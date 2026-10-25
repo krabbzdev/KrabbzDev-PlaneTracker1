@@ -290,6 +290,8 @@
   .rg-head { padding: 16px 20px 4px; }
   .rg-head .t { font: 700 26px var(--mono); }
   .rg-head .s { color: var(--muted); font-size: 14px; margin-top: 2px; }
+  .rg-head .t { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .rg-head .age { font: 600 13px Inter, sans-serif; color: var(--warn); background: rgba(255,181,71,.12); border: 1px solid rgba(255,181,71,.35); border-radius: 999px; padding: 2px 10px; letter-spacing: 0; }
   .rg-sec { padding: 10px 20px; }
   .rg-sec h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
   .rg-photo { position: relative; }
@@ -1176,6 +1178,13 @@ $('regClose').onclick = $('regX').onclick = () => $('regDlg').close();
 // clicking the dark area outside the panel closes it too
 $('regDlg').addEventListener('click', e => { if (e.target === $('regDlg')) $('regDlg').close(); });
 
+// "5 years old" from the year built (2021 -> 5 in 2026); nothing when the year is unknown or odd
+function ageBadge(year) {
+  const y = parseInt(year, 10), age = new Date().getFullYear() - y;
+  if (!y || age < 0 || age > 120) return '';
+  return `<span class="age" title="Built in ${y}">${age === 0 ? 'Brand new' : age === 1 ? '1 year old' : age + ' years old'}</span>`;
+}
+
 async function openReg(hex, reg) {
   $('regBody').innerHTML = `<div class="rg-head"><div class="t">${reg}</div><div class="s">Looking up registration…</div></div>`;
   if (!$('regDlg').open) $('regDlg').showModal();
@@ -1208,7 +1217,7 @@ async function openReg(hex, reg) {
   $('regBody').innerHTML = `
     ${Lk.photo?.src ? `<div class="rg-photo" style="background-image:url('${Lk.photo.src}')">${photoCredit(Lk.photo)}</div>` : ''}
     <div class="rg-links">${links}</div>
-    <div class="rg-head"><div class="t">${reg}</div><div class="s">${[make, model].filter(Boolean).join(' ')}${a.flight && a.flight !== reg ? ' · flying as ' + a.flight : ''}${airlineOf(a) ? ' (' + airlineOf(a) + ')' : ''}</div></div>
+    <div class="rg-head"><div class="t">${reg}${ageBadge(F?.year || a.year)}</div><div class="s">${[make, model].filter(Boolean).join(' ')}${a.flight && a.flight !== reg ? ' · flying as ' + a.flight : ''}${airlineOf(a) ? ' (' + airlineOf(a) + ')' : ''}</div></div>
     <div class="rg-sec"><h4>Right now</h4><div class="rg-grid" id="rgLive"></div></div>
     <div class="rg-sec"><h4>Flight path</h4><div id="rgMap" class="rg-map"></div><div class="rg-cap" id="rgCap"></div></div>
     <div class="rg-sec"><h4>Registered owner${F?.fractional ? ' · fractional ownership' : ''}</h4>
