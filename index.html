@@ -242,6 +242,7 @@
   .toast b { color: var(--bc); }
   @keyframes toastIn { from { transform: translateY(12px); opacity: 0; } }
   .ring-label { font: 600 10px var(--mono); color: rgba(76,201,240,.85); text-shadow: 0 0 3px #000; white-space: nowrap; }
+  .ring-label.ring-overhead { color: #ff8a9a; text-align: center; }
   .apt { position: relative; width: var(--s); height: var(--s); }
   .apt i { position: absolute; inset: 0; border-radius: 50%; background: #0b1020; border: 2px solid var(--c); display: grid; place-items: center; font: 700 8px Inter, sans-serif; font-style: normal; color: var(--c); }
   .apt i::after { content: ''; width: 2px; height: 70%; background: var(--c); transform: rotate(35deg); border-radius: 1px; }
@@ -560,6 +561,10 @@ function drawHome() {
   L.circle(home, { radius: radius * MI, color: '#4cc9f0', weight: 2, opacity: .8, fillColor: '#4cc9f0', fillOpacity: .05, interactive: false }).addTo(ringLayer);
   const north = L.latLng(home[0] + radius * MI / 111320, home[1]);
   L.marker(north, { icon: L.divIcon({ className: 'ring-label', html: radius + ' mi', iconSize: [40, 14], iconAnchor: [20, 16] }), interactive: false }).addTo(ringLayer);
+  // the overhead radius: planes inside it trigger the alert banner, takeover and announcement
+  L.circle(home, { radius: ALERT_MI * MI, color: '#ff5d73', weight: 2, opacity: .8, fillColor: '#ff5d73', fillOpacity: .06, dashArray: '6 6', interactive: false }).addTo(ringLayer);
+  const south = L.latLng(home[0] - ALERT_MI * MI / 111320, home[1]);
+  L.marker(south, { icon: L.divIcon({ className: 'ring-label ring-overhead', html: `Overhead ${ALERT_MI} mi`, iconSize: [90, 14], iconAnchor: [45, -2] }), interactive: false }).addTo(ringLayer);
 }
 
 // ---------- airports ----------
