@@ -32,6 +32,9 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force build | Out-Null
+          # The tray icon helper (tray/Tray.cs), bundled inside the .exe; csc ships with Windows (.NET Framework 4)
+          & "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe" -nologo -target:winexe -optimize+ -out:build\Krabbz9999-FlightTracker-Tray.exe tray\Tray.cs
+          if ($LASTEXITCODE) { throw 'Tray helper failed to compile' }
           node --experimental-sea-config sea-config.json
           Copy-Item (Get-Command node).Source Krabbz9999-FlightTracker.exe
           # The copy still carries Node.js's own signature; remove it before the app is injected

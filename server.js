@@ -463,6 +463,14 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, latest.body);
     }
     if (url.pathname === '/api/fastats') return send(res, 200, JSON.stringify(await faStats()));
+    // Quit from the tray icon: only from this PC, and the custom header keeps other web pages from triggering it
+    if (url.pathname === '/api/quit' && req.method === 'POST') {
+      const local = /^(::1|127\.|::ffff:127\.)/.test(req.socket.remoteAddress || '');
+      if (!local || req.headers['x-ft-tray'] !== '1') return send(res, 403, '{"error":"forbidden"}');
+      send(res, 200, '{"ok":true}');
+      saveLog();
+      return setTimeout(() => process.exit(0), 300);
+    }
     const tk = url.pathname.match(/^\/api\/track\/([0-9a-f~]{6,7})$/i);
     if (tk) return send(res, 200, JSON.stringify({ points: trackHist.get(tk[1].toLowerCase()) || [] }));
     if (url.pathname === '/api/settings') {
@@ -600,6 +608,30 @@ if (sea) {
   setInterval(tick, 6 * 3600000);
 }
 
+// ---------- system tray icon (Windows .exe only) ----------
+// Node has no tray support, so the .exe carries a tiny helper (tray/Tray.cs, compiled at build time)
+// that shows a ✈ icon with Open / Quit. It's unpacked next to the app and closes itself when this
+// process exits (including when an update restarts it; the new copy starts its own).
+const TRAY_EXE = path.join(APP_DIR, 'Krabbz9999-FlightTracker-Tray.exe');
+function startTray(tries = 0) {
+  if (!sea || process.platform !== 'win32' || process.env.NO_TRAY) return;
+  let bin;
+  try { bin = Buffer.from(sea.getAsset('tray.exe')); } catch (e) { return; } // built without the helper
+  try {
+    let current = null;
+    try { current = fs.readFileSync(TRAY_EXE); } catch (e) {}
+    if (!current || !current.equals(bin)) fs.writeFileSync(TRAY_EXE, bin);
+  } catch (e) {
+    // just updated: the old copy's helper may still be closing and holding the file
+    if (tries < 5) return setTimeout(() => startTray(tries + 1), 2000);
+    return console.log('Tray icon unavailable: ' + e.message);
+  }
+  try {
+    require('child_process').spawn(TRAY_EXE, [String(PORT), String(process.pid), `Krabbz9999 - FlightTracker (build ${VERSION.build})`],
+      { detached: true, stdio: 'ignore', cwd: APP_DIR }).unref();
+  } catch (e) { console.log('Tray icon unavailable: ' + e.message); }
+}
+
 let listenTries = 0;
 server.on('error', e => {
   if (e.code !== 'EADDRINUSE') throw e;
@@ -610,5 +642,5 @@ server.on('error', e => {
 });
 server.listen(PORT, () => {
   console.log(`Krabbz9999 - FlightTracker v${VERSION.version} build ${VERSION.build} running at http://localhost:${PORT}`);
-  if (sea) { console.log('Close this window to stop it.'); openBrowser(); }
+  if (sea) { console.log('To stop it, close this window or right-click the plane icon in the system tray and choose Quit.'); openBrowser(); startTray(); }
 });

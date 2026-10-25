@@ -4,6 +4,7 @@
   "disableExperimentalSEAWarning": true,
   "assets": {
     "index.html": "index.html",
-    "version.json": "version.json"
+    "version.json": "version.json",
+    "tray.exe": "build/Krabbz9999-FlightTracker-Tray.exe"
   }
 }
