@@ -68,8 +68,36 @@ Needs [Node.js](https://nodejs.org) 22+ (24 recommended).
 
 ```bat
 node server.js        rem run from source at http://localhost:8090
-build-exe.cmd         rem build Krabbz9999-FlightTracker.exe (bumps the build number)
-release.cmd "notes"   rem build + publish a GitHub Release (needs the GitHub CLI)
+build-exe.cmd         rem build Krabbz9999-FlightTracker.exe locally, for testing
+release.cmd "notes"   rem bump the build number, tag and push; GitHub builds and publishes the release
 ```
 
 `server.js` is the whole back end (no dependencies) and `index.html` is the whole front end.
+Published `.exe` files are always built from this repository by
+[GitHub Actions](.github/workflows/release.yml), never on a personal computer.
+
+## Code signing policy
+
+Free code signing for this project will be provided by [SignPath.io](https://about.signpath.io),
+with a certificate by [SignPath Foundation](https://signpath.org) (application in progress).
+
+- **Author, reviewer and release approver:** [@showtechclove1](https://github.com/showtechclove1) (Krabbz9999)
+- Every release is built by GitHub Actions from the tagged source in this repository.
+- Only the maintainer above can push release tags, and each signing request is approved by them.
+
+## Privacy
+
+This program does not collect, store or send personal information to the author, and has no
+analytics or tracking. Your settings stay in `settings.json` next to the program. To do its job it
+contacts these services directly from your computer:
+
+- **adsb.fi**: your home's map coordinates, to ask which aircraft are nearby
+- **OpenStreetMap Nominatim**: an address you type into Settings, to find its coordinates
+- **Planespotters.net, adsbdb, adsb.lol, Wikipedia**: aircraft identifiers, callsigns and registrations, to look up photos, owners and routes
+- **FlightAware**: the feeder username in Settings, to show its public stats page
+- **GitHub**: to check for and download updates
+- **Esri** (map tiles), **OurAirports** (airport list), **ADS-B Exchange** (only when you open its viewer)
+
+## License
+
+[MIT](LICENSE) © 2026 Krabbz9999
