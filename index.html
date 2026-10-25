@@ -275,8 +275,17 @@
   /* clickable tail numbers + owner / registration panel */
   a.tail { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
   a.tail:hover { color: var(--accent); }
-  dialog.reg-dlg { width: min(560px, 94vw); padding: 0; overflow: hidden; }
-  dialog.reg-dlg .acts { padding: 0 20px 18px; }
+  /* Share to Facebook */
+  .fb-share { display: inline-flex; align-items: center; gap: 6px; font: 600 12px Inter, sans-serif; color: #fff; background: #1877f2; border: 1px solid #1877f2; border-radius: 999px; padding: 2px 10px 2px 8px; cursor: pointer; line-height: 1.4; }
+  .fb-share b { font: 800 13px Arial, sans-serif; }
+  .fb-share:hover { background: #166fe5; border-color: #fff3; }
+  .fb-share.big { font-size: 14px; padding: 8px 14px; border-radius: 10px; }
+  /* fits the window: the content scrolls, the Close bar stays pinned at the bottom */
+  dialog.reg-dlg { width: min(560px, 94vw); max-height: 92vh; padding: 0; overflow: hidden; }
+  dialog.reg-dlg[open] { display: flex; flex-direction: column; }
+  dialog.reg-dlg #regBody { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  dialog.reg-dlg .acts { flex: none; padding: 12px 20px; border-top: 1px solid var(--line); background: var(--panel); }
+  dialog.reg-dlg .rg-x { position: absolute; top: 10px; right: 10px; z-index: 2; background: rgba(0,0,0,.6); border-color: rgba(255,255,255,.25); padding: 4px 10px; }
   .rg-photo { height: 180px; background: #0d1426 center/cover no-repeat; }
   .rg-head { padding: 16px 20px 4px; }
   .rg-head .t { font: 700 26px var(--mono); }
@@ -415,6 +424,7 @@
 <dialog id="axDlg" class="ax-dlg">
   <div class="ax-bar">
     <b id="axTitle">ADS-B Exchange</b>
+    <button type="button" class="fb-share" id="axShare" data-share=""><b>f</b> Share</button>
     <a id="axNewTab" class="btn" href="#" target="_blank" rel="noopener">Open in new tab ↗</a>
     <button id="axClose">✕ Close</button>
   </div>
@@ -422,6 +432,7 @@
 </dialog>
 
 <dialog id="regDlg" class="reg-dlg">
+  <button class="rg-x" id="regX" aria-label="Close">✕</button>
   <div id="regBody"></div>
   <div class="acts"><button id="regClose">Close</button></div>
 </dialog>
@@ -1080,7 +1091,7 @@ function drawTakeover(a) {
       <div class="to-model"><b>${brandOf(a)}</b> ${modelOnly(a)}</div>
       <div class="to-route ${routeOf(a) ? '' : 'none'}">${routeOf(a) || 'Route not published'}</div>
       ${cpaHtml}
-      <div style="margin-top:12px">${adsbxBtn(a.hex, a.flight || reg, '🌐 View on ADS-B Exchange', 'big')}</div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">${adsbxBtn(a.hex, a.flight || reg, '🌐 View on ADS-B Exchange', 'big')}${shareBtn(a.hex, 'big')}</div>
       <div class="to-grid">
         <div><div class="k">Altitude</div><div class="v" style="color:${color}">${fmtAlt(a.alt)}${a.vr > 300 ? ' ↑' : a.vr < -300 ? ' ↓' : ''}</div></div>
         <div><div class="k">Speed</div><div class="v">${a.gs != null ? Math.round(a.gs * 1.15078) + ' mph' : '—'}</div></div>
@@ -1101,7 +1112,47 @@ document.addEventListener('click', e => {
   e.preventDefault(); e.stopPropagation();
   openAdsbx(b.dataset.adsbx, b.dataset.label);
 }, true);
+// ---------- Share to Facebook ----------
+// Facebook's share dialog only accepts a link (it no longer takes pre-filled text), and this
+// dashboard isn't public, so we share the plane's public FlightAware page and put a
+// ready-made caption on the clipboard to paste into the post.
+const shareBtn = (hex, kind = '') => `<button type="button" class="fb-share ${kind}" data-share="${hex}" title="Share this plane on Facebook (caption is copied for you to paste)"><b>f</b> Share</button>`;
+function shareTarget(hex) {
+  const a = tracks.get(hex)?.aircraft || { hex };
+  const reg = a.reg || look(hex).info?.reg || '';
+  const id = a.flight && a.flight !== reg ? a.flight : reg;
+  return { a, reg, url: id ? 'https://www.flightaware.com/live/flight/' + encodeURIComponent(id) : 'https://globe.adsbexchange.com/?icao=' + hex };
+}
+function shareCaption({ a, reg }) {
+  const city = s => (s || '').replace(/\s*\([^)]*\)\s*$/, '');
+  const rp = a.lat != null ? routeParts(a) : {};
+  const route = rp.from && rp.to ? `, ${city(rp.from)} → ${city(rp.to)}` : rp.to ? `, going to ${city(rp.to)}` : '';
+  const ids = [a.flight, reg && reg !== a.flight ? reg : ''].filter(Boolean).join(' / ');
+  const lead = a.dist != null && a.dist < 1 ? '✈ Overhead now' : '✈ Flying near home';
+  const model = a.lat != null ? modelOf(a) : 'an aircraft';
+  return `${lead}: ${model}${ids ? ` (${ids})` : ''}${airlineOf(a) ? ` · ${airlineOf(a)}` : ''}${route}. Tracked with Krabbz9999 - FlightTracker 🛩️ flighttracker.loves3d.com`;
+}
+// capture phase so a Share click never also selects a card underneath
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-share]');
+  if (!b) return;
+  e.preventDefault(); e.stopPropagation();
+  const t = shareTarget(b.dataset.share), caption = shareCaption(t);
+  // open the share window first (inside the click, so pop-up blockers allow it), then copy the caption
+  const w = window.open('https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(t.url), 'fbshare', 'width=640,height=600');
+  let copied = false;
+  try { await navigator.clipboard.writeText(caption); copied = true; } catch (err) {}
+  const el = document.createElement('div');
+  el.className = 'toast'; el.style.setProperty('--bc', '#1877f2');
+  el.innerHTML = copied ? `<b>Caption copied</b><br>Paste it into your Facebook post (Ctrl+V).`
+    : `<b>Copy this caption</b><br><span style="user-select:all">${esc(caption)}</span>`;
+  if (!w) el.innerHTML += `<br><a href="https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(t.url)}" target="_blank" rel="noopener" style="color:var(--accent)">Open Facebook share ↗</a>`;
+  $('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 12000);
+}, true);
+
 function openAdsbx(hex, label) {
+  $('axShare').dataset.share = hex;
   if ($('regDlg').open) $('regDlg').close();
   $('axTitle').textContent = `ADS-B Exchange · ${label}`;
   $('axNewTab').href = adsbxUrl(hex);
@@ -1120,7 +1171,9 @@ document.addEventListener('click', e => {
   e.preventDefault(); e.stopPropagation();
   openReg(t.dataset.hex, t.dataset.reg);
 }, true);
-$('regClose').onclick = () => $('regDlg').close();
+$('regClose').onclick = $('regX').onclick = () => $('regDlg').close();
+// clicking the dark area outside the panel closes it too
+$('regDlg').addEventListener('click', e => { if (e.target === $('regDlg')) $('regDlg').close(); });
 
 async function openReg(hex, reg) {
   $('regBody').innerHTML = `<div class="rg-head"><div class="t">${reg}</div><div class="s">Looking up registration…</div></div>`;
@@ -1143,6 +1196,7 @@ async function openReg(hex, reg) {
     `<a href="https://www.flightaware.com/resources/registration/${reg}" target="_blank" rel="noopener">FlightAware ↗</a>`,
     `<a href="https://www.planespotters.net/search?q=${reg}" target="_blank" rel="noopener">Planespotters ↗</a>`,
     hex ? adsbxBtn(hex, reg, '🌐 ADS-B Exchange') : '',
+    hex ? shareBtn(hex) : '',
   ].filter(Boolean).join('');
   const src = F
     ? `<div class="rg-src">Source: FAA Aircraft Registry database (file from ${F.fileDate}). Street addresses are intentionally not shown.</div>`
@@ -1312,6 +1366,7 @@ function renderDetail() {
       <div class="links">
         ${a.flight ? `<a href="https://www.flightaware.com/live/flight/${a.flight}" target="_blank" rel="noopener">FlightAware ↗</a>` : ''}
         ${adsbxBtn(a.hex, a.flight || reg, '🌐 ADS-B Exchange')}
+        ${shareBtn(a.hex)}
         ${reg ? `<a href="https://www.planespotters.net/search?q=${reg}" target="_blank" rel="noopener">Photos ↗</a>` : ''}
       </div>
     </div>`;
