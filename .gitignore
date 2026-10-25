@@ -16,3 +16,4 @@ ReleasableAircraft.zip
 
 # local copy of the source-backup artifact
 backup-artifact/
+settings.json.bad

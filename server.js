@@ -221,7 +221,15 @@ setInterval(() => {
 const LOG_FILE = path.join(APP_DIR, 'daily-log.json');
 const SETTINGS_FILE = path.join(APP_DIR, 'settings.json');
 let settings = {};
-try { settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); } catch (e) {}
+if (fs.existsSync(SETTINGS_FILE)) {
+  // files saved by some Windows editors start with a byte-order mark, which JSON.parse rejects
+  try { settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8').replace(/^﻿/, '')); }
+  catch (e) {
+    // never silently overwrite someone's settings: keep the unreadable file aside and start fresh
+    try { fs.copyFileSync(SETTINGS_FILE, SETTINGS_FILE + '.bad'); } catch (e2) {}
+    console.log('settings.json could not be read; a copy was saved as settings.json.bad');
+  }
+}
 
 function distMi(a, b) {
   const R = Math.PI / 180, dLat = (b[0] - a[0]) * R, dLon = (b[1] - a[1]) * R;

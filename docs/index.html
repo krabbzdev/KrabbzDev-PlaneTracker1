@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Krabbz9999 - FlightTracker</title>
+<meta name="description" content="See every plane over your house. A free Windows app with a live map, photos, routes and an overhead alert. One file, updates itself.">
+<meta property="og:title" content="Krabbz9999 - FlightTracker">
+<meta property="og:description" content="See every plane over your house. Free for Windows, one file, updates itself.">
+<meta property="og:image" content="https://flighttracker.loves3d.com/dashboard.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23ffb627' d='M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  /* Layout: a night-sky landing page. Hero with the real dashboard, then install steps,
+     features, updates, FAQ and credits. Airport-signage display type, runway-light amber accent. */
+  :root {
+    --night: #08111f;
+    --panel: #0f1c30;
+    --panel-2: #142540;
+    --line: #22365a;
+    --ink: #e9eff8;
+    --muted: #9aaac4;
+    --amber: #ffb627;
+    --radar: #5ccfe6;
+    --display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+    --body: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { animation: none !important; transition: none !important; } }
+  body { margin: 0; background: var(--night); color: var(--ink); font: 17px/1.6 var(--body); }
+  a { color: var(--radar); }
+  a:focus-visible, .btn:focus-visible, summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; border-radius: 4px; }
+  .wrap { max-width: 1160px; margin: 0 auto; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+
+  /* top bar */
+  .top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; background: rgba(8,17,31,.85); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--night); }
+  .top .wrap { display: flex; align-items: center; gap: 20px; padding-block: 12px; }
+  .brand { display: flex; align-items: center; gap: 10px; font: 700 22px var(--display); letter-spacing: .02em; color: var(--ink); text-decoration: none; text-transform: uppercase; }
+  .brand svg { color: var(--amber); }
+  .top nav { margin-left: auto; display: flex; gap: 18px; flex-wrap: wrap; }
+  .top nav a { color: var(--muted); text-decoration: none; font-size: 15px; }
+  .top nav a:hover { color: var(--ink); }
+  @media (max-width: 720px) { .top nav { display: none; } }
+
+  /* hero */
+  .hero { position: relative; overflow: hidden; padding-block: 64px 40px; }
+  .hero::before { /* radar rings centred behind the screenshot */
+    content: ""; position: absolute; inset: -40% -20% auto auto; width: 1100px; height: 1100px; max-width: none;
+    background: repeating-radial-gradient(circle, transparent 0 89px, rgba(92,207,230,.08) 89px 90px);
+    pointer-events: none; }
+  .hero .wrap { position: relative; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 48px; align-items: center; }
+  @media (max-width: 920px) { .hero .wrap { grid-template-columns: minmax(0, 1fr); gap: 32px; } }
+  .eyebrow { font: 600 13px var(--mono); color: var(--amber); letter-spacing: .12em; text-transform: uppercase; }
+  h1 { font: 800 clamp(48px, 7vw, 84px)/.92 var(--display); text-transform: uppercase; letter-spacing: .005em; margin: 14px 0 18px; text-wrap: balance; }
+  h1 em { font-style: normal; color: var(--amber); }
+  .lede { font-size: 19px; color: var(--muted); max-width: 46ch; margin: 0 0 28px; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 22px; border-radius: 10px; font: 700 18px var(--body); text-decoration: none; border: 2px solid transparent; }
+  .btn.primary { background: var(--amber); color: #1b1200; }
+  .btn.primary:hover { background: #ffc44f; }
+  .btn.ghost { color: var(--ink); border-color: var(--line); }
+  .btn.ghost:hover { border-color: var(--radar); }
+  .meta { margin-top: 14px; font: 13px var(--mono); color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 16px; }
+  .meta b { color: var(--ink); font-weight: 600; }
+  .shot { position: relative; border-radius: 14px; border: 1px solid var(--line); overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 0 6px rgba(92,207,230,.06); background: var(--panel); }
+  .shot img { display: block; width: 100%; height: auto; }
+  .shot figcaption { font: 12px var(--mono); color: var(--muted); padding: 8px 12px; border-top: 1px solid var(--line); }
+
+  /* sections */
+  section { padding-block: 64px; border-top: 1px solid var(--line); }
+  h2 { font: 700 clamp(34px, 4.5vw, 48px)/1 var(--display); text-transform: uppercase; margin: 0 0 10px; text-wrap: balance; }
+  .sub { color: var(--muted); max-width: 62ch; margin: 0 0 32px; }
+
+  /* install: a real sequence, so numbered */
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; counter-reset: step; }
+  @media (max-width: 860px) { .steps { grid-template-columns: minmax(0, 1fr); } }
+  .steps li { counter-increment: step; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px 22px 20px; min-width: 0; }
+  .steps li::before { content: counter(step); display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--amber); color: var(--amber); font: 700 22px var(--display); margin-bottom: 14px; }
+  .steps h3 { font: 700 24px var(--display); text-transform: uppercase; margin: 0 0 6px; }
+  .steps p { margin: 0 0 8px; color: var(--muted); }
+  .steps p:last-child { margin-bottom: 0; }
+  .note { font-size: 15px; background: var(--panel-2); border-left: 3px solid var(--amber); padding: 10px 12px; border-radius: 0 8px 8px 0; color: var(--ink); }
+  kbd { font: 600 13px var(--mono); background: var(--panel-2); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px; color: var(--ink); white-space: nowrap; }
+  .reqs { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { font: 13px var(--mono); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; }
+
+  /* features */
+  .feat { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  @media (max-width: 860px) { .feat { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 560px) { .feat { grid-template-columns: minmax(0, 1fr); } }
+  .feat div { background: var(--panel); padding: 22px; min-width: 0; }
+  .feat h3 { font: 700 22px var(--display); text-transform: uppercase; margin: 0 0 6px; color: var(--ink); }
+  .feat h3 span { color: var(--radar); margin-right: 6px; }
+  .feat p { margin: 0; color: var(--muted); font-size: 16px; }
+
+  /* updates + share */
+  .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+  @media (max-width: 860px) { .two { grid-template-columns: minmax(0, 1fr); } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px; min-width: 0; }
+  .card h3 { font: 700 26px var(--display); text-transform: uppercase; margin: 0 0 8px; }
+  .card p { color: var(--muted); margin: 0 0 10px; }
+  .copyrow { display: flex; gap: 8px; align-items: stretch; margin-top: 12px; flex-wrap: wrap; }
+  .copyrow code { flex: 1 1 260px; min-width: 0; font: 14px var(--mono); background: var(--night); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-wrap: anywhere; }
+  .copyrow button { font: 700 15px var(--body); background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 0 16px; cursor: pointer; min-height: 42px; }
+  .copyrow button:hover { border-color: var(--radar); }
+
+  /* faq */
+  details.q { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 0 18px; margin-bottom: 10px; }
+  details.q summary { cursor: pointer; padding: 16px 0; font-weight: 700; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+  details.q summary::-webkit-details-marker { display: none; }
+  details.q summary::after { content: "+"; color: var(--amber); font: 700 22px var(--display); }
+  details.q[open] summary::after { content: "–"; }
+  details.q p { margin: 0 0 16px; color: var(--muted); max-width: 70ch; }
+
+  /* credits */
+  .credits { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+  .credits table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .credits th, .credits td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .credits th { font: 600 12px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; background: var(--panel); }
+  .credits tr:last-child td { border-bottom: 0; }
+
+  footer { border-top: 1px solid var(--line); padding-block: 28px calc(28px + env(safe-area-inset-bottom, 0px)); color: var(--muted); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg>
+      Krabbz9999 · FlightTracker
+    </a>
+    <nav aria-label="Page sections">
+      <a href="#install">Install</a>
+      <a href="#features">Features</a>
+      <a href="#updates">Updates</a>
+      <a href="#faq">FAQ</a>
+      <a href="https://github.com/showtechclove1/krabbz9999-flighttracker">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="hero">
+    <div class="wrap">
+      <div>
+        <div class="eyebrow">Free · Windows · One file</div>
+        <h1>See every plane <em>over your house</em></h1>
+        <p class="lede">A live map of the aircraft around your home, with photos, routes and owners. When one flies right overhead, it takes over the screen and tells you what it is.</p>
+        <div class="cta">
+          <a class="btn primary" id="dl" href="https://github.com/showtechclove1/krabbz9999-flighttracker/releases/latest/download/Krabbz9999-FlightTracker.exe">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16"/></svg>
+            Download for Windows
+          </a>
+          <a class="btn ghost" href="#install">How to install</a>
+        </div>
+        <div class="meta"><span>Latest: <b id="ver">see GitHub</b></span><span>Windows 10 / 11 (64-bit)</span><span id="size">about 90 MB</span></div>
+      </div>
+      <figure class="shot" style="margin:0">
+        <img src="dashboard.png" width="1600" height="1000" alt="The FlightTracker dashboard: a list of nearby aircraft with photos and routes on the left, a dark map of Tampa Bay with planes and airports in the middle, and today's log on the right.">
+        <figcaption>Live around Tampa International: JetBlue in from New York, Southwest landing, a Gulfstream on the ramp.</figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <section id="install">
+    <div class="wrap">
+      <h2>Install in two minutes</h2>
+      <p class="sub">There's no installer and nothing else to set up. The app is a single file that runs a small dashboard on your PC and opens it in your browser.</p>
+      <ol class="steps">
+        <li>
+          <h3>Download</h3>
+          <p>Get <b>Krabbz9999-FlightTracker.exe</b> with the button above.</p>
+          <p>Make a folder for it, like <code>C:\FlightTracker</code>, and move it there. Its settings and daily log are saved in that folder.</p>
+        </li>
+        <li>
+          <h3>Run it</h3>
+          <p>Double-click the file. A small black window opens (that's the app; leave it open) and the dashboard opens in your browser.</p>
+          <p class="note">Windows may say <b>"Windows protected your PC"</b> because the app isn't code-signed. Click <b>More info</b>, then <b>Run anyway</b>. If Windows Firewall asks, allow <b>Private networks</b>.</p>
+        </li>
+        <li>
+          <h3>Enter your address</h3>
+          <p>The first time, it asks for your <b>home address</b>. Type it, click <b>Find</b>, then <b>Save</b>. Planes start showing up right away.</p>
+          <p>It only asks once. Change it any time with <kbd>🏠 Home</kbd>.</p>
+        </li>
+      </ol>
+      <div class="reqs">
+        <span class="chip">Windows 10 or 11, 64-bit</span>
+        <span class="chip">Internet connection</span>
+        <span class="chip">No antenna needed</span>
+        <span class="chip">No account needed</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <h2>What you get</h2>
+      <p class="sub">Everything updates every few seconds from the public adsb.fi feed of aircraft transponder signals.</p>
+      <div class="feat">
+        <div><h3><span>◎</span>Live map</h3><p>Every aircraft within your chosen radius (10 miles to start), colored by altitude, with airports, your home and an optional office pin.</p></div>
+        <div><h3><span>⚠</span>Overhead alert</h3><p>When a plane passes within a mile, a full-screen close-up shows its path, where it's from and going, and when it'll be closest. A chime and voice say "Overhead now!"</p></div>
+        <div><h3><span>▣</span>Photos and details</h3><p>A photo of the actual plane when one exists, plus maker and model, airline, owner, route, altitude, speed and how long it's been tracked.</p></div>
+        <div><h3><span>N</span>Tail numbers</h3><p>Click any registration like <b>N367FX</b> for owner and registration details and a map of its flight path.</p></div>
+        <div><h3><span>★</span>Military and emergencies</h3><p>Military and other interesting aircraft are highlighted, with a pop-up when one comes near. Emergency squawks get a red alert.</p></div>
+        <div><h3><span>▤</span>Today's log</h3><p>How many planes flew by today, the busiest hour, and leaderboards for closest, lowest, fastest, highest, airlines and aircraft types.</p></div>
+        <div><h3><span>⌖</span>ADS-B Exchange</h3><p>Open ADS-B Exchange's live view of any plane without leaving the dashboard.</p></div>
+        <div><h3><span>⇄</span>Whole-house</h3><p>Leave it running on one PC and open it from any phone, tablet or TV browser at home: <code>http://&lt;PC name&gt;:8090</code>.</p></div>
+        <div><h3><span>⌂</span>Feeder stats</h3><p>Already feed FlightAware with your own receiver? Add your username in Settings to see your rank and daily counts.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="updates">
+    <div class="wrap two">
+      <div class="card">
+        <h3>Keeps itself up to date</h3>
+        <p>About a minute after it starts, and every 6 hours after that, the app checks for a new version. If there is one, it downloads it, checks it's intact, swaps itself and restarts. Any dashboard you have open reloads onto the new version.</p>
+        <p>The version and build number are in the bottom-right corner. You can check now, or turn automatic updates off, under <kbd>⚙ Settings</kbd> → Updates.</p>
+      </div>
+      <div class="card">
+        <h3>Share it</h3>
+        <p>Send people this page. Each person's copy keeps its own home address and settings, so nothing of yours goes with it.</p>
+        <div class="copyrow"><code id="link">https://flighttracker.loves3d.com</code><button type="button" id="copyBtn">Copy link</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <h2>Questions</h2>
+      <p class="sub">The short answers.</p>
+      <details class="q"><summary>Do I need an antenna or receiver?</summary><p>No. Aircraft come from adsb.fi, a free public network of volunteer receivers, so it works anywhere with an internet connection.</p></details>
+      <details class="q"><summary>Is it safe? Why does Windows warn me?</summary><p>Windows warns about any app that isn't signed with a paid certificate. The full source code is public on GitHub, so you can see exactly what it does. It only talks to the public services listed below.</p></details>
+      <details class="q"><summary>Where is my information kept?</summary><p>Your settings stay on your PC, in a <code>settings.json</code> file next to the app. When you search for your address, it's sent once to OpenStreetMap to find its map coordinates. After that, only those coordinates are sent, to adsb.fi, to ask which planes are nearby.</p></details>
+      <details class="q"><summary>Does it work on a Mac or phone?</summary><p>The app runs on Windows. Once it's running, any device on your home network can open the dashboard in a browser, including phones, tablets and Macs.</p></details>
+      <details class="q"><summary>How do I stop it, or start it with Windows?</summary><p>Close the black console window to stop it. To start it automatically, press <kbd>Win</kbd>+<kbd>R</kbd>, type <code>shell:startup</code>, and put a shortcut to the app in the folder that opens.</p></details>
+      <details class="q"><summary>Can I see full FAA owner records?</summary><p>Yes, for US aircraft. Download the FAA's <a href="https://registry.faa.gov/database/ReleasableAircraft.zip">ReleasableAircraft.zip</a> (about 60 MB) yourself, put it next to the app and restart it. Street addresses are never shown.</p></details>
+    </div>
+  </section>
+
+  <section id="credits">
+    <div class="wrap">
+      <h2>Data and credits</h2>
+      <p class="sub">FlightTracker is free for personal, non-commercial use and stands on these services. Each has its own terms.</p>
+      <div class="credits">
+        <table>
+          <thead><tr><th>What</th><th>Where it comes from</th></tr></thead>
+          <tbody>
+            <tr><td>Live aircraft</td><td><a href="https://adsb.fi">adsb.fi</a> open data</td></tr>
+            <tr><td>Photos</td><td><a href="https://www.planespotters.net">Planespotters.net</a> (photographers credited in the app), or a stock model photo from <a href="https://www.wikipedia.org">Wikipedia</a></td></tr>
+            <tr><td>Aircraft and owners</td><td><a href="https://www.adsbdb.com">adsbdb</a>, optional <a href="https://registry.faa.gov">FAA registry</a> file</td></tr>
+            <tr><td>Routes</td><td><a href="https://adsb.lol">adsb.lol</a> route data and adsbdb</td></tr>
+            <tr><td>Airports</td><td><a href="https://ourairports.com">OurAirports</a> (public domain)</td></tr>
+            <tr><td>Maps</td><td>Esri World Dark Gray, drawn with <a href="https://leafletjs.com">Leaflet</a></td></tr>
+            <tr><td>Address search</td><td><a href="https://nominatim.org">OpenStreetMap Nominatim</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Krabbz9999 - FlightTracker · <span id="ver2">open source</span></span>
+    <span><a href="https://github.com/showtechclove1/krabbz9999-flighttracker">Source code and releases on GitHub</a></span>
+  </div>
+</footer>
+
+<script>
+  // Show the latest release (build number, date, file size) straight from GitHub.
+  fetch('https://api.github.com/repos/showtechclove1/krabbz9999-flighttracker/releases/latest')
+    .then(r => r.ok ? r.json() : Promise.reject(r.status))
+    .then(rel => {
+      const build = (rel.tag_name.match(/(\d+)\s*$/) || [])[1];
+      const date = new Date(rel.published_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      const label = build ? `build ${build} · ${date}` : `${rel.tag_name} · ${date}`;
+      document.getElementById('ver').textContent = label;
+      document.getElementById('ver2').textContent = label;
+      const exe = (rel.assets || []).find(a => /\.exe$/i.test(a.name));
+      if (exe) document.getElementById('size').textContent = Math.round(exe.size / 1048576) + ' MB';
+    })
+    .catch(() => {});
+
+  document.getElementById('copyBtn').addEventListener('click', async () => {
+    const text = document.getElementById('link').textContent, b = document.getElementById('copyBtn');
+    try { await navigator.clipboard.writeText(text); b.textContent = 'Copied'; }
+    catch (e) { const r = document.createRange(); r.selectNodeContents(document.getElementById('link')); getSelection().removeAllRanges(); getSelection().addRange(r); b.textContent = 'Press Ctrl+C'; }
+    setTimeout(() => { b.textContent = 'Copy link'; }, 2000);
+  });
+</script>
+</body>
+</html>
