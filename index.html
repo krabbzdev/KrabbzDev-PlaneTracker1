@@ -643,17 +643,18 @@ map.on('zoomend', drawAirports);
 $('showApts').addEventListener('change', e => { showApts = e.target.checked; save('skyShowApts', showApts); drawAirports(); });
 
 const radiusBounds = () => L.latLng(home).toBounds(radius * MI * 2.2);
+const DEFAULT_ZOOM_STEPS = 2; // start at 400%: two steps closer than the view that fits the whole Tracker Radius
 function fitRadius() {
   if (!home) return;
-  map.fitBounds(radiusBounds(), { animate: true });
+  map.setView(home, map.getBoundsZoom(radiusBounds()) + DEFAULT_ZOOM_STEPS, { animate: true });
 }
 
 // Zoom level as a percentage beside +/-: 100% shows the whole Tracker Radius, each zoom step doubles or halves it.
-// Click it to go back to 100%.
+// Click it to go back to the default (400%).
 const zoomPct = L.control({ position: 'topleft' });
 zoomPct.onAdd = () => {
   const el = L.DomUtil.create('div', 'leaflet-bar zoom-pct');
-  el.title = 'Zoom level (100% shows your whole Tracker Radius). Click to reset.';
+  el.title = 'Zoom level (100% shows your whole Tracker Radius). Click to go back to the default, 400%.';
   L.DomEvent.disableClickPropagation(el);
   el.onclick = fitRadius;
   return el;
