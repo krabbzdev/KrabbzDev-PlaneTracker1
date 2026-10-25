@@ -68,16 +68,32 @@ function photoMatches(link, mfr) {
 
 // Stock photo of the aircraft model from Wikipedia (freely licensed), used when there's no photo of the actual plane.
 const stockCache = new Map();
-async function stockPhoto(model) {
-  if (stockCache.has(model)) return stockCache.get(model);
-  let out = null;
-  try {
-    const r = await get('https://en.wikipedia.org/w/api.php?action=query&format=json&generator=search&gsrlimit=1&prop=pageimages|info&inprop=url&piprop=thumbnail&pithumbsize=480&gsrsearch='
-      + encodeURIComponent(model + ' aircraft'));
-    const p = Object.values(JSON.parse(r.body).query?.pages || {})[0];
-    if (p?.thumbnail?.source) out = { src: p.thumbnail.source, link: p.fullurl, credit: 'Wikipedia', stock: true, title: p.title };
-  } catch (e) {}
-  stockCache.set(model, out);
+// Tries "maker model" (hyphens dropped: "Cirrus SF50 Vision") first, then "model aircraft", and prefers a page
+// whose title names the model number (e.g. "sf50"), since the top hit is often the maker's page with no picture.
+async function stockPhoto(model, mfr = '') {
+  const key = mfr + '|' + model;
+  if (stockCache.has(key)) return stockCache.get(key);
+  const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const tokens = model.split(/\s+/).map(norm).filter(t => /\d/.test(t) && t.length >= 2);
+  const plain = model.replace(/(\w)-(\w)/g, '$1$2');
+  const queries = [...new Set([
+    mfr && !norm(model).startsWith(norm(mfr)) ? `${mfr} ${plain}` : plain,
+    model + ' aircraft',
+  ])];
+  let out = null, fallback = null, failed = false;
+  for (const q of queries) {
+    try {
+      const r = await get('https://en.wikipedia.org/w/api.php?action=query&format=json&generator=search&gsrlimit=5&prop=pageimages|info&inprop=url&piprop=thumbnail&pithumbsize=480&gsrsearch='
+        + encodeURIComponent(q));
+      const pages = Object.values(JSON.parse(r.body).query?.pages || {}).sort((a, b) => a.index - b.index);
+      const hit = pages.find(p => p.thumbnail?.source && tokens.some(t => norm(p.title).includes(t)));
+      const pick = p => ({ src: p.thumbnail.source, link: p.fullurl, credit: 'Wikipedia', stock: true, title: p.title });
+      if (hit) { out = pick(hit); break; }
+      if (!fallback && pages[0]?.thumbnail?.source) fallback = pick(pages[0]);
+    } catch (e) { failed = true; }
+  }
+  out = out || (tokens.length ? null : fallback); // with a model number, a picture of something else is worse than none
+  if (out || !failed) stockCache.set(key, out); // a network hiccup shouldn't stick as "no photo"
   return out;
 }
 
@@ -114,7 +130,7 @@ async function lookup(hex, cs, reg, mfr = '', model = '') {
     const p = (JSON.parse(ps.value.body).photos || []).find(x => photoMatches(x.link, mfr));
     if (p) out.photo = { src: p.thumbnail_large?.src || p.thumbnail?.src, link: p.link, credit: p.photographer };
   } catch (e) {}
-  if (!out.photo && model) out.photo = await stockPhoto(model);
+  if (!out.photo && model) out.photo = await stockPhoto(model, mfr);
   try {
     const a = JSON.parse(db.value.body).response?.aircraft;
     if (a) {
@@ -122,7 +138,7 @@ async function lookup(hex, cs, reg, mfr = '', model = '') {
       // adsbdb's photo links point at a host that refuses third-party use, so photos come from Planespotters only
     }
   } catch (e) {}
-  lookupCache.set(key, out);
+  if (out.photo || !model) lookupCache.set(key, out); // no photo yet: try again next time (stockPhoto caches real misses)
   return out;
 }
 

@@ -351,12 +351,11 @@
   </div>
   <span class="live" id="live"><i></i><span id="liveTxt">Connecting…</span></span>
   <div class="spacer"></div>
-  <div class="ctl">Radius <input type="range" id="radius" min="1" max="25" step="1" value="10"><b id="radiusVal">10 mi</b></div>
+  <div class="ctl">Watch Radius <input type="range" id="radius" min="1" max="25" step="1" value="10"><b id="radiusVal">10 mi</b></div>
   <label class="chk"><input type="checkbox" id="showAll"> Show outside radius</label>
   <label class="chk"><input type="checkbox" id="showApts" checked> Airports</label>
   <label class="chk" title="Take over the screen with a close-up when a plane passes within 1 mile"><input type="checkbox" id="takeoverOn" checked> Overhead takeover</label>
   <label class="chk" title="Chime and spoken announcement when a plane is overhead"><input type="checkbox" id="soundOn" checked> 🔔 Sound</label>
-  <label class="chk" title="Two cat meows before the chime when a plane is overhead"><input type="checkbox" id="meowOn" checked> 🐱 Meow</label>
   <a class="btn" id="faBtn" href="#" target="_blank" rel="noopener" title="Your feeder's stats on FlightAware" style="display:none">📡 My ADSB ↗</a>
   <button id="changeHomeBtn" title="Change your home address">🏠 Home</button>
   <button id="homeBtn">⚙ Settings</button>
@@ -946,7 +945,16 @@ let takeoverOn = load('skyTakeover', true);
 $('takeoverOn').checked = takeoverOn;
 $('takeoverOn').addEventListener('change', e => { takeoverOn = e.target.checked; save('skyTakeover', takeoverOn); if (!takeoverOn) closeTakeover(); });
 let toHex = null, toMap = null, toLayers = null, toLeaveTimer = null, toFitted = false, toOpenedAt = 0;
-const toDismissed = new Map(); // hex -> time the viewer closed it (don't re-open for that pass)
+// hex -> last time it was inside the radius. Each plane gets one takeover/announcement per visit:
+// it's forgotten only after 2 min outside the radius, and kept across page reloads.
+const announced = new Map(load('skyAnnounced', []));
+function trackAnnounced(now) {
+  for (const [hex, t] of announced) {
+    if (current.find(x => x.hex === hex)?.inside) announced.set(hex, now);
+    else if (now - t > 2 * 60000) announced.delete(hex);
+  }
+  save('skyAnnounced', [...announced]);
+}
 
 // Closest point of approach to home on the current straight-line course (flat-earth is fine at this scale).
 function cpa(a) {
@@ -968,6 +976,7 @@ function ahead(a, secs) {
 function updateTakeover() {
   if (!takeoverOn || !home) return;
   const now = Date.now();
+  trackAnnounced(now);
   if (toHex) {
     const a = current.find(x => x.hex === toHex);
     // leave a few seconds after it moves out (or drops off), so it doesn't flicker at the edge
@@ -979,13 +988,14 @@ function updateTakeover() {
     return;
   }
   const cand = current
-    .filter(a => a.dist != null && a.dist < ALERT_MI && a.alt !== 'ground' && !(now - (toDismissed.get(a.hex) || 0) < 15 * 60000))
+    .filter(a => a.dist != null && a.dist < ALERT_MI && a.alt !== 'ground' && !announced.has(a.hex))
     .sort((a, b) => a.dist - b.dist)[0];
   if (cand) openTakeover(cand);
 }
 
 function openTakeover(a) {
   toHex = a.hex; toFitted = false; toOpenedAt = Date.now();
+  announced.set(a.hex, toOpenedAt); save('skyAnnounced', [...announced]);
   $('takeover').classList.add('show');
   if (!toMap) {
     toMap = L.map('toMap', { zoomControl: true, attributionControl: false, scrollWheelZoom: false });
@@ -1005,13 +1015,6 @@ $('soundOn').addEventListener('change', e => {
   soundOn = e.target.checked; save('skySound', soundOn);
   if (soundOn) { unlockAudio(); setTimeout(chime, 50); } else if ('speechSynthesis' in window) speechSynthesis.cancel();
 });
-// optional extra: two cat meows before the chime
-let meowOn = load('skyMeow', true); // on by default
-$('meowOn').checked = meowOn;
-$('meowOn').addEventListener('change', e => {
-  meowOn = e.target.checked; save('skyMeow', meowOn);
-  if (meowOn) { unlockAudio(); setTimeout(doubleMeow, 50); } // preview it
-});
 // browsers only allow sound once the viewer has clicked or typed on the page, so unlock on any interaction
 function unlockAudio() {
   try {
@@ -1020,34 +1023,6 @@ function unlockAudio() {
   } catch (e) {}
 }
 ['click', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, unlockAudio, { passive: true }));
-
-// Synthesized cat "meow": a nasal tone that slides up then down with a little vibrato,
-// filtered to sound vocal. `delay` is seconds from now.
-function meow(delay = 0) {
-  if (!audioCtx || audioCtx.state !== 'running') return false;
-  const t = audioCtx.currentTime + delay;
-  const o = audioCtx.createOscillator(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
-  const vib = audioCtx.createOscillator(), vibAmt = audioCtx.createGain();
-  o.type = 'sawtooth';
-  o.frequency.setValueAtTime(560, t);
-  o.frequency.exponentialRampToValueAtTime(1050, t + .16);  // "mee-"
-  o.frequency.exponentialRampToValueAtTime(640, t + .58);   // "-ow"
-  vib.frequency.value = 7; vibAmt.gain.value = 18;
-  vib.connect(vibAmt).connect(o.frequency);
-  f.type = 'bandpass'; f.Q.value = 3.5;
-  f.frequency.setValueAtTime(1500, t);
-  f.frequency.linearRampToValueAtTime(2700, t + .18);
-  f.frequency.linearRampToValueAtTime(950, t + .6);
-  g.gain.setValueAtTime(0, t);
-  g.gain.linearRampToValueAtTime(.5, t + .05);
-  g.gain.setValueAtTime(.5, t + .42);
-  g.gain.exponentialRampToValueAtTime(.001, t + .66);
-  o.connect(f).connect(g).connect(audioCtx.destination);
-  o.start(t); vib.start(t); o.stop(t + .68); vib.stop(t + .68);
-  return true;
-}
-const MEOW_LEAD = 1.7; // seconds the two meows take before the chime starts
-function doubleMeow() { return meow(0) && meow(.85); }
 
 function chime(delay = 0) {
   if (!audioCtx || audioCtx.state !== 'running') return false;
@@ -1099,9 +1074,7 @@ function announce(a) {
 function alertSound(hex) {
   if (!soundOn) return;
   unlockAudio();
-  // optional: meow, meow, then the chime and the spoken announcement as usual
-  const lead = meowOn ? MEOW_LEAD : 0;
-  const played = (meowOn ? doubleMeow() : true) && chime(lead);
+  const played = chime();
   if (!played && !soundBlockedShown) {
     soundBlockedShown = true;
     const el = document.createElement('div');
@@ -1112,11 +1085,18 @@ function alertSound(hex) {
     setTimeout(() => el.remove(), 15000);
   }
   // give the route lookup a moment to arrive, then announce (after the chime finishes)
-  setTimeout(() => { const a = current.find(x => x.hex === hex); if (a && toHex === hex && soundOn) announce(a); }, 1800 + lead * 1000);
+  // (if the lookup is still on its way, wait up to ~6 s more so the destination can be said)
+  const started = Date.now();
+  const speak = () => {
+    const a = current.find(x => x.hex === hex);
+    if (!a || toHex !== hex || !soundOn) return;
+    if (lookups.get(hex) === 'pending' && !routeParts(a).to && Date.now() - started < 6000) return setTimeout(speak, 500);
+    announce(a);
+  };
+  setTimeout(speak, 1800);
 }
 
 function closeTakeover() {
-  if (toHex) toDismissed.set(toHex, Date.now()); // one takeover per pass, whether closed by hand or automatically
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   toHex = null; clearTimeout(toLeaveTimer); toLeaveTimer = null;
   $('takeover').classList.remove('show');
