@@ -472,6 +472,7 @@ const server = http.createServer(async (req, res) => {
         const pt = p => Array.isArray(p) && isFinite(p[0]) && isFinite(p[1]) ? [+p[0], +p[1]] : null;
         if ('home' in b && pt(b.home)) settings.home = pt(b.home);
         if ('homeLabel' in b) settings.homeLabel = String(b.homeLabel || '').slice(0, 120);
+        if ('homeName' in b) settings.homeName = String(b.homeName || '').slice(0, 40);
         if ('office' in b) settings.office = b.office && pt(b.office.pos)
           ? { name: String(b.office.name || 'Office').slice(0, 40), pos: pt(b.office.pos), label: String(b.office.label || '').slice(0, 120) } : null;
         if ('faUser' in b && /^[A-Za-z0-9_.-]{0,40}$/.test(b.faUser || '')) { settings.faUser = b.faUser || ''; faCache = null; }
@@ -482,7 +483,7 @@ const server = http.createServer(async (req, res) => {
         await refreshAircraft().catch(() => {});
       }
       return send(res, 200, JSON.stringify({
-        home: settings.home || null, homeLabel: settings.homeLabel || '', office: settings.office || null,
+        home: settings.home || null, homeLabel: settings.homeLabel || '', homeName: settings.homeName || '', office: settings.office || null,
         faUser: faUser(), contact: contactSetting() || '',
       }));
     }

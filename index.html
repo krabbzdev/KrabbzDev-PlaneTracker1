@@ -232,6 +232,8 @@
     .to-photo { height: 160px; }
   }
   #version { position: fixed; right: 10px; bottom: 6px; z-index: 1500; font: 11px var(--mono); color: var(--muted); background: rgba(11,16,32,.75); padding: 2px 8px; border-radius: 6px; pointer-events: none; }
+  #version a { color: var(--accent); text-decoration: none; pointer-events: auto; }
+  #version a:hover { text-decoration: underline; }
   #toasts { position: fixed; right: 16px; bottom: 32px; display: flex; flex-direction: column; gap: 8px; z-index: 2000; max-width: min(380px, calc(100vw - 32px)); }
   .toast { background: var(--panel); border: 1px solid var(--bc); border-left-width: 4px; border-radius: 10px; padding: 10px 14px; font-size: 13px; box-shadow: 0 6px 24px rgba(0,0,0,.5); cursor: pointer; animation: toastIn .25s ease-out; }
   .toast b { color: var(--bc); }
@@ -413,8 +415,9 @@
   <p id="welcome" class="welcome" hidden>What's your home address? That's where we'll watch the sky for planes overhead. You only need to do this once; you can change it any time with 🏠 Home.</p>
   <p>Search an address, type coordinates, or click the spot on the map.</p>
   <div class="place" id="homePlace">
-    <h4>🏠 Our Home</h4>
+    <h4>🏠 Home</h4>
     <div class="cur" id="homeCur"></div>
+    <div class="row"><input id="homeNameIn" maxlength="40" placeholder="Name shown on the map, e.g. Our Home"></div>
     <div class="row"><input id="homeAddr" placeholder="Street address"><button data-find="home">Find</button></div>
     <div class="row"><input id="latIn" placeholder="Latitude"><input id="lonIn" placeholder="Longitude"></div>
     <div class="acts"><button id="geoBtn">Use my location</button><button data-pick="home">Click on map</button></div>
@@ -447,7 +450,7 @@
 </dialog>
 
 <div id="toasts"></div>
-<div id="version" title="Version and build number"></div>
+<div id="version"><span id="verText" title="Version and build number"></span> · <a id="verRepo" href="https://github.com/showtechclove1/krabbz9999-flighttracker" target="_blank" rel="noopener" title="Source code and releases on GitHub">GitHub ↗</a></div>
 
 <dialog id="axDlg" class="ax-dlg">
   <div class="ax-bar">
@@ -544,7 +547,7 @@ function drawHome() {
   ringLayer.clearLayers();
   if (homeMarker) homeMarker.remove();
   if (!home) return;
-  homeMarker = L.marker(home, { icon: L.divIcon({ className: '', html: '<div class="poi" style="--c:#4cc9f0;cursor:pointer"><i>🏠</i><span>Our Home</span></div>', iconSize: [0, 0] }), zIndexOffset: 1000 })
+  homeMarker = L.marker(home, { icon: L.divIcon({ className: '', html: `<div class="poi" style="--c:#4cc9f0;cursor:pointer"><i>🏠</i><span>${esc(homeName())}</span></div>`, iconSize: [0, 0] }), zIndexOffset: 1000 })
     .bindTooltip('Click to change home', { direction: 'bottom', offset: [0, 16] })
     .on('click', () => openHome(true)).addTo(map);
   const step = radius <= 6 ? 1 : radius <= 12 ? 2 : 5;
@@ -1126,7 +1129,7 @@ function drawTakeover(a) {
   const trail = tracks.get(a.hex)?.points || [];
   // 1-mile ring + home
   L.circle(home, { radius: ALERT_MI * MI, color: '#ff5d73', weight: 2, opacity: .6, fillColor: '#ff5d73', fillOpacity: .05, dashArray: '6 6', interactive: false }).addTo(toLayers);
-  L.marker(home, { icon: L.divIcon({ className: '', html: '<div class="poi" style="--c:#4cc9f0"><i>🏠</i><span>Our Home</span></div>', iconSize: [0, 0] }) }).addTo(toLayers);
+  L.marker(home, { icon: L.divIcon({ className: '', html: `<div class="poi" style="--c:#4cc9f0"><i>🏠</i><span>${esc(homeName())}</span></div>`, iconSize: [0, 0] }) }).addTo(toLayers);
   // flown path (solid) and projected path for the next 2 minutes (dashed)
   if (trail.length > 1) L.polyline(trail, { color, weight: 5, opacity: .9, lineCap: 'round' }).addTo(toLayers);
   let proj = null;
@@ -1491,7 +1494,8 @@ let loadedBuild = null;
 async function checkVersion() {
   let v;
   try { v = await fetch('/api/version', { cache: 'no-store' }).then(r => r.json()); } catch (e) { return; } // app restarting
-  $('version').textContent = `v${v.version} · build ${v.build}${v.date ? ' · ' + v.date : ''}`;
+  $('verText').textContent = `v${v.version} · build ${v.build}${v.date ? ' · ' + v.date : ''}`;
+  $('verRepo').href = 'https://github.com/' + (v.repo || 'showtechclove1/krabbz9999-flighttracker');
   if (loadedBuild === null) { loadedBuild = v.build; return; }
   // the app updated itself: reload so this page runs the new version too (not in the middle of an overhead alert)
   if (v.build !== loadedBuild && !toHex) {
@@ -1663,6 +1667,7 @@ function rawCache() {
 
 // ---------- settings: Home, Office, data source and accounts (saved in settings.json next to the app) ----------
 let cfg = {}; // last settings from the server
+const homeName = () => cfg.homeName || 'Our Home'; // label on the home pin, renamed in Settings
 let office = null; // { name, pos: [lat, lon], label }
 const poiLayer = L.layerGroup().addTo(map);
 function drawPois() {
@@ -1701,6 +1706,7 @@ async function openHome(focusHome, firstRun) {
   await loadCfg();
   if (home) { $('latIn').value = home[0]; $('lonIn').value = home[1]; }
   $('homeAddr').value = cfg.homeLabel || '';
+  $('homeNameIn').value = cfg.homeName || '';
   $('homeCur').textContent = home ? `Currently: ${cfg.homeLabel || home[0].toFixed(4) + ', ' + home[1].toFixed(4)}` : 'Not set yet';
   $('offName').value = office?.name || '';
   $('offAddr').value = office?.label || '';
@@ -1745,6 +1751,7 @@ $('saveHome').onclick = async () => {
   const homeChanged = isFinite(lat) && isFinite(lon) && (!home || lat !== home[0] || lon !== home[1]);
   const patch = {
     homeLabel: $('homeAddr').value.trim(),
+    homeName: $('homeNameIn').value.trim(),
     office: isFinite(oLat) && isFinite(oLon) ? { name: $('offName').value.trim() || 'Office', pos: [oLat, oLon], label: $('offAddr').value.trim() } : null,
     faUser: $('faIn').value.trim(),
     contact: $('contactIn').value.trim(),
@@ -1752,7 +1759,7 @@ $('saveHome').onclick = async () => {
   if (isFinite(lat) && isFinite(lon)) patch.home = [lat, lon];
   voicePref = $('voiceSel').value; save('skyVoice', voicePref);
   await saveCfg(patch);
-  if (homeChanged) setHome(lat, lon);
+  if (homeChanged) setHome(lat, lon); else drawHome(); // redraw so a new pin name shows
   drawPois();
   pollFa();
   $('homeDlg').close();
