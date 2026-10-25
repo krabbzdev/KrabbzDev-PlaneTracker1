@@ -8,6 +8,7 @@ build/
 settings.json
 daily-log.json
 airports-cache.json
+aircraft-types-cache.json
 faa-index.json
 ReleasableAircraft.zip
 

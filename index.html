@@ -814,7 +814,7 @@ async function requestLookup(hex) {
   const mfr = ac ? brandOf(ac) : '', model = ac && (ac.desc || ac.type) ? modelOf(ac) : '';
   try {
     const r = await fetch('/api/lookup/' + hex + '?cs=' + encodeURIComponent(cs) + '&reg=' + encodeURIComponent(reg)
-      + '&mfr=' + encodeURIComponent(mfr) + '&model=' + encodeURIComponent(model));
+      + '&mfr=' + encodeURIComponent(mfr) + '&model=' + encodeURIComponent(model) + '&type=' + encodeURIComponent(ac?.type || ''));
     lookups.set(hex, r.ok ? await r.json() : {});
   } catch (e) { lookups.set(hex, {}); }
   render();

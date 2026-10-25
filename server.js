@@ -67,38 +67,80 @@ function photoMatches(link, mfr) {
 }
 
 // Stock photo of the aircraft model from Wikipedia (freely licensed), used when there's no photo of the actual plane.
-const stockCache = new Map();
-// Tries "maker model" (hyphens dropped: "Cirrus SF50 Vision") first, then "model aircraft", and prefers a page
-// whose title names the model number (e.g. "sf50"), since the top hit is often the maker's page with no picture.
-async function stockPhoto(model, mfr = '') {
-  const key = mfr + '|' + model;
-  if (stockCache.has(key)) return stockCache.get(key);
-  const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const tokens = model.split(/\s+/).map(norm).filter(t => /\d/.test(t) && t.length >= 2);
-  const plain = model.replace(/(\w)-(\w)/g, '$1$2');
-  const queries = [...new Set([
-    mfr && !norm(model).startsWith(norm(mfr)) ? `${mfr} ${plain}` : plain,
-    model + ' aircraft',
-  ])];
-  let out = null, fallback = null, failed = false;
-  for (const q of queries) {
+// 1. By ICAO type code (GL7T, C25B, B738...): Wikipedia's "List of aircraft type designators" names the exact
+//    article for each code, so that's tried first. The list is fetched once and cached for a week.
+// 2. Otherwise a search: "maker model" (hyphens dropped: "Cirrus SF50 Vision"), the base model ("Piper PA28"
+//    for "PA-28-140/150/160/180"), then "model aircraft". A page counts only if its title names the model number,
+//    since the top hit is often the maker's page with no picture, or something unrelated.
+const TYPES_CACHE = path.join(APP_DIR, 'aircraft-types-cache.json');
+let typeIndex = null, typeIndexLoading = null;
+function loadTypeIndex() {
+  if (typeIndex) return Promise.resolve(typeIndex);
+  if (typeIndexLoading) return typeIndexLoading;
+  return typeIndexLoading = (async () => {
     try {
-      const r = await get('https://en.wikipedia.org/w/api.php?action=query&format=json&generator=search&gsrlimit=5&prop=pageimages|info&inprop=url&piprop=thumbnail&pithumbsize=480&gsrsearch='
-        + encodeURIComponent(q));
-      const pages = Object.values(JSON.parse(r.body).query?.pages || {}).sort((a, b) => a.index - b.index);
-      const hit = pages.find(p => p.thumbnail?.source && tokens.some(t => norm(p.title).includes(t)));
-      const pick = p => ({ src: p.thumbnail.source, link: p.fullurl, credit: 'Wikipedia', stock: true, title: p.title });
-      if (hit) { out = pick(hit); break; }
-      if (!fallback && pages[0]?.thumbnail?.source) fallback = pick(pages[0]);
+      const c = JSON.parse(fs.readFileSync(TYPES_CACHE, 'utf8'));
+      if (Date.now() - c.at < 7 * 86400000) return (typeIndex = c.types);
+    } catch (e) {}
+    try {
+      const r = await get('https://en.wikipedia.org/w/index.php?title=List_of_aircraft_type_designators&action=raw', 15000);
+      if (r.status !== 200) throw new Error('HTTP ' + r.status);
+      const types = {};
+      // rows look like: | GL7T || CCX || [[Bombardier Global 7500|Bombardier Global 7500 / Global 8000]]
+      for (const m of r.body.toString().matchAll(/^\|\s*([A-Z0-9]{2,4})\s*\|\|[^\n]*?\[\[([^\]|#]+)/gm)) types[m[1]] = types[m[1]] || m[2].trim();
+      fs.writeFileSync(TYPES_CACHE, JSON.stringify({ at: Date.now(), types }));
+      return (typeIndex = types);
+    } catch (e) { return {}; } // try again next time
+    finally { typeIndexLoading = null; }
+  })();
+}
+
+const wikiPhoto = p => p?.thumbnail?.source ? { src: p.thumbnail.source, link: p.fullurl, credit: 'Wikipedia', stock: true, title: p.title } : null;
+const stockCache = new Map();
+async function stockPhoto(model, mfr = '', type = '') {
+  const key = [mfr, model, type].join('|');
+  if (stockCache.has(key)) return stockCache.get(key);
+  let out = null, failed = false;
+  const WIKI = 'https://en.wikipedia.org/w/api.php?action=query&format=json&redirects=1&prop=pageimages|info&inprop=url&piprop=thumbnail&pithumbsize=480';
+
+  const article = type && (await loadTypeIndex())[type.toUpperCase()];
+  if (article) {
+    try {
+      const r = await get(WIKI + '&titles=' + encodeURIComponent(article));
+      out = wikiPhoto(Object.values(JSON.parse(r.body).query?.pages || {})[0]);
     } catch (e) { failed = true; }
   }
-  out = out || (tokens.length ? null : fallback); // with a model number, a picture of something else is worse than none
+
+  if (!out && model) {
+    const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    // model numbers to look for in a title: "PA-28-140/150/160/180" gives pa28140 and its base model pa28
+    const tokens = [...new Set(model.split(/\s+/).flatMap(w => {
+      const first = w.split('/')[0], parts = first.split('-');
+      return [norm(first), parts.length > 2 ? norm(parts.slice(0, 2).join('-')) : ''];
+    }).filter(t => /\d/.test(t) && t.length >= 2))];
+    const plain = model.replace(/(\w)-(\w)/g, '$1$2');
+    const maker = mfr && !norm(model).startsWith(norm(mfr)) ? mfr + ' ' : '';
+    const base = (model.split(/\s+/)[0].split('/')[0].match(/^[A-Za-z]+-?\d+/) || [''])[0];
+    const queries = [...new Set([maker + plain, base && base !== model ? maker + base : '', model + ' aircraft'].filter(Boolean))];
+    let fallback = null;
+    for (const q of queries) {
+      try {
+        const r = await get(WIKI + '&generator=search&gsrlimit=5&gsrsearch=' + encodeURIComponent(q));
+        const pages = Object.values(JSON.parse(r.body).query?.pages || {})
+          .filter(p => !/^List of/i.test(p.title)).sort((a, b) => a.index - b.index);
+        const hit = pages.find(p => p.thumbnail?.source && tokens.some(t => norm(p.title).includes(t)));
+        if (hit) { out = wikiPhoto(hit); break; }
+        if (!fallback && pages[0]?.thumbnail?.source) fallback = wikiPhoto(pages[0]);
+      } catch (e) { failed = true; }
+    }
+    out = out || (tokens.length ? null : fallback); // with a model number, a picture of something else is worse than none
+  }
   if (out || !failed) stockCache.set(key, out); // a network hiccup shouldn't stick as "no photo"
   return out;
 }
 
-async function lookup(hex, cs, reg, mfr = '', model = '') {
-  const key = [hex, cs, reg, mfr, model].join('|');
+async function lookup(hex, cs, reg, mfr = '', model = '', type = '') {
+  const key = [hex, cs, reg, mfr, model, type].join('|');
   if (lookupCache.has(key)) return lookupCache.get(key);
   const out = { photo: null, info: null, flight: null };
   // Airline + route by callsign; skip private tail-number callsigns, which never have one.
@@ -130,7 +172,7 @@ async function lookup(hex, cs, reg, mfr = '', model = '') {
     const p = (JSON.parse(ps.value.body).photos || []).find(x => photoMatches(x.link, mfr));
     if (p) out.photo = { src: p.thumbnail_large?.src || p.thumbnail?.src, link: p.link, credit: p.photographer };
   } catch (e) {}
-  if (!out.photo && model) out.photo = await stockPhoto(model, mfr);
+  if (!out.photo && (model || type)) out.photo = await stockPhoto(model, mfr, type);
   try {
     const a = JSON.parse(db.value.body).response?.aircraft;
     if (a) {
@@ -138,7 +180,7 @@ async function lookup(hex, cs, reg, mfr = '', model = '') {
       // adsbdb's photo links point at a host that refuses third-party use, so photos come from Planespotters only
     }
   } catch (e) {}
-  if (out.photo || !model) lookupCache.set(key, out); // no photo yet: try again next time (stockPhoto caches real misses)
+  if (out.photo || !(model || type)) lookupCache.set(key, out); // no photo yet: try again next time (stockPhoto caches real misses)
   return out;
 }
 
@@ -530,7 +572,7 @@ const server = http.createServer(async (req, res) => {
       const q = k => (url.searchParams.get(k) || '').trim().toUpperCase();
       const reg = /^[A-Z0-9-]{2,10}$/.test(q('reg')) ? q('reg') : '';
       const txt = k => (url.searchParams.get(k) || '').trim().slice(0, 80);
-      return send(res, 200, JSON.stringify(await lookup(m[1].toLowerCase(), q('cs'), reg, txt('mfr'), txt('model'))));
+      return send(res, 200, JSON.stringify(await lookup(m[1].toLowerCase(), q('cs'), reg, txt('mfr'), txt('model'), /^[A-Z0-9]{2,4}$/.test(q('type')) ? q('type') : '')));
     }
     send(res, 404, '{"error":"not found"}');
   } catch (e) {
