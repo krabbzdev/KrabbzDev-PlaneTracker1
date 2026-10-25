@@ -304,7 +304,8 @@
   .rg-grid div { background: var(--panel-2); border-radius: 8px; padding: 7px 10px; min-width: 0; }
   .rg-grid .k { font-size: 10px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); }
   .rg-grid .v { font: 13px var(--mono); margin-top: 2px; overflow-wrap: anywhere; }
-  .rg-links { display: flex; flex-wrap: wrap; gap: 8px 14px; padding: 6px 20px 12px; font-size: 13px; }
+  /* quick links bar, right under the photo */
+  .rg-links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 20px; font-size: 13px; background: var(--panel-2); border-bottom: 1px solid var(--line); }
   .rg-links a { color: var(--accent); text-decoration: none; }
   .rg-src { margin: 4px 20px 12px; font-size: 12px; color: var(--muted); line-height: 1.5; }
   .rg-src.hint { background: rgba(76,201,240,.08); border: 1px solid rgba(76,201,240,.3); border-radius: 8px; padding: 8px 10px; color: var(--text); }
@@ -1206,6 +1207,7 @@ async function openReg(hex, reg) {
       : `<div class="rg-src">Non-US registration; the FAA registry only covers N-numbers. Owner shown is from the live feed.</div>`;
   $('regBody').innerHTML = `
     ${Lk.photo?.src ? `<div class="rg-photo" style="background-image:url('${Lk.photo.src}')">${photoCredit(Lk.photo)}</div>` : ''}
+    <div class="rg-links">${links}</div>
     <div class="rg-head"><div class="t">${reg}</div><div class="s">${[make, model].filter(Boolean).join(' ')}${a.flight && a.flight !== reg ? ' · flying as ' + a.flight : ''}${airlineOf(a) ? ' (' + airlineOf(a) + ')' : ''}</div></div>
     <div class="rg-sec"><h4>Right now</h4><div class="rg-grid" id="rgLive"></div></div>
     <div class="rg-sec"><h4>Flight path</h4><div id="rgMap" class="rg-map"></div><div class="rg-cap" id="rgCap"></div></div>
@@ -1222,8 +1224,7 @@ async function openReg(hex, reg) {
     ${F ? `<div class="rg-sec"><h4>Registration</h4><div class="rg-grid">
       ${cell('Certificate issued', F.certIssued)}${cell('Airworthiness', F.airworthiness)}${cell('Expires', F.expires)}${cell('Status', F.status)}
     </div></div>` : ''}
-    ${src}
-    <div class="rg-links">${links}</div>`;
+    ${src}`;
   startRegMap(hex);
 }
 
