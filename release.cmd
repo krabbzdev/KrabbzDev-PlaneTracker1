@@ -4,7 +4,7 @@ rem Usage:  release.cmd "What changed in this build"
 rem Needs: Node.js, Git and the GitHub CLI (signed in with: gh auth login).
 cd /d "%~dp0"
 if "%~1"=="" ( echo Usage: release.cmd "What changed" & exit /b 1 )
-call build-exe.cmd || exit /b 1
+call "%~dp0build-exe.cmd" || exit /b 1
 for /f %%v in ('node -p "require('./version.json').version"') do set VER=%%v
 for /f %%b in ('node -p "require('./version.json').build"') do set BUILD=%%b
 set TAG=v%VER%.%BUILD%
