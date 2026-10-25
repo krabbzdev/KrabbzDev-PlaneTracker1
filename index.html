@@ -356,7 +356,7 @@
   <div class="ctl">Tracker Radius <input type="range" id="radius" min="1" max="25" step="1" value="20"><b id="radiusVal">20 mi</b></div>
   <label class="chk"><input type="checkbox" id="showAll"> Show outside radius</label>
   <label class="chk"><input type="checkbox" id="showApts" checked> Airports</label>
-  <label class="chk" title="Live rain radar on the map (US, refreshes every 5 minutes)"><input type="checkbox" id="wxOn"> 🌧 Weather</label>
+  <label class="chk" title="Live rain radar on the map (US, refreshes every 5 minutes)"><input type="checkbox" id="wxOn" checked> 🌧 Weather</label>
   <label class="chk" title="Take over the screen with a close-up when a plane passes within 1 mile"><input type="checkbox" id="takeoverOn" checked> Overhead takeover</label>
   <label class="chk" title="Chime and spoken announcement when a plane is overhead"><input type="checkbox" id="soundOn" checked> 🔔 Sound</label>
   <a class="btn" id="faBtn" href="#" target="_blank" rel="noopener" title="Your feeder's stats on FlightAware" style="display:none">📡 My ADSB ↗</a>
@@ -527,7 +527,7 @@ L.tileLayer(ESRI + 'World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { max
 map.createPane('weather').style.zIndex = 350;
 const wxUrl = () => 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png?t=' + Math.floor(Date.now() / 300000);
 const wxLayer = L.tileLayer(wxUrl(), { pane: 'weather', opacity: .6, maxZoom: 16, attribution: 'Radar: NWS NEXRAD via Iowa Environmental Mesonet' });
-let wxOn = load('skyWeather', false), wxTimer = null;
+let wxOn = load('skyWeather', true), wxTimer = null;
 function setWeather(on) {
   wxOn = on; save('skyWeather', on); $('wxOn').checked = on;
   clearInterval(wxTimer);
