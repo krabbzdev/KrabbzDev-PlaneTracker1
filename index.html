@@ -1207,6 +1207,7 @@ async function openReg(hex, reg) {
   $('regBody').innerHTML = `
     ${Lk.photo?.src ? `<div class="rg-photo" style="background-image:url('${Lk.photo.src}')">${photoCredit(Lk.photo)}</div>` : ''}
     <div class="rg-head"><div class="t">${reg}</div><div class="s">${[make, model].filter(Boolean).join(' ')}${a.flight && a.flight !== reg ? ' · flying as ' + a.flight : ''}${airlineOf(a) ? ' (' + airlineOf(a) + ')' : ''}</div></div>
+    <div class="rg-sec"><h4>Right now</h4><div class="rg-grid" id="rgLive"></div></div>
     <div class="rg-sec"><h4>Flight path</h4><div id="rgMap" class="rg-map"></div><div class="rg-cap" id="rgCap"></div></div>
     <div class="rg-sec"><h4>Registered owner${F?.fractional ? ' · fractional ownership' : ''}</h4>
       <div class="rg-owner">${owner || 'Not listed'}</div>
@@ -1241,8 +1242,22 @@ function startRegMap(hex) {
 }
 $('regDlg').addEventListener('close', () => { clearInterval(rgTimer); if (rgMap) { rgMap.remove(); rgMap = null; } });
 
+function renderRegLive(hex) {
+  const el = $('rgLive'), a = tracks.get(hex)?.aircraft;
+  if (!el) return;
+  if (!a) { el.innerHTML = '<div><div class="k">Status</div><div class="v">No longer in range</div></div>'; return; }
+  const cell = (k, v, style = '') => `<div><div class="k">${k}</div><div class="v" style="${style}">${v ?? '—'}</div></div>`;
+  el.innerHTML = cell('Altitude', fmtAlt(a.alt) + (a.vr > 300 ? ' ↑' : a.vr < -300 ? ' ↓' : ''), 'color:' + altColor(a.alt))
+    + cell('Speed', a.gs != null ? Math.round(a.gs * 1.15078) + ' mph' : null)
+    + cell('Distance', a.dist != null ? a.dist.toFixed(1) + ' mi ' + compass(a.brg) : null)
+    + cell('Heading', a.track != null ? Math.round(a.track) + '° ' + compass(a.track) : null)
+    + cell('Climb', a.vr != null ? (a.vr > 0 ? '+' : '') + a.vr + ' fpm' : null)
+    + cell('Squawk', a.squawk);
+}
+
 async function drawRegTrack(hex, fit) {
   if (!rgMap) return;
+  renderRegLive(hex);
   let pts = [];
   try { pts = (await fetch('/api/track/' + hex).then(r => r.json())).points || []; } catch (e) {}
   if (!rgMap) return;
@@ -1321,56 +1336,18 @@ $('cards').addEventListener('click', e => {
   if (card) select(card.dataset.hex, true);
 });
 
+// Selecting a plane (card, map, alert or leaderboard) highlights it and opens its popup window.
 function select(hex, pan) {
   selected = hex;
   const t = hex && tracks.get(hex);
   if (t && pan) map.panTo([t.aircraft.lat, t.aircraft.lon]);
-  if (hex) requestLookup(hex);
+  if (hex) { requestLookup(hex); openReg(hex, regLabel(hex)); }
   render();
 }
+const regLabel = hex => { const a = tracks.get(hex)?.aircraft; return a?.reg || look(hex).info?.reg || a?.flight || hex.toUpperCase(); };
 
-function renderDetail() {
-  const el = $('detail');
-  const t = selected && tracks.get(selected);
-  if (!t) { el.className = ''; el.innerHTML = ''; return; }
-  const a = t.aircraft, Lk = look(a.hex), i = Lk.info || {};
-  const reg = a.reg || i.reg || '';
-  const photo = Lk.photo;
-  el.className = 'show';
-  el.innerHTML = `
-    <div class="hero" style="${photo?.src ? `background-image:url('${photo.src}')` : ''}">
-      ${photoCredit(photo)}
-      <button class="x" onclick="select(null)">✕</button>
-    </div>
-    <div class="d-body">
-      <div class="d-title"><span class="cs">${a.flight || reg || a.hex.toUpperCase()}</span><span class="reg">${reg ? tailLink(a.hex, reg) + ' · ' : ''}${a.hex.toUpperCase()}</span>${specialOf(a) ? `<span class="badge sp" style="--bc:${SPECIAL[specialOf(a)].color};margin-left:auto">${specialOf(a) === 'emergency' ? emergencyOf(a) : SPECIAL[specialOf(a)].label}</span>` : ''}</div>
-      <div class="grid2 wide">
-        <div><div class="k">From${routeParts(a).guessed && routeParts(a).from ? ' (seen departing)' : ''}</div><div class="v" style="color:var(--accent)">${routeParts(a).from || '—'}</div></div>
-        <div><div class="k">To${routeParts(a).guessed && routeParts(a).to ? ' (likely)' : ''}</div><div class="v" style="color:var(--accent)">${routeParts(a).to || '—'}</div></div>
-        <div><div class="k">Brand</div><div class="v">${brandOf(a) || '—'}</div></div>
-        <div><div class="k">Model</div><div class="v">${modelOnly(a) || '—'}</div></div>
-        <div><div class="k">Airline</div><div class="v">${airlineOf(a) || '—'}</div></div>
-        <div><div class="k">Owner</div><div class="v">${ownerOf(a) || '—'}</div></div>
-      </div>
-      <div class="grid2">
-        <div><div class="k">Altitude</div><div class="v" style="color:${altColor(a.alt)}">${fmtAlt(a.alt)}</div></div>
-        <div><div class="k">Speed</div><div class="v">${a.gs != null ? Math.round(a.gs * 1.15078) + ' mph' : '—'}</div></div>
-        <div><div class="k">Climb</div><div class="v">${a.vr != null ? (a.vr > 0 ? '+' : '') + a.vr + ' fpm' : '—'}</div></div>
-        <div><div class="k">Distance</div><div class="v">${a.dist != null ? a.dist.toFixed(2) + ' mi' : '—'}</div></div>
-        <div><div class="k">Bearing</div><div class="v">${a.brg != null ? Math.round(a.brg) + '° ' + compass(a.brg) : '—'}</div></div>
-        <div><div class="k">Squawk</div><div class="v">${a.squawk || '—'}</div></div>
-        <div><div class="k">Tracked for</div><div class="v">${trackedFor(a) || '—'}</div></div>
-        <div><div class="k">Heading</div><div class="v">${a.track != null ? Math.round(a.track) + '°' : '—'}</div></div>
-        <div><div class="k">ICAO hex</div><div class="v">${a.hex.toUpperCase()}</div></div>
-      </div>
-      <div class="links">
-        ${a.flight ? `<a href="https://www.flightaware.com/live/flight/${a.flight}" target="_blank" rel="noopener">FlightAware ↗</a>` : ''}
-        ${adsbxBtn(a.hex, a.flight || reg, '🌐 ADS-B Exchange')}
-        ${shareBtn(a.hex)}
-        ${reg ? `<a href="https://www.planespotters.net/search?q=${reg}" target="_blank" rel="noopener">Photos ↗</a>` : ''}
-      </div>
-    </div>`;
-}
+// The old right-hand details panel was replaced by the popup window (openReg).
+function renderDetail() { $('detail').className = ''; }
 
 // ---------- data source ----------
 let DEMO_NO_SERVER = false;
