@@ -330,7 +330,7 @@
   <label class="chk"><input type="checkbox" id="showApts" checked> Airports</label>
   <label class="chk" title="Take over the screen with a close-up when a plane passes within 1 mile"><input type="checkbox" id="takeoverOn" checked> Overhead takeover</label>
   <label class="chk" title="Chime and spoken announcement when a plane is overhead"><input type="checkbox" id="soundOn" checked> 🔔 Sound</label>
-  <label class="chk" title="Two cat meows before the chime when a plane is overhead"><input type="checkbox" id="meowOn"> 🐱 Meow</label>
+  <label class="chk" title="Two cat meows before the chime when a plane is overhead"><input type="checkbox" id="meowOn" checked> 🐱 Meow</label>
   <a class="btn" id="faBtn" href="#" target="_blank" rel="noopener" title="Your feeder's stats on FlightAware" style="display:none">📡 My ADSB ↗</a>
   <button id="changeHomeBtn" title="Change your home address">🏠 Home</button>
   <button id="homeBtn">⚙ Settings</button>
@@ -929,7 +929,7 @@ $('soundOn').addEventListener('change', e => {
   if (soundOn) { unlockAudio(); setTimeout(chime, 50); } else if ('speechSynthesis' in window) speechSynthesis.cancel();
 });
 // optional extra: two cat meows before the chime
-let meowOn = load('skyMeow', false);
+let meowOn = load('skyMeow', true); // on by default
 $('meowOn').checked = meowOn;
 $('meowOn').addEventListener('change', e => {
   meowOn = e.target.checked; save('skyMeow', meowOn);

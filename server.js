@@ -23,7 +23,7 @@ try { VERSION = JSON.parse(sea ? Buffer.from(sea.getAsset('version.json')).toStr
 const PORT = Number(process.env.PORT || 8090);
 // Defaults shown in Settings -> Your accounts until someone changes or clears them there.
 const DEFAULT_FA_USER = 'LoveFamily9999';      // FlightAware feeder whose stats are shown
-const DEFAULT_CONTACT = 'General@loves3d.com'; // contact Planespotters asks every app for
+const DEFAULT_CONTACT = 'noreply@loves3d.com'; // contact Planespotters asks every app for
 const contactSetting = () => 'contact' in settings ? settings.contact : DEFAULT_CONTACT;
 
 const lookupCache = new Map(); // hex|callsign -> {photo, info, flight}
