@@ -13,3 +13,6 @@ ReleasableAircraft.zip
 
 # local tooling
 .claude/
+
+# local copy of the source-backup artifact
+backup-artifact/
