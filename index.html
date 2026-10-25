@@ -433,6 +433,11 @@
     <p class="src-note">Planespotters asks each app for a contact. If you leave it blank, your FlightAware page is used; with neither, planes show stock model photos.</p>
   </div>
   <div class="place">
+    <h4>🗣 Overhead voice</h4>
+    <div class="row"><select id="voiceSel"></select><button id="voiceTest">▶ Test</button></div>
+    <p class="src-note">"TikTok style" picks an upbeat natural voice on this computer and speeds it up a little. Voices come from your browser and Windows, so the list differs between PCs.</p>
+  </div>
+  <div class="place">
     <h4>⬆ Updates</h4>
     <div class="cur" id="updCur"></div>
     <label class="chk" style="margin:4px 0 8px"><input type="checkbox" id="autoUpd"> Install updates automatically</label>
@@ -1059,13 +1064,36 @@ function chime(delay = 0) {
   return true;
 }
 
-// "Overhead now! [model], going to [destination]." in the browser's normal voice.
-function announce(a) {
+// Voice for announcements, picked in Settings (per browser, since each PC has its own voices).
+// 'tiktok' = an upbeat natural en-US voice, pitched and sped up a little; '' = browser default.
+let voicePref = load('skyVoice', 'tiktok');
+const TIKTOK_LIKE = /jenny|aria|ava|emma|michelle|samantha|google us english|zira/i;
+function voiceOptions(sel) {
+  const voices = 'speechSynthesis' in window ? speechSynthesis.getVoices() : [];
+  sel.innerHTML = `<option value="tiktok">TikTok style (upbeat)</option><option value="">Browser default</option>`
+    + voices.filter(v => /^en/i.test(v.lang)).map(v => `<option value="${esc(v.name)}">${esc(v.name)} (${esc(v.lang)})</option>`).join('');
+  sel.value = voicePref;
+  if (sel.value !== voicePref) sel.value = 'tiktok';
+}
+function say(text, pref = voicePref) {
   if (!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(text), voices = speechSynthesis.getVoices();
+  if (pref === 'tiktok') {
+    const en = voices.filter(v => /^en-US/i.test(v.lang));
+    u.voice = en.find(v => TIKTOK_LIKE.test(v.name) && /natural|online/i.test(v.name)) || en.find(v => TIKTOK_LIKE.test(v.name)) || en[0] || null;
+    u.pitch = 1.25; u.rate = 1.12;
+  } else if (pref) u.voice = voices.find(v => v.name === pref) || null;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => voiceOptions($('voiceSel'));
+
+// "Overhead now! [model], going to [destination], at [speed] miles per hour."
+function announce(a) {
   const rp = routeParts(a), city = s => (s || '').replace(/\s*\([^)]*\)\s*$/, '');
   const model = modelOf(a).replace(/-/g, ' '); // "A-320" reads more naturally as "A 320"
-  speechSynthesis.cancel();
-  speechSynthesis.speak(new SpeechSynthesisUtterance(`Overhead now! ${model}${rp.to ? `, going to ${city(rp.to)}` : ''}.`));
+  const speed = a.gs != null ? `, at ${Math.round(a.gs * 1.15078)} miles per hour` : '';
+  say(`Overhead now! ${model}${rp.to ? `, going to ${city(rp.to)}` : ''}${speed}.`);
 }
 
 function alertSound(hex) {
@@ -1685,6 +1713,7 @@ async function openHome(focusHome, firstRun) {
   $('offLon').value = office?.pos ? office.pos[1] : '';
   $('faIn').value = cfg.faUser || '';
   $('contactIn').value = cfg.contact || '';
+  voiceOptions($('voiceSel'));
   refreshUpdatePanel();
   $('homePlace').classList.toggle('focus', !!focusHome);
   if (!$('homeDlg').open) $('homeDlg').showModal();
@@ -1692,6 +1721,7 @@ async function openHome(focusHome, firstRun) {
 }
 $('changeHomeBtn').onclick = () => openHome(true);
 $('cancelHome').onclick = () => $('homeDlg').close();
+$('voiceTest').onclick = () => say('Overhead now! Boeing 737, going to Orlando, at 280 miles per hour.', $('voiceSel').value);
 $('clearOffice').onclick = () => { for (const id of ['offName', 'offAddr', 'offLat', 'offLon']) $(id).value = ''; };
 document.querySelectorAll('[data-find]').forEach(btn => btn.onclick = async () => {
   const which = btn.dataset.find, q = $(which === 'home' ? 'homeAddr' : 'offAddr').value.trim();
@@ -1725,6 +1755,7 @@ $('saveHome').onclick = async () => {
     contact: $('contactIn').value.trim(),
   };
   if (isFinite(lat) && isFinite(lon)) patch.home = [lat, lon];
+  voicePref = $('voiceSel').value; save('skyVoice', voicePref);
   await saveCfg(patch);
   if (homeChanged) setHome(lat, lon);
   drawPois();
