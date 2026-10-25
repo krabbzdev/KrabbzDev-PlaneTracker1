@@ -363,7 +363,6 @@
   <label class="chk" title="Live rain radar on the map (US, refreshes every 5 minutes)"><input type="checkbox" id="wxOn" checked> 🌧 Weather</label>
   <label class="chk" title="Take over the screen with a close-up when a plane passes within 1 mile"><input type="checkbox" id="takeoverOn" checked> Overhead takeover</label>
   <label class="chk" title="Chime and spoken announcement when a plane is overhead"><input type="checkbox" id="soundOn" checked> 🔔 Sound</label>
-  <a class="btn" id="faBtn" href="#" target="_blank" rel="noopener" title="Your feeder's stats on FlightAware" style="display:none">📡 My ADSB ↗</a>
   <button id="changeHomeBtn" title="Change your home address">🏠 Home</button>
   <button id="homeBtn">⚙ Settings</button>
 </header>
@@ -1727,22 +1726,14 @@ function drawPois() {
 }
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-// header button to the user's own FlightAware feeder page (only when they've entered a username)
-function applyCfg() {
-  const b = $('faBtn');
-  if (cfg.faUser) { b.href = 'https://www.flightaware.com/adsb/stats/user/' + encodeURIComponent(cfg.faUser); b.style.display = ''; }
-  else b.style.display = 'none';
-}
 async function loadCfg() {
   try { cfg = await fetch('/api/settings').then(r => r.json()); } catch (e) { cfg = {}; }
   office = cfg.office || null;
-  applyCfg();
   return cfg;
 }
 async function saveCfg(patch) {
   try { cfg = await fetch('/api/settings', { method: 'POST', body: JSON.stringify(patch) }).then(r => r.json()); } catch (e) {}
   office = cfg.office || null;
-  applyCfg();
 }
 
 let picking = null; // 'home' | 'office' while choosing a spot on the map
