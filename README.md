@@ -26,7 +26,7 @@ bottom-right corner.
 
 ## Features
 
-- **Live map** of aircraft around home (default 10 mile radius), with airports, your home and an optional office
+- **Live map** of aircraft around home (default 20 mile radius), with airports, your home and an optional office
 - **Overhead takeover**: within 1 mile, a full-screen close-up with the flight path, predicted closest
   approach, where it's from and going, plus a chime and a spoken "Overhead now!" alert (🔔 Sound toggle)
 - **Aircraft details**: photo, maker and model, airline, owner, route, altitude, speed and time tracked

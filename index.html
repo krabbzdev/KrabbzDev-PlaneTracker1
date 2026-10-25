@@ -351,7 +351,7 @@
   </div>
   <span class="live" id="live"><i></i><span id="liveTxt">Connecting…</span></span>
   <div class="spacer"></div>
-  <div class="ctl">Tracker Radius <input type="range" id="radius" min="1" max="25" step="1" value="10"><b id="radiusVal">10 mi</b></div>
+  <div class="ctl">Tracker Radius <input type="range" id="radius" min="1" max="25" step="1" value="20"><b id="radiusVal">20 mi</b></div>
   <label class="chk"><input type="checkbox" id="showAll"> Show outside radius</label>
   <label class="chk"><input type="checkbox" id="showApts" checked> Airports</label>
   <label class="chk" title="Take over the screen with a close-up when a plane passes within 1 mile"><input type="checkbox" id="takeoverOn" checked> Overhead takeover</label>
@@ -367,7 +367,7 @@
 </div>
 
 <section class="stats">
-  <div class="stat"><div class="k">Overhead now</div><div class="v" id="sCount">–</div><div class="s" id="sCountSub">within 10 miles</div></div>
+  <div class="stat"><div class="k">Overhead now</div><div class="v" id="sCount">–</div><div class="s" id="sCountSub">within 20 miles</div></div>
   <div class="stat"><div class="k">Closest</div><div class="v" id="sClose">–</div><div class="s" id="sCloseSub">&nbsp;</div></div>
   <div class="stat"><div class="k">Lowest</div><div class="v" id="sLow">–</div><div class="s" id="sLowSub">&nbsp;</div></div>
   <div class="stat"><div class="k">Fastest</div><div class="v" id="sFast">–</div><div class="s" id="sFastSub">&nbsp;</div></div>
@@ -487,7 +487,7 @@ const $ = id => document.getElementById(id);
 function load(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
 function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 let home = null; // comes from the app's settings (see init)
-let radius = load('skyRadius', 10);
+let radius = load('skyRadius', 20);
 let showAll = load('skyShowAll', false);
 $('radius').value = radius; $('showAll').checked = showAll;
 
