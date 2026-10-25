@@ -21,6 +21,10 @@ let VERSION = { version: '1.0', build: 'dev', date: null };
 try { VERSION = JSON.parse(sea ? Buffer.from(sea.getAsset('version.json')).toString() : fs.readFileSync(path.join(__dirname, 'version.json'), 'utf8')); } catch (e) {}
 
 const PORT = Number(process.env.PORT || 8090);
+// Defaults shown in Settings -> Your accounts until someone changes or clears them there.
+const DEFAULT_FA_USER = 'LoveFamily9999';      // FlightAware feeder whose stats are shown
+const DEFAULT_CONTACT = 'General@loves3d.com'; // contact Planespotters asks every app for
+const contactSetting = () => 'contact' in settings ? settings.contact : DEFAULT_CONTACT;
 
 const lookupCache = new Map(); // hex|callsign -> {photo, info, flight}
 const firstSeen = new Map();   // hex -> {first, last} (ms)
@@ -31,7 +35,7 @@ function get(url, timeoutMs = 6000) {
     const lib = url.startsWith('https') ? https : http;
     // Planespotters requires a contact URL or email in the User-Agent: the user's own contact (Settings),
     // else their FlightAware page. Without one, photos fall back to stock model photos.
-    const contact = process.env.CONTACT || settings.contact || (settings.faUser ? 'https://www.flightaware.com/adsb/stats/user/' + settings.faUser : '');
+    const contact = process.env.CONTACT || contactSetting() || (faUser() ? 'https://www.flightaware.com/adsb/stats/user/' + faUser() : '');
     const ua = `Krabbz9999FlightTracker/1.0 (${contact ? '+' + contact : 'home dashboard'})`;
     const req = lib.get(url, { headers: { 'User-Agent': ua }, timeout: timeoutMs }, res => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
@@ -395,7 +399,7 @@ function registry(reg) {
 }
 
 // ---------- FlightAware feeder stats (your own public stats page), fetched at most every 30 minutes ----------
-const faUser = () => settings.faUser || '';
+const faUser = () => ('faUser' in settings ? settings.faUser : DEFAULT_FA_USER) || '';
 let faCache = null;
 async function faStats() {
   if (!faUser()) return { notSet: true };
@@ -463,7 +467,7 @@ const server = http.createServer(async (req, res) => {
       }
       return send(res, 200, JSON.stringify({
         home: settings.home || null, homeLabel: settings.homeLabel || '', office: settings.office || null,
-        faUser: settings.faUser || '', contact: settings.contact || '',
+        faUser: faUser(), contact: contactSetting() || '',
       }));
     }
     if (url.pathname === '/api/version') return send(res, 200, JSON.stringify({ ...VERSION, exe: !!sea }));
