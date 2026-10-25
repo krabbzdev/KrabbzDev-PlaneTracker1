@@ -95,19 +95,19 @@ async function lookup(hex, cs, reg, mfr = '', model = '') {
     // adsb.lol standing data (same source tar1090 uses) - fresher routes than adsbdb
     hasRoute ? get(`https://vrs-standing-data.adsb.lol/routes/${cs.slice(0, 2)}/${cs}.json`) : Promise.reject(),
   ]);
-  const port = (city, code, lat, lon) => ({ label: `${city} (${code})`, pos: [lat, lon] });
+  const port = (city, code, lat, lon, icao) => ({ label: `${city} (${code})`, pos: [lat, lon], icao: icao || null });
   try {
     const f = JSON.parse(route.value.body).response?.flightroute;
     if (f) out.flight = {
       airline: f.airline?.name || null,
-      airports: [f.origin, f.destination].filter(Boolean).map(p => port(p.municipality, p.iata_code || p.icao_code, p.latitude, p.longitude)),
+      airports: [f.origin, f.destination].filter(Boolean).map(p => port(p.municipality, p.iata_code || p.icao_code, p.latitude, p.longitude, p.icao_code)),
     };
   } catch (e) {}
   try {
     const v = JSON.parse(vrs.value.body);
     if (v._airports?.length >= 2) {
       out.flight = out.flight || { airline: null };
-      out.flight.airports = v._airports.map(p => port(p.location || p.name, p.iata || p.icao, p.lat, p.lon));
+      out.flight.airports = v._airports.map(p => port(p.location || p.name, p.iata || p.icao, p.lat, p.lon, p.icao));
     }
   } catch (e) {}
   try {

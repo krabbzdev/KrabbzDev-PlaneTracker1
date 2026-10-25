@@ -66,17 +66,18 @@
   /* list | map | panels; each column scrolls on its own */
   main { display: grid; grid-template-columns: 380px minmax(0, 1fr) 380px; grid-template-rows: minmax(560px, calc(100vh - 140px)); grid-template-areas: "list map aside"; gap: 12px; padding: 0 20px 20px; min-height: 0; }
   #map { grid-area: map; border-radius: 14px; border: 1px solid var(--line); min-height: 420px; background: #0a0f1c; }
-  aside { grid-area: aside; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "stats" "today" "detail"; align-content: start; gap: 12px; min-height: 0; overflow-y: auto; }
+  aside { grid-area: aside; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "stats" "today" "atc" "detail"; align-content: start; gap: 12px; min-height: 0; overflow-y: auto; }
   @media (max-width: 1250px) {
     main { grid-template-columns: 360px minmax(0, 1fr); grid-template-rows: minmax(520px, calc(100vh - 140px)) auto; grid-template-areas: "list map" "aside aside"; }
     aside { overflow: visible; }
   }
   #stats { grid-area: stats; }
   #today { grid-area: today; }
+  #atc { grid-area: atc; }
   #detail { grid-area: detail; }
   #list { grid-area: list; }
-  #stats, #today { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
-  #stats[open], #today[open] { padding-bottom: 14px; }
+  #stats, #today, #atc { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+  #stats[open], #today[open], #atc[open] { padding-bottom: 14px; }
   .st-h { display: flex; align-items: center; gap: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); cursor: pointer; list-style: none; user-select: none; }
   .st-h::-webkit-details-marker { display: none; }
   .st-h:hover { color: var(--text); }
@@ -93,7 +94,7 @@
   .td-tiles .s { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #tdHours { display: block; width: 100%; height: 50px; margin-top: 10px; }
   .td-axis { display: flex; justify-content: space-between; font: 10px var(--mono); color: var(--muted); margin-top: 2px; }
-  .tabs { display: flex; gap: 4px; margin-top: 10px; overflow-x: auto; scrollbar-width: none; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
   .tabs button { flex: none; padding: 4px 9px; font-size: 12px; border-radius: 999px; background: transparent; color: var(--muted); }
   .tabs button.on { background: var(--panel-2); color: var(--text); border-color: var(--accent); }
   #tdList { margin-top: 6px; }
@@ -275,6 +276,19 @@
   /* clickable tail numbers + owner / registration panel */
   a.tail { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
   a.tail:hover { color: var(--accent); }
+  /* Listen to ATC (LiveATC) */
+  .leaflet-popup.apt-pop .leaflet-popup-content-wrapper, .leaflet-popup.apt-pop .leaflet-popup-tip { background: var(--panel); color: var(--text); border: 1px solid var(--line); }
+  .leaflet-popup.apt-pop .leaflet-popup-content { margin: 10px 14px; font: 13px Inter, sans-serif; line-height: 1.4; }
+  .leaflet-popup.apt-pop small { color: var(--muted); }
+  a.atc-btn { display: inline-block; margin-top: 8px; padding: 5px 12px; border-radius: 8px; background: #2f855a; color: #fff !important; font-weight: 600; text-decoration: none; }
+  a.atc-btn:hover { background: #38a169; }
+  a.atc-link { color: #68d391 !important; font-weight: 600; text-decoration: none; white-space: nowrap; }
+  #atc .atc-row { display: flex; gap: 8px; margin-top: 10px; }
+  #atc select { flex: 1; min-width: 0; font: 13px Inter, sans-serif; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+  #atc .atc-btn { margin-top: 0; white-space: nowrap; }
+  #atc .atc-quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  #atc .atc-quick a { font: 600 12px var(--mono); color: #68d391; border: 1px solid rgba(104,211,145,.4); border-radius: 999px; padding: 2px 10px; text-decoration: none; }
+  #atc .atc-quick a:hover { background: rgba(104,211,145,.12); }
   /* Share to Facebook */
   .fb-share { display: inline-flex; align-items: center; gap: 6px; font: 600 12px Inter, sans-serif; color: #fff; background: #1877f2; border: 1px solid #1877f2; border-radius: 999px; padding: 2px 10px 2px 8px; cursor: pointer; line-height: 1.4; }
   .fb-share b { font: 800 13px Arial, sans-serif; }
@@ -383,6 +397,12 @@
         <button data-tab="closest" class="on">Closest</button><button data-tab="lowest">Lowest</button><button data-tab="fastest">Fastest</button><button data-tab="highest">Highest</button><button data-tab="airlines">Airlines</button><button data-tab="types">Types</button><button data-tab="special">Special</button>
       </div>
       <div id="tdList"></div>
+    </details>
+    <details id="atc" open>
+      <summary class="st-h"><span class="chev">▸</span>🎧 Listen to ATC<span class="st-sum" id="atcSum"></span></summary>
+      <div class="atc-row"><select id="atcSel" aria-label="Airport to listen to"></select><a id="atcGo" class="atc-btn" href="#" target="_blank" rel="noopener">🎧 Listen</a></div>
+      <div class="atc-quick" id="atcQuick"></div>
+      <div class="fa-note">Opens the airport's live tower, approach and ground feeds on LiveATC.net in a new tab.</div>
     </details>
     <div id="detail"></div>
   </aside>
@@ -536,6 +556,7 @@ async function loadAirports() {
     if (r.ok) airportList = await r.json();
   } catch (e) {}
   drawAirports();
+  renderAtcPicker();
 }
 function drawAirports() {
   airportLayer.clearLayers();
@@ -553,8 +574,45 @@ function drawAirports() {
     }).bindTooltip(
       `<b>${a.name}</b>${code}${a.iata && a.ident !== a.iata ? ' · ' + a.ident : ''} · ${a.type.replace('_', ' ')}<br><small>${a.city || ''}${a.elev ? ' · elev ' + a.elev + ' ft' : ''}${d != null ? ' · ' + d.toFixed(1) + ' mi ' + compass(bearing(home, [a.lat, a.lon])) + ' of home' : ''}</small>`,
       { className: 'apt-tip', direction: 'top', offset: [0, -st.s / 2] }
+    ).bindPopup(
+      `<b>${esc(a.name)}</b><br><small>${esc(a.city || '')} · ${code}</small><br>` +
+      `<a class="atc-btn" href="${atcUrl(a.ident || code)}" target="_blank" rel="noopener">🎧 Listen to ATC</a>`,
+      { className: 'apt-pop', offset: [0, -st.s / 2] }
     ).addTo(airportLayer);
   }
+}
+
+// ---------- Listen to ATC: opens LiveATC's page for the airport (their streams can't be embedded) ----------
+// Picker panel: nearby airports (closest first) plus quick buttons for the closest major ones.
+$('atc').open = load('skyAtcOpen', true);
+$('atc').addEventListener('toggle', () => save('skyAtcOpen', $('atc').open));
+function renderAtcPicker() {
+  if (!home || !airportList.length) return;
+  const fields = airportList.filter(p => /airport/.test(p.type) && /^[A-Z0-9]{3,4}$/.test(p.ident))
+    .map(p => ({ ...p, d: distMi(home, [p.lat, p.lon]) })).sort((a, b) => a.d - b.d);
+  const list = fields.slice(0, 25), saved = load('skyAtcPick', '');
+  $('atcSel').innerHTML = list.map(p => `<option value="${p.ident}"${p.ident === saved ? ' selected' : ''}>${p.iata || p.ident} · ${esc(nice(p.name))} · ${p.d.toFixed(1)} mi</option>`).join('');
+  const majors = fields.filter(p => p.type !== 'small_airport').slice(0, 4);
+  $('atcQuick').innerHTML = majors.map(p => `<a href="${atcUrl(p.ident)}" target="_blank" rel="noopener" title="${esc(nice(p.name))}">🎧 ${p.iata || p.ident}</a>`).join('');
+  const update = () => { $('atcGo').href = atcUrl($('atcSel').value); save('skyAtcPick', $('atcSel').value); $('atcSum').textContent = '· ' + $('atcSel').selectedOptions[0]?.textContent.split(' · ')[0]; };
+  $('atcSel').onchange = update;
+  update();
+}
+const atcUrl = code => 'https://www.liveatc.net/search/?icao=' + encodeURIComponent(code);
+// ICAO code for a route label like "Tampa (TPA)": use our airport list when it knows the field
+function atcCode(label) {
+  const c = (String(label || '').match(/\(([A-Z0-9]{3,4})\)\s*$/) || [])[1];
+  if (!c) return null;
+  const p = airportList.find(x => x.iata === c || x.ident === c);
+  return p ? p.ident : c;
+}
+function atcLinks(a) {
+  const rp = routeParts(a), out = [];
+  for (const [label, kind, icao] of [[rp.from, 'from', rp.fromIcao], [rp.to, 'to', rp.toIcao]]) {
+    const code = icao || atcCode(label), short = (String(label || '').match(/\(([A-Z0-9]{3,4})\)\s*$/) || [])[1];
+    if (code && !out.some(o => o.includes(code))) out.push(`<a class="atc-link" href="${atcUrl(code)}" target="_blank" rel="noopener" title="Listen to ${kind === 'from' ? 'departure' : 'arrival'} airport ATC on LiveATC">🎧 ATC ${short}</a>`);
+  }
+  return out.join('');
 }
 map.on('zoomend', drawAirports);
 $('showApts').addEventListener('change', e => { showApts = e.target.checked; save('skyShowApts', showApts); drawAirports(); });
@@ -746,9 +804,9 @@ function inferredTo(a) {
 // {from, to, guessed} for display; guessed = worked out from the flight path, not a published route
 function routeParts(a) {
   const leg = publishedLeg(a);
-  if (leg) return { from: leg.A.label, to: leg.B.label, guessed: false };
+  if (leg) return { from: leg.A.label, to: leg.B.label, fromIcao: leg.A.icao, toIcao: leg.B.icao, guessed: false };
   const f = inferredFrom(a), t = inferredTo(a);
-  return { from: f ? aptLabel(f) : null, to: t ? aptLabel(t) : null, guessed: true };
+  return { from: f ? aptLabel(f) : null, to: t ? aptLabel(t) : null, fromIcao: f?.ident, toIcao: t?.ident, guessed: true };
 }
 function routeOf(a) {
   const r = routeParts(a);
@@ -1207,6 +1265,7 @@ async function openReg(hex, reg) {
     `<a href="https://www.planespotters.net/search?q=${reg}" target="_blank" rel="noopener">Planespotters ↗</a>`,
     hex ? adsbxBtn(hex, reg, '🌐 ADS-B Exchange') : '',
     hex ? shareBtn(hex) : '',
+    a.lat != null ? atcLinks(a) : '',
   ].filter(Boolean).join('');
   const src = F
     ? `<div class="rg-src">Source: FAA Aircraft Registry database (file from ${F.fileDate}). Street addresses are intentionally not shown.</div>`
