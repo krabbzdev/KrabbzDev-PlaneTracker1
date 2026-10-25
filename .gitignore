@@ -1,0 +1,15 @@
+# build output (the .exe is published as a GitHub Release, not committed)
+build/
+*.exe
+*.exe.old
+*.exe.new
+
+# personal data each installation creates next to the app - never commit these
+settings.json
+daily-log.json
+airports-cache.json
+faa-index.json
+ReleasableAircraft.zip
+
+# local tooling
+.claude/

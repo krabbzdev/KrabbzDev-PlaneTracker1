@@ -1,0 +1,1638 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Krabbz9999 - FlightTracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #121a30;
+    --panel-2: #18223d;
+    --line: #26314f;
+    --text: #e7ecf7;
+    --muted: #8d98b5;
+    --accent: #4cc9f0;
+    --good: #52d39b;
+    --warn: #ffb547;
+    --hot: #ff5d73;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: Inter, system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; min-height: 100vh; }
+  body > main { flex: 1; }
+
+  /* Under-1-mile alert ticker */
+  #ticker { display: none; align-items: stretch; height: 40px; background: linear-gradient(90deg, rgba(255,93,115,.22), rgba(255,181,71,.14)); border-bottom: 1px solid rgba(255,93,115,.5); overflow: hidden; }
+  #ticker.show { display: flex; }
+  #ticker .lbl { flex: none; display: flex; align-items: center; gap: 8px; padding: 0 16px; background: var(--hot); color: #fff; font: 700 12px Inter, sans-serif; letter-spacing: 1px; text-transform: uppercase; position: relative; z-index: 1; box-shadow: 6px 0 12px rgba(11,16,32,.6); }
+  #ticker .lbl i { width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+  #ticker .viewport { flex: 1; overflow: hidden; position: relative; mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent); }
+  #ticker .track { display: inline-flex; white-space: nowrap; height: 100%; align-items: center; animation: scroll var(--dur, 30s) linear infinite; will-change: transform; }
+  #ticker:hover .track { animation-play-state: paused; }
+  @keyframes scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+  #ticker .item { display: inline-flex; align-items: center; gap: 10px; padding: 0 36px 0 0; font: 500 14px var(--mono); cursor: pointer; }
+  #ticker .item b { font-weight: 700; color: #fff; }
+  #ticker .item .dot { color: var(--muted); }
+  #ticker .item img { height: 28px; width: 42px; object-fit: cover; border-radius: 4px; }
+
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; letter-spacing: .2px; }
+  .brand svg { color: var(--accent); }
+  .live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .live i { width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 0 rgba(82,211,155,.6); animation: pulse 2s infinite; }
+  .live.off i { background: var(--hot); animation: none; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(82,211,155,.6); } 70% { box-shadow: 0 0 0 8px rgba(82,211,155,0); } 100% { box-shadow: 0 0 0 0 rgba(82,211,155,0); } }
+  .spacer { flex: 1; }
+  .ctl { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .ctl input[type=range] { accent-color: var(--accent); width: 120px; }
+  .ctl b { color: var(--text); font-family: var(--mono); min-width: 44px; display: inline-block; }
+  button { font: inherit; font-size: 13px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+  button:hover, a.btn:hover { border-color: var(--accent); }
+  a.btn { font-size: 13px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; text-decoration: none; white-space: nowrap; }
+  label.chk { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 14px 20px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+  .stat .k { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+  .stat .v { font-size: 26px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat .s { font-size: 12px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* list | map | panels; each column scrolls on its own */
+  main { display: grid; grid-template-columns: 380px minmax(0, 1fr) 380px; grid-template-rows: minmax(560px, calc(100vh - 140px)); grid-template-areas: "list map aside"; gap: 12px; padding: 0 20px 20px; min-height: 0; }
+  #map { grid-area: map; border-radius: 14px; border: 1px solid var(--line); min-height: 420px; background: #0a0f1c; }
+  aside { grid-area: aside; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "stats" "today" "detail"; align-content: start; gap: 12px; min-height: 0; overflow-y: auto; }
+  @media (max-width: 1250px) {
+    main { grid-template-columns: 360px minmax(0, 1fr); grid-template-rows: minmax(520px, calc(100vh - 140px)) auto; grid-template-areas: "list map" "aside aside"; }
+    aside { overflow: visible; }
+  }
+  #stats { grid-area: stats; }
+  #today { grid-area: today; }
+  #detail { grid-area: detail; }
+  #list { grid-area: list; }
+  #stats, #today { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+  #stats[open], #today[open] { padding-bottom: 14px; }
+  .st-h { display: flex; align-items: center; gap: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); cursor: pointer; list-style: none; user-select: none; }
+  .st-h::-webkit-details-marker { display: none; }
+  .st-h:hover { color: var(--text); }
+  .st-h .chev { display: inline-block; transition: transform .15s; font-size: 11px; }
+  details[open] > summary .chev { transform: rotate(90deg); }
+  .st-sum { font: 12px var(--mono); text-transform: none; letter-spacing: 0; color: var(--text); opacity: .75; }
+  details[open] > summary .st-sum { display: none; }
+
+  /* Today's log */
+  .td-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+  .td-tiles > div { background: var(--panel-2); border-radius: 8px; padding: 7px 10px; min-width: 0; }
+  .td-tiles .k { font-size: 10px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); white-space: nowrap; }
+  .td-tiles .v { font: 600 18px var(--mono); margin-top: 2px; white-space: nowrap; }
+  .td-tiles .s { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #tdHours { display: block; width: 100%; height: 50px; margin-top: 10px; }
+  .td-axis { display: flex; justify-content: space-between; font: 10px var(--mono); color: var(--muted); margin-top: 2px; }
+  .tabs { display: flex; gap: 4px; margin-top: 10px; overflow-x: auto; scrollbar-width: none; }
+  .tabs button { flex: none; padding: 4px 9px; font-size: 12px; border-radius: 999px; background: transparent; color: var(--muted); }
+  .tabs button.on { background: var(--panel-2); color: var(--text); border-color: var(--accent); }
+  #tdList { margin-top: 6px; }
+  .lb { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: center; padding: 6px 4px; border-bottom: 1px solid var(--line); font-size: 13px; cursor: default; }
+  .lb:last-child { border-bottom: 0; }
+  .lb.live { cursor: pointer; }
+  .lb.live:hover { background: var(--panel-2); }
+  .lb .rk { font: 600 12px var(--mono); color: var(--muted); text-align: right; }
+  .lb .nm { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lb .nm b { font-family: var(--mono); font-weight: 600; }
+  .lb .nm small { color: var(--muted); }
+  .lb .val { font: 600 13px var(--mono); text-align: right; white-space: nowrap; }
+  .lb .val small { display: block; font-weight: 400; font-size: 10px; color: var(--muted); }
+  .lb .bar { height: 3px; border-radius: 2px; background: var(--accent); opacity: .6; margin-top: 3px; }
+  .lb-empty { color: var(--muted); font-size: 13px; padding: 10px 4px; }
+
+  .st-h a { margin-left: auto; color: var(--accent); text-decoration: none; text-transform: none; letter-spacing: 0; }
+  .spark { margin-top: 10px; background: var(--panel-2); border-radius: 10px; padding: 8px 10px 4px; }
+  .spark .top { display: flex; align-items: baseline; justify-content: space-between; }
+  .spark .k { font-size: 10px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); }
+  .spark .v { font: 600 18px var(--mono); }
+  .spark svg { display: block; width: 100%; height: 34px; margin-top: 2px; }
+  .st-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .st-grid div { background: var(--panel-2); border-radius: 8px; padding: 7px 10px; min-width: 0; }
+  .st-grid .k { font-size: 10px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); white-space: nowrap; }
+  .st-grid .v { font-family: var(--mono); font-size: 14px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .st-grid .v small { color: var(--muted); font-size: 11px; }
+  .welcome { color: var(--text) !important; font-size: 14px !important; background: rgba(76,201,240,.1); border: 1px solid rgba(76,201,240,.35); border-radius: 10px; padding: 10px 12px; }
+  .fa-h { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .fa-h a { margin-left: auto; color: var(--accent); text-decoration: none; }
+  .fa-note { font-size: 11px; color: var(--muted); margin-top: 8px; }
+  #faDays { display: block; width: 100%; height: 40px; margin-top: 4px; }
+  .meter { height: 4px; border-radius: 2px; background: var(--line); margin-top: 5px; overflow: hidden; }
+  .meter i { display: block; height: 100%; border-radius: 2px; }
+  #detail { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: none; }
+  #detail.show { display: block; }
+  #list { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow-y: auto; flex: 1; min-height: 200px; }
+  .list-h { position: sticky; top: 0; background: var(--panel); padding: 12px 14px; font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); border-bottom: 1px solid var(--line); z-index: 1; }
+
+  /* photo column only when there is a photo; otherwise the text gets the full width */
+  .card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); cursor: pointer; transition: background .15s; }
+  .card:has(.thumb) { grid-template-columns: 96px minmax(0, 1fr); }
+  /* in the list, long model / route / owner lines wrap instead of being cut off */
+  .card .brand-l, .card .route, .card .model { white-space: normal; overflow-wrap: anywhere; }
+  .card:hover, .card.sel { background: var(--panel-2); }
+  .card.new { animation: flash 2.4s ease-out; }
+  @keyframes flash { 0% { background: rgba(76,201,240,.28); } 100% { background: transparent; } }
+  .thumb { width: 96px; height: 64px; border-radius: 8px; background: #0d1426 center/cover no-repeat; display: grid; place-items: center; color: var(--line); overflow: hidden; }
+  .row1 { display: flex; align-items: baseline; gap: 8px; }
+  .cs { font-family: var(--mono); font-weight: 600; font-size: 15px; }
+  .reg { font-size: 12px; color: var(--muted); }
+  .badge { margin-left: auto; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: rgba(255,93,115,.15); color: var(--hot); }
+  .badge.near { background: rgba(255,181,71,.15); color: var(--warn); }
+  .model { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 2px 0 6px; }
+  .brand-l { font-size: 13px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .brand-l b { font-weight: 600; }
+  .brand-l .air { color: var(--muted); }
+  .route { font-size: 12px; color: var(--accent); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .route.none { color: var(--muted); font-style: italic; }
+  .card .model { margin: 2px 0 6px; }
+  .metrics { display: flex; gap: 12px; font-family: var(--mono); font-size: 12px; flex-wrap: wrap; row-gap: 2px; }
+  .metrics span { white-space: nowrap; }
+  .metrics em { font-style: normal; color: var(--muted); }
+  .empty { padding: 28px 18px; color: var(--muted); font-size: 14px; text-align: center; line-height: 1.6; }
+
+  .hero { height: 200px; background: #0d1426 center/cover no-repeat; position: relative; }
+  .hero .credit { position: absolute; right: 8px; bottom: 6px; font-size: 10px; color: #fff; background: rgba(0,0,0,.55); padding: 2px 6px; border-radius: 4px; text-decoration: none; }
+  .hero .x { position: absolute; top: 8px; right: 8px; padding: 2px 9px; background: rgba(0,0,0,.55); }
+  .d-body { padding: 12px 14px 14px; }
+  .d-title { display: flex; align-items: baseline; gap: 10px; }
+  .d-title .cs { font-size: 20px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .grid2 div { background: var(--panel-2); border-radius: 8px; padding: 8px 10px; }
+  .grid2 .k { font-size: 10px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); }
+  .grid2 .v { font-family: var(--mono); font-size: 14px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .grid2.wide { grid-template-columns: 1fr 1fr; }
+  .grid2.wide .v { font-family: Inter, sans-serif; font-size: 13px; }
+  .grid2 > div { min-width: 0; }
+  .links { display: flex; gap: 12px; margin-top: 10px; font-size: 12px; }
+  .links a { color: var(--accent); text-decoration: none; }
+
+  .banner { display: none; margin: 0 20px 12px; padding: 10px 14px; border-radius: 10px; background: rgba(255,93,115,.12); border: 1px solid rgba(255,93,115,.4); font-size: 13px; }
+  .banner.show { display: block; }
+
+  /* Map bits */
+  .leaflet-container { font-family: Inter, system-ui, sans-serif; }
+  .plane { transition: transform .9s linear; }
+  .plane svg { filter: drop-shadow(0 1px 2px rgba(0,0,0,.8)); }
+  .plane .tag { position: absolute; left: 22px; top: -2px; font: 600 10px var(--mono); color: #fff; white-space: nowrap; text-shadow: 0 1px 2px #000, 0 0 4px #000; }
+  .plane .tag em { font-style: normal; font-weight: 700; }
+  .plane .halo { position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--hc); box-shadow: 0 0 10px var(--hc); animation: halo 1.6s ease-in-out infinite; }
+  @keyframes halo { 50% { opacity: .35; transform: scale(1.15); } }
+  .badges { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+  .badges .badge { margin-left: 0; }
+  .badge.sp { background: color-mix(in srgb, var(--bc) 18%, transparent); color: var(--bc); }
+  .card.special { box-shadow: inset 3px 0 0 var(--bc); }
+  /* Overhead takeover */
+  #takeover { position: fixed; inset: 0; z-index: 3000; background: var(--bg); display: none; grid-template-rows: auto 1fr; animation: toIn .35s ease-out; }
+  #takeover.show { display: grid; }
+  @keyframes toIn { from { opacity: 0; transform: scale(1.02); } }
+  .to-bar { display: flex; align-items: center; gap: 14px; padding: 12px 20px; background: linear-gradient(90deg, rgba(255,93,115,.3), rgba(255,181,71,.15)); border-bottom: 1px solid rgba(255,93,115,.5); }
+  .to-bar .lbl { display: flex; align-items: center; gap: 10px; font: 800 18px Inter, sans-serif; letter-spacing: 2px; text-transform: uppercase; }
+  .to-bar .lbl i { width: 12px; height: 12px; border-radius: 50%; background: var(--hot); box-shadow: 0 0 12px var(--hot); animation: blink 1s infinite; }
+  .to-bar .hint { color: var(--muted); font-size: 12px; margin-left: auto; white-space: nowrap; }
+  .to-bar-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding-left: 14px; border-left: 1px solid rgba(255,255,255,.2); }
+  .to-bar-info .l1 { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .to-bar-info .l1 b { font-family: var(--mono); font-size: 17px; }
+  .to-bar-info .route { font-size: 17px; font-weight: 600; color: #fff; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .to-bar-info .route em { font-style: normal; color: var(--warn); font-weight: 700; font-size: 12px; letter-spacing: .5px; text-transform: uppercase; margin-right: 4px; }
+  .to-bar-info .route.none { color: var(--muted); font-weight: 400; font-size: 14px; }
+  @media (max-width: 960px) { .to-bar { flex-wrap: wrap; } .to-bar .hint { display: none; } .to-bar-info { border-left: 0; padding-left: 0; flex-basis: 100%; order: 3; } }
+  .to-body { display: grid; grid-template-columns: 1fr 420px; min-height: 0; }
+  #toMap { min-height: 0; background: #0a0f1c; }
+  .to-info { border-left: 1px solid var(--line); overflow-y: auto; background: var(--panel); }
+  .to-photo { height: 240px; background: #0d1426 center/cover no-repeat; position: relative; display: grid; place-items: center; }
+  .to-photo .credit { position: absolute; right: 8px; bottom: 6px; font-size: 10px; color: #fff; background: rgba(0,0,0,.55); padding: 2px 6px; border-radius: 4px; text-decoration: none; }
+  .to-main { padding: 16px 18px; }
+  .to-cs { font: 700 34px var(--mono); line-height: 1.1; }
+  .to-sub { color: var(--muted); font-size: 14px; margin-top: 4px; }
+  .to-model { font-size: 18px; margin-top: 10px; }
+  .to-route { font-size: 15px; color: var(--accent); margin-top: 6px; }
+  .to-route.none { color: var(--muted); font-style: italic; }
+  .to-cpa { margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: rgba(255,181,71,.1); border: 1px solid rgba(255,181,71,.35); font-size: 14px; }
+  .to-cpa b { font: 700 22px var(--mono); color: var(--warn); display: block; }
+  .to-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .to-grid div { background: var(--panel-2); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+  .to-grid .k { font-size: 11px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); }
+  .to-grid .v { font: 600 20px var(--mono); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .to-plane { position: relative; }
+  .to-plane .halo { position: absolute; inset: -10px; border-radius: 50%; border: 3px solid var(--hot); animation: halo 1.4s ease-in-out infinite; }
+  .to-plane svg { filter: drop-shadow(0 2px 6px rgba(0,0,0,.9)); }
+  @media (max-width: 960px) {
+    .to-body { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+    .to-info { max-height: 45vh; border-left: 0; border-top: 1px solid var(--line); }
+    .to-photo { height: 160px; }
+  }
+  #version { position: fixed; right: 10px; bottom: 6px; z-index: 1500; font: 11px var(--mono); color: var(--muted); background: rgba(11,16,32,.75); padding: 2px 8px; border-radius: 6px; pointer-events: none; }
+  #toasts { position: fixed; right: 16px; bottom: 32px; display: flex; flex-direction: column; gap: 8px; z-index: 2000; max-width: min(380px, calc(100vw - 32px)); }
+  .toast { background: var(--panel); border: 1px solid var(--bc); border-left-width: 4px; border-radius: 10px; padding: 10px 14px; font-size: 13px; box-shadow: 0 6px 24px rgba(0,0,0,.5); cursor: pointer; animation: toastIn .25s ease-out; }
+  .toast b { color: var(--bc); }
+  @keyframes toastIn { from { transform: translateY(12px); opacity: 0; } }
+  .ring-label { font: 600 10px var(--mono); color: rgba(76,201,240,.85); text-shadow: 0 0 3px #000; white-space: nowrap; }
+  .apt { position: relative; width: var(--s); height: var(--s); }
+  .apt i { position: absolute; inset: 0; border-radius: 50%; background: #0b1020; border: 2px solid var(--c); display: grid; place-items: center; font: 700 8px Inter, sans-serif; font-style: normal; color: var(--c); }
+  .apt i::after { content: ''; width: 2px; height: 70%; background: var(--c); transform: rotate(35deg); border-radius: 1px; }
+  .apt.heliport i { border-radius: 3px; }
+  .apt.heliport i::after { content: 'H'; width: auto; height: auto; background: none; transform: none; }
+  .apt span { position: absolute; left: calc(var(--s) + 5px); top: 50%; transform: translateY(-50%); font: 600 10px var(--mono); color: var(--c); white-space: nowrap; text-shadow: 0 0 3px #000, 0 0 3px #000; }
+  .leaflet-tooltip.apt-tip { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.5); }
+  .leaflet-tooltip.apt-tip::before { display: none; }
+  .apt-tip b { display: block; font-size: 13px; }
+  .apt-tip small { color: var(--muted); }
+  .home-pin { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(76,201,240,.25); }
+
+  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px; padding: 20px; width: min(440px, 92vw); }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog h3 { margin: 0 0 6px; }
+  dialog p { color: var(--muted); font-size: 13px; margin: 0 0 14px; line-height: 1.5; }
+  dialog input { width: 100%; font: 14px var(--mono); padding: 8px 10px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 10px; }
+  dialog .acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  dialog .place { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
+  dialog .place input { background: var(--panel); margin-bottom: 8px; }
+  dialog h4 { margin: 0 0 8px; font-size: 14px; }
+  dialog select { width: 100%; font: 14px Inter, sans-serif; padding: 8px 10px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; }
+  dialog .src-note { margin: 8px 0 0; font-size: 12px; }
+  dialog .src-note a, .live a { color: var(--accent); }
+  dialog .cur { font-size: 12px; color: var(--muted); margin: -4px 0 8px; }
+  /* ADS-B Exchange buttons + viewer */
+  a.adsbx { color: var(--accent); text-decoration: none; cursor: pointer; }
+  a.adsbx:hover { text-decoration: underline; }
+  a.adsbx.chip { font: 600 11px Inter, sans-serif; padding: 1px 7px; border-radius: 999px; border: 1px solid rgba(76,201,240,.4); background: rgba(76,201,240,.08); }
+  a.adsbx.chip:hover { text-decoration: none; background: rgba(76,201,240,.18); }
+  a.adsbx.big { display: inline-block; font: 600 14px Inter, sans-serif; padding: 8px 14px; border-radius: 10px; border: 1px solid rgba(76,201,240,.5); background: rgba(76,201,240,.1); }
+  dialog.ax-dlg { width: 94vw; height: 90vh; max-width: none; max-height: none; padding: 0; display: none; flex-direction: column; overflow: hidden; }
+  dialog.ax-dlg[open] { display: flex; }
+  .ax-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .ax-bar b { margin-right: auto; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #axFrame { flex: 1; width: 100%; border: 0; background: #fff; }
+  /* clickable tail numbers + owner / registration panel */
+  a.tail { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
+  a.tail:hover { color: var(--accent); }
+  dialog.reg-dlg { width: min(560px, 94vw); padding: 0; overflow: hidden; }
+  dialog.reg-dlg .acts { padding: 0 20px 18px; }
+  .rg-photo { height: 180px; background: #0d1426 center/cover no-repeat; }
+  .rg-head { padding: 16px 20px 4px; }
+  .rg-head .t { font: 700 26px var(--mono); }
+  .rg-head .s { color: var(--muted); font-size: 14px; margin-top: 2px; }
+  .rg-sec { padding: 10px 20px; }
+  .rg-sec h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+  .rg-photo { position: relative; }
+  .rg-photo .credit { position: absolute; right: 8px; bottom: 6px; font-size: 10px; color: #fff; background: rgba(0,0,0,.55); padding: 2px 6px; border-radius: 4px; text-decoration: none; }
+  .thumb { position: relative; }
+  .thumb .stock-tag { position: absolute; left: 3px; bottom: 3px; font: 600 9px Inter, sans-serif; color: #fff; background: rgba(0,0,0,.6); padding: 1px 4px; border-radius: 3px; }
+  .rg-map { height: 260px; border-radius: 10px; border: 1px solid var(--line); background: #0a0f1c; }
+  .rg-cap { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .rg-owner { font-size: 17px; font-weight: 600; }
+  .rg-co { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+  .rg-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .rg-grid div { background: var(--panel-2); border-radius: 8px; padding: 7px 10px; min-width: 0; }
+  .rg-grid .k { font-size: 10px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); }
+  .rg-grid .v { font: 13px var(--mono); margin-top: 2px; overflow-wrap: anywhere; }
+  .rg-links { display: flex; flex-wrap: wrap; gap: 8px 14px; padding: 6px 20px 12px; font-size: 13px; }
+  .rg-links a { color: var(--accent); text-decoration: none; }
+  .rg-src { margin: 4px 20px 12px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .rg-src.hint { background: rgba(76,201,240,.08); border: 1px solid rgba(76,201,240,.3); border-radius: 8px; padding: 8px 10px; color: var(--text); }
+  .rg-src a { color: var(--accent); }
+  dialog .place.focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(76,201,240,.15); }
+  dialog .row { display: flex; gap: 8px; }
+  dialog .row button { margin-bottom: 8px; }
+  /* Points of interest */
+  .poi { display: flex; align-items: center; gap: 6px; transform: translate(-13px, -13px); }
+  .poi i { flex: none; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; font-style: normal; font-size: 14px; background: var(--c); border: 2px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.6); }
+  .poi span { font: 700 11px Inter, sans-serif; color: #fff; background: rgba(11,16,32,.85); border: 1px solid var(--c); padding: 2px 7px; border-radius: 6px; white-space: nowrap; }
+
+  @media (max-width: 960px) {
+    main { grid-template-columns: minmax(0, 1fr); grid-template-rows: 55vh 60vh auto; grid-template-areas: "map" "list" "aside"; }
+    aside { grid-template-columns: minmax(0, 1fr); }
+    #map { height: 55vh; }
+    .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px 16px; }
+    header, main { padding-left: 16px; padding-right: 16px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg>
+    Krabbz9999 - FlightTracker
+  </div>
+  <span class="live" id="live"><i></i><span id="liveTxt">Connecting…</span></span>
+  <div class="spacer"></div>
+  <div class="ctl">Radius <input type="range" id="radius" min="1" max="25" step="1" value="10"><b id="radiusVal">10 mi</b></div>
+  <label class="chk"><input type="checkbox" id="showAll"> Show outside radius</label>
+  <label class="chk"><input type="checkbox" id="showApts" checked> Airports</label>
+  <label class="chk" title="Take over the screen with a close-up when a plane passes within 1 mile"><input type="checkbox" id="takeoverOn" checked> Overhead takeover</label>
+  <label class="chk" title="Chime and spoken announcement when a plane is overhead"><input type="checkbox" id="soundOn" checked> 🔔 Sound</label>
+  <a class="btn" id="faBtn" href="#" target="_blank" rel="noopener" title="Your feeder's stats on FlightAware" style="display:none">📡 My ADSB ↗</a>
+  <button id="changeHomeBtn" title="Change your home address">🏠 Home</button>
+  <button id="homeBtn">⚙ Settings</button>
+</header>
+
+<div id="ticker" title="Hover to pause · click an aircraft to select it">
+  <div class="lbl"><i></i><span id="tickerLbl">Nearby</span></div>
+  <div class="viewport"><div class="track" id="tickerTrack"></div></div>
+</div>
+
+<section class="stats">
+  <div class="stat"><div class="k">Overhead now</div><div class="v" id="sCount">–</div><div class="s" id="sCountSub">within 10 miles</div></div>
+  <div class="stat"><div class="k">Closest</div><div class="v" id="sClose">–</div><div class="s" id="sCloseSub">&nbsp;</div></div>
+  <div class="stat"><div class="k">Lowest</div><div class="v" id="sLow">–</div><div class="s" id="sLowSub">&nbsp;</div></div>
+  <div class="stat"><div class="k">Fastest</div><div class="v" id="sFast">–</div><div class="s" id="sFastSub">&nbsp;</div></div>
+</section>
+
+<div class="banner" id="banner"></div>
+
+<main>
+  <div id="list"><div class="list-h" id="listH">Aircraft nearby</div><div id="cards"></div></div>
+  <div id="map"></div>
+  <aside>
+    <details id="stats">
+      <summary class="st-h"><span class="chev">▸</span><span class="live" id="stLive"><i></i></span>FlightAware feeder stats<span class="st-sum" id="stSum"></span></summary>
+      <div id="faSec"></div>
+    </details>
+    <details id="today" open>
+      <summary class="st-h"><span class="chev">▸</span>📊 Today's log<span class="st-sum" id="tdSum"></span></summary>
+      <div class="td-tiles">
+        <div><div class="k">Aircraft today</div><div class="v" id="tdUnique">–</div><div class="s" id="tdYest">&nbsp;</div></div>
+        <div><div class="k">Military</div><div class="v" id="tdMil">–</div><div class="s">&nbsp;</div></div>
+        <div><div class="k">Busiest hour</div><div class="v" id="tdBusy">–</div><div class="s" id="tdBusySub">&nbsp;</div></div>
+      </div>
+      <svg id="tdHours" viewBox="0 0 240 50" preserveAspectRatio="none"></svg>
+      <div class="td-axis"><span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>12a</span></div>
+      <div class="tabs" id="tdTabs">
+        <button data-tab="closest" class="on">Closest</button><button data-tab="lowest">Lowest</button><button data-tab="fastest">Fastest</button><button data-tab="highest">Highest</button><button data-tab="airlines">Airlines</button><button data-tab="types">Types</button><button data-tab="special">Special</button>
+      </div>
+      <div id="tdList"></div>
+    </details>
+    <div id="detail"></div>
+  </aside>
+</main>
+
+<dialog id="homeDlg">
+  <h3 id="setTitle">Settings</h3>
+  <p id="welcome" class="welcome" hidden>What's your home address? That's where we'll watch the sky for planes overhead. You only need to do this once; you can change it any time with 🏠 Home.</p>
+  <p>Search an address, type coordinates, or click the spot on the map.</p>
+  <div class="place" id="homePlace">
+    <h4>🏠 Our Home</h4>
+    <div class="cur" id="homeCur"></div>
+    <div class="row"><input id="homeAddr" placeholder="Street address"><button data-find="home">Find</button></div>
+    <div class="row"><input id="latIn" placeholder="Latitude"><input id="lonIn" placeholder="Longitude"></div>
+    <div class="acts"><button id="geoBtn">Use my location</button><button data-pick="home">Click on map</button></div>
+  </div>
+  <div class="place">
+    <h4>🏢 Office <span style="font-weight:400;color:var(--muted)">(optional)</span></h4>
+    <div class="row"><input id="offName" placeholder="Name shown on the map, e.g. Work"></div>
+    <div class="row"><input id="offAddr" placeholder="Street address"><button data-find="office">Find</button></div>
+    <div class="row"><input id="offLat" placeholder="Latitude"><input id="offLon" placeholder="Longitude"></div>
+    <div class="acts"><button id="clearOffice">Remove office</button><button data-pick="office">Click on map</button></div>
+  </div>
+  <div class="place">
+    <h4>👤 Your accounts <span style="font-weight:400;color:var(--muted)">(all optional)</span></h4>
+    <div class="row"><input id="faIn" placeholder="FlightAware username (shows your feeder stats)"></div>
+    <div class="row"><input id="contactIn" placeholder="Email or web page for photo lookups (Planespotters)"></div>
+    <p class="src-note">Planespotters asks each app for a contact. If you leave it blank, your FlightAware page is used; with neither, planes show stock model photos.</p>
+  </div>
+  <div class="place">
+    <h4>⬆ Updates</h4>
+    <div class="cur" id="updCur"></div>
+    <label class="chk" style="margin:4px 0 8px"><input type="checkbox" id="autoUpd"> Install updates automatically</label>
+    <div class="acts"><button id="updCheck">Check for updates</button><button id="updInstall" style="display:none;border-color:var(--accent)">Install now</button></div>
+  </div>
+  <div class="acts"><button id="cancelHome">Cancel</button><button id="saveHome" style="border-color:var(--accent)">Save</button></div>
+</dialog>
+
+<div id="toasts"></div>
+<div id="version" title="Version and build number"></div>
+
+<dialog id="axDlg" class="ax-dlg">
+  <div class="ax-bar">
+    <b id="axTitle">ADS-B Exchange</b>
+    <a id="axNewTab" class="btn" href="#" target="_blank" rel="noopener">Open in new tab ↗</a>
+    <button id="axClose">✕ Close</button>
+  </div>
+  <iframe id="axFrame" title="ADS-B Exchange live map" src="about:blank" referrerpolicy="no-referrer"></iframe>
+</dialog>
+
+<dialog id="regDlg" class="reg-dlg">
+  <div id="regBody"></div>
+  <div class="acts"><button id="regClose">Close</button></div>
+</dialog>
+
+<div id="takeover" role="dialog" aria-label="Aircraft overhead">
+  <div class="to-bar">
+    <span class="lbl"><i></i>Overhead now</span>
+    <div class="to-bar-info" id="toBar"></div>
+    <span class="hint">Closes automatically · Esc to close</span>
+    <button id="toClose">✕ Close</button>
+  </div>
+  <div class="to-body">
+    <div id="toMap"></div>
+    <div class="to-info" id="toInfo"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const DEMO = new URLSearchParams(location.search).has('demo');
+const MI = 1609.344;
+const $ = id => document.getElementById(id);
+
+// ---------- settings ----------
+function load(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+let home = null; // comes from the app's settings (see init)
+let radius = load('skyRadius', 10);
+let showAll = load('skyShowAll', false);
+$('radius').value = radius; $('showAll').checked = showAll;
+
+// ---------- geo math ----------
+const toRad = d => d * Math.PI / 180, toDeg = r => r * 180 / Math.PI;
+function distMi(a, b) {
+  const dLat = toRad(b[0] - a[0]), dLon = toRad(b[1] - a[1]);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a[0])) * Math.cos(toRad(b[0])) * Math.sin(dLon / 2) ** 2;
+  return 2 * 3958.8 * Math.asin(Math.sqrt(h));
+}
+function bearing(a, b) {
+  const y = Math.sin(toRad(b[1] - a[1])) * Math.cos(toRad(b[0]));
+  const x = Math.cos(toRad(a[0])) * Math.sin(toRad(b[0])) - Math.sin(toRad(a[0])) * Math.cos(toRad(b[0])) * Math.cos(toRad(b[1] - a[1]));
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+const compass = d => ['N','NE','E','SE','S','SW','W','NW'][Math.round(d / 45) % 8];
+function altColor(alt) {
+  if (alt === 'ground') return '#9aa4bf';
+  if (alt == null) return '#cfd6e6';
+  // low = warm, high = cool, roughly like tar1090
+  const t = Math.max(0, Math.min(1, alt / 40000));
+  return `hsl(${Math.round(20 + t * 260)}, 85%, 60%)`;
+}
+const fmtAlt = a => a === 'ground' ? 'Ground' : a == null ? '—' : a.toLocaleString() + ' ft';
+
+// ---------- map ----------
+const map = L.map('map', { zoomControl: true, attributionControl: true, scrollWheelZoom: false }) // zoom with +/- only, so page scrolling never zooms the map.setView(home || [27.9506, -82.4572], 11);
+const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
+L.tileLayer(ESRI + 'World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, attribution: 'Tiles &copy; Esri' }).addTo(map);
+L.tileLayer(ESRI + 'World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, pane: 'shadowPane' }).addTo(map);
+map.createPane('airports').style.zIndex = 450; // above rings and trails, below planes
+const airportLayer = L.layerGroup().addTo(map);
+const ringLayer = L.layerGroup().addTo(map);
+const trailLayer = L.layerGroup().addTo(map);
+const planeLayer = L.layerGroup().addTo(map);
+let homeMarker = null;
+
+function drawHome() {
+  ringLayer.clearLayers();
+  if (homeMarker) homeMarker.remove();
+  if (!home) return;
+  homeMarker = L.marker(home, { icon: L.divIcon({ className: '', html: '<div class="poi" style="--c:#4cc9f0;cursor:pointer"><i>🏠</i><span>Our Home</span></div>', iconSize: [0, 0] }), zIndexOffset: 1000 })
+    .bindTooltip('Click to change home', { direction: 'bottom', offset: [0, 16] })
+    .on('click', () => openHome(true)).addTo(map);
+  const step = radius <= 6 ? 1 : radius <= 12 ? 2 : 5;
+  for (let r = step; r < radius; r += step) {
+    L.circle(home, { radius: r * MI, color: '#4cc9f0', weight: 1, opacity: .25, fill: false, dashArray: '3 6', interactive: false }).addTo(ringLayer);
+  }
+  L.circle(home, { radius: radius * MI, color: '#4cc9f0', weight: 2, opacity: .8, fillColor: '#4cc9f0', fillOpacity: .05, interactive: false }).addTo(ringLayer);
+  const north = L.latLng(home[0] + radius * MI / 111320, home[1]);
+  L.marker(north, { icon: L.divIcon({ className: 'ring-label', html: radius + ' mi', iconSize: [40, 14], iconAnchor: [20, 16] }), interactive: false }).addTo(ringLayer);
+}
+
+// ---------- airports ----------
+let airportList = [];
+let showApts = load('skyShowApts', true);
+$('showApts').checked = showApts;
+const APT_STYLE = {
+  // every airport always shows; labels and heliports (mostly hospital pads) appear as you zoom in
+  large_airport:  { s: 16, c: '#ffb547', minZoom: 0,  labelZoom: 0 },
+  medium_airport: { s: 13, c: '#ffd27a', minZoom: 0,  labelZoom: 0 },
+  small_airport:  { s: 10, c: '#a9b4d0', minZoom: 0,  labelZoom: 10 },
+  seaplane_base:  { s: 10, c: '#6fb3ff', minZoom: 0,  labelZoom: 11 },
+  heliport:       { s: 12, c: '#c58cff', minZoom: 11, labelZoom: 13 },
+};
+async function loadAirports() {
+  if (!home) return;
+  try {
+    const r = await fetch(`/api/airports?lat=${home[0]}&lon=${home[1]}&r=40`);
+    if (r.ok) airportList = await r.json();
+  } catch (e) {}
+  drawAirports();
+}
+function drawAirports() {
+  airportLayer.clearLayers();
+  if (!showApts) return;
+  const z = map.getZoom();
+  for (const a of airportList) {
+    const st = APT_STYLE[a.type];
+    if (!st || z < st.minZoom) continue;
+    const code = a.iata || a.ident;
+    const label = z >= st.labelZoom ? `<span>${code}</span>` : '';
+    const d = home ? distMi(home, [a.lat, a.lon]) : null;
+    L.marker([a.lat, a.lon], {
+      pane: 'airports',
+      icon: L.divIcon({ className: '', html: `<div class="apt ${a.type === 'heliport' ? 'heliport' : ''}" style="--s:${st.s}px;--c:${st.c}"><i></i>${label}</div>`, iconSize: [st.s, st.s], iconAnchor: [st.s / 2, st.s / 2] }),
+    }).bindTooltip(
+      `<b>${a.name}</b>${code}${a.iata && a.ident !== a.iata ? ' · ' + a.ident : ''} · ${a.type.replace('_', ' ')}<br><small>${a.city || ''}${a.elev ? ' · elev ' + a.elev + ' ft' : ''}${d != null ? ' · ' + d.toFixed(1) + ' mi ' + compass(bearing(home, [a.lat, a.lon])) + ' of home' : ''}</small>`,
+      { className: 'apt-tip', direction: 'top', offset: [0, -st.s / 2] }
+    ).addTo(airportLayer);
+  }
+}
+map.on('zoomend', drawAirports);
+$('showApts').addEventListener('change', e => { showApts = e.target.checked; save('skyShowApts', showApts); drawAirports(); });
+
+function fitRadius() {
+  if (!home) return;
+  map.fitBounds(L.latLng(home).toBounds(radius * MI * 2.2), { animate: true });
+}
+
+// ---------- state ----------
+const tracks = new Map();   // hex -> {marker, trail, points, aircraft}
+const lookups = new Map();  // hex -> {photo, info} | 'pending'
+let lastInside = new Set();
+let selected = null;
+let firstLoad = true;
+
+const planeSvg = (color, rot) =>
+  `<svg width="26" height="26" viewBox="0 0 24 24" style="transform:rotate(${rot}deg)"><path fill="${color}" stroke="#0b1020" stroke-width="1" d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg>`;
+
+// Military / interesting / emergency aircraft
+const EMERGENCY_SQUAWKS = { '7500': 'HIJACK', '7600': 'RADIO FAILURE', '7700': 'EMERGENCY' };
+const emergencyOf = a => a.emergency ? a.emergency.toUpperCase() : EMERGENCY_SQUAWKS[a.squawk] || null;
+const specialOf = a => emergencyOf(a) ? 'emergency' : a.flags & 1 ? 'military' : a.flags & 2 ? 'interesting' : null;
+const SPECIAL = {
+  military:    { color: '#9be15d', tag: 'MIL', label: 'MILITARY', icon: '🎖' },
+  interesting: { color: '#c58cff', tag: '★', label: 'INTERESTING', icon: '★' },
+  emergency:   { color: '#ff5d73', tag: 'SOS', label: 'EMERGENCY', icon: '🚨' },
+};
+
+function planeIcon(a, inside) {
+  const sp = specialOf(a);
+  // special aircraft stay visible (and in colour) even outside the radius
+  const show = inside || sp;
+  const color = show ? altColor(a.alt) : '#5b6684';
+  const name = a.flight || a.reg;
+  const label = show && name ? `<span class="tag">${sp ? `<em style="color:${SPECIAL[sp].color}">${SPECIAL[sp].tag}</em> ` : ''}${name}</span>` : '';
+  const halo = sp ? `<span class="halo" style="--hc:${SPECIAL[sp].color}"></span>` : '';
+  return L.divIcon({ className: 'plane', html: halo + planeSvg(color, a.track || 0) + label, iconSize: [26, 26], iconAnchor: [13, 13] });
+}
+
+function normalize(raw) {
+  return {
+    hex: raw.hex.replace('~', ''),
+    flight: (raw.flight || '').trim(),
+    lat: raw.lat, lon: raw.lon,
+    alt: raw.alt_baro ?? raw.altitude ?? raw.alt_geom ?? null,
+    gs: raw.gs ?? raw.speed ?? null,
+    track: raw.track ?? raw.true_heading ?? raw.mag_heading ?? null,
+    vr: raw.baro_rate ?? raw.geom_rate ?? raw.vert_rate ?? null,
+    squawk: raw.squawk, reg: raw.r || '', type: raw.t || '', desc: raw.desc || '', owner: raw.ownOp || '',
+    seenPos: raw.seen_pos ?? raw.seen ?? 0,
+    emergency: raw.emergency && raw.emergency !== 'none' ? raw.emergency : null,
+    firstSeen: raw.first_seen ?? null,
+    firstPos: raw.first_pos ?? null,
+    flags: (raw.dbFlags || 0) & 3, // 1 = military, 2 = interesting; privacy flags (4, 8) deliberately ignored
+    year: raw.year || null,
+  };
+}
+
+// Pop-up when a special aircraft enters the radius (emergencies: anywhere in range). Once per aircraft per visit.
+const notified = new Map(); // hex -> time
+function notifySpecial(a) {
+  const sp = specialOf(a);
+  if (!sp || (!a.inside && sp !== 'emergency')) return;
+  if (Date.now() - (notified.get(a.hex) || 0) < 30 * 60000) return;
+  notified.set(a.hex, Date.now());
+  if (firstLoad) return; // don't spam on page load
+  const S = SPECIAL[sp], el = document.createElement('div');
+  el.className = 'toast'; el.style.setProperty('--bc', S.color);
+  el.innerHTML = `<b>${S.icon} ${sp === 'emergency' ? emergencyOf(a) : S.label[0] + S.label.slice(1).toLowerCase()} aircraft</b> ${sp === 'emergency' ? 'in range' : 'nearby'}<br>`
+    + `${a.flight || a.reg || a.hex.toUpperCase()} · ${a.desc ? nice(a.desc) : a.type || ''}${a.dist != null ? ` · ${a.dist.toFixed(1)} mi ${compass(a.brg)}` : ''}`;
+  el.onclick = () => { select(a.hex, true); el.remove(); };
+  $('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 12000);
+}
+
+// ---------- photo / info / route lookups ----------
+async function requestLookup(hex) {
+  if (lookups.has(hex) || DEMO_NO_SERVER) return;
+  lookups.set(hex, 'pending');
+  const cs = tracks.get(hex)?.aircraft.flight || '';
+  const reg = tracks.get(hex)?.aircraft.reg || '';
+  // maker + model let the server reject photos of a different plane and find a stock photo when there's none
+  const ac = tracks.get(hex)?.aircraft;
+  const mfr = ac ? brandOf(ac) : '', model = ac && (ac.desc || ac.type) ? modelOf(ac) : '';
+  try {
+    const r = await fetch('/api/lookup/' + hex + '?cs=' + encodeURIComponent(cs) + '&reg=' + encodeURIComponent(reg)
+      + '&mfr=' + encodeURIComponent(mfr) + '&model=' + encodeURIComponent(model));
+    lookups.set(hex, r.ok ? await r.json() : {});
+  } catch (e) { lookups.set(hex, {}); }
+  render();
+}
+const look = hex => { const v = lookups.get(hex); return v && v !== 'pending' ? v : {}; };
+// photo credit overlay: real photos credit the Planespotters photographer; stock ones say plainly they're the model, not this plane
+const photoCredit = p => !p?.src ? '' : p.stock
+  ? `<a class="credit" href="${p.link}" target="_blank" rel="noopener">Stock photo of this model · Wikipedia</a>`
+  : p.credit ? `<a class="credit" href="${p.link}" target="_blank" rel="noopener">© ${p.credit} · Planespotters</a>` : '';
+
+// Brand from ICAO type code, for when the description or online lookup doesn't name the maker.
+const TYPE_BRANDS = [
+  [/^(A3|A2|A1[0-9]|A[0-9]{2}N|BCS)/, 'Airbus'], [/^(B7|B3[789]|B73|B74|B75|B76|B77|B78)/, 'Boeing'],
+  [/^E[0-9]/, 'Embraer'], [/^(CRJ|CL[0-9]|GL[0-9E]|BD)/, 'Bombardier'], [/^LJ/, 'Learjet'],
+  [/^C130/, 'Lockheed'], [/^C[0-9]/, 'Cessna'], [/^(SR2|S22|SF50)/, 'Cirrus'], [/^(PA|P2[0-9]|P3[0-9]|P46)/, 'Piper'],
+  [/^BE/, 'Beechcraft'], [/^(DA[0-9]|DV2)/, 'Diamond'], [/^PC[0-9]/, 'Pilatus'], [/^M20/, 'Mooney'], [/^RV/, "Van's"],
+  [/^R(22|44|66)/, 'Robinson'], [/^(EC|AS[0-9]|H1[0-9]|H60)/, 'Airbus Helicopters'], [/^B(06|407|412|429|505)/, 'Bell'],
+  [/^GL?F|^G[0-9]{3}/, 'Gulfstream'], [/^(FA|F2TH|F900)/, 'Dassault'], [/^HDJT/, 'Honda'], [/^TBM/, 'Daher'],
+  [/^(DH8|DHC)/, 'De Havilland'], [/^AT[0-9]/, 'ATR'], [/^(MD|DC)/, 'McDonnell Douglas'], [/^(A109|A139|AW)/, 'Leonardo'],
+];
+const KEEP_UPPER = new Set(['LLC', 'LP', 'LLP', 'NA', 'II', 'III', 'USA', 'US', 'FBO', 'TV', 'ATR', 'MD', 'II']);
+// Title-case names, but keep model codes ("PA-44", "A-321", "737") and abbreviations upper case.
+const nice = s => (s || '').trim().toLowerCase().replace(/[a-z0-9'.&-]+/g, w => KEEP_UPPER.has(w.toUpperCase()) || /\d/.test(w) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1));
+const KNOWN_BRANDS = new Set(TYPE_BRANDS.map(([, n]) => n.toLowerCase()).concat(['cirrus', 'bombardier', 'textron', 'eclipse', 'grumman', 'sikorsky', 'lockheed', 'northrop']));
+const cleanMaker = s => nice(s).replace(/\s+S\.?\s?A\.?S?$/i, '') // FAA style "EMBRAER S A"
+  .replace(/\b(Corporation|Corp\.?|Inc\.?|Co\.?|Company|Ltd\.?|Aircraft|Design|Industries|Aviation|Gmbh|S\.?a\.?s?)\b\.?/gi, '').replace(/[,\s]+$/, '').replace(/\s{2,}/g, ' ').trim();
+
+function brandOf(a) {
+  const i = look(a.hex).info;
+  // the description's own maker ("CESSNA 680 ...") beats a parent company ("Textron Aviation")
+  const descFirst = (a.desc || '').split(' ')[0].toLowerCase();
+  if (KNOWN_BRANDS.has(descFirst)) return nice(descFirst);
+  if (i?.manufacturer) return cleanMaker(i.manufacturer);
+  const t = a.type || i?.icao_type || '';
+  for (const [re, name] of TYPE_BRANDS) if (re.test(t)) return name;
+  return a.desc ? nice(a.desc.split(' ')[0]) : '';
+}
+function modelOnly(a) {
+  const i = look(a.hex).info, brand = brandOf(a);
+  let m = a.desc ? nice(a.desc) : i?.type || a.type || 'Unknown type';
+  // drop the brand if the description already starts with it ("Airbus A-321" -> "A-321")
+  const first = m.split(' ')[0];
+  if (brand && first.toLowerCase() === brand.split(' ')[0].toLowerCase()) m = m.slice(first.length).trim();
+  return m || a.type || '';
+}
+const modelOf = a => [brandOf(a), modelOnly(a)].filter(Boolean).join(' ');
+const ownerOf = a => nice(a.owner || look(a.hex).info?.owner || '');
+const airlineOf = a => look(a.hex).flight?.airline || '';
+// Route databases go stale when airlines reuse flight numbers, so only show a route
+// if the plane is actually somewhere along it (detour no more than ~25% + 75 mi).
+// Published route. Multi-stop flights list every airport; pick the leg the plane is on now.
+function publishedLeg(a) {
+  const ports = look(a.hex).flight?.airports;
+  if (!ports || ports.length < 2) return null;
+  const p = [a.lat, a.lon];
+  let best = null;
+  for (let i = 0; i < ports.length - 1; i++) {
+    const A = ports[i], B = ports[i + 1], direct = distMi(A.pos, B.pos);
+    const extra = distMi(A.pos, p) + distMi(p, B.pos) - direct;
+    if (extra <= direct * 0.25 + 75 && (!best || extra < best.extra)) best = { A, B, extra };
+  }
+  return best;
+}
+const aptLabel = p => `${nice(p.city || p.name)} (${p.iata || p.ident})`;
+// Departed: first heard low (under 2,000 ft) within 3 mi of an airport, and has climbed since
+// (otherwise we probably just started listening while it was landing there).
+function inferredFrom(a) {
+  const fp = a.firstPos;
+  if (!fp || !(fp[2] === 'ground' || (typeof fp[2] === 'number' && fp[2] < 2000))) return null;
+  if (typeof a.alt !== 'number' || a.alt < (typeof fp[2] === 'number' ? fp[2] : 0) + 800) return null;
+  let best = null;
+  for (const p of airportList) {
+    const d = distMi([fp[0], fp[1]], [p.lat, p.lon]);
+    if (d < 3 && (!best || d < best.d)) best = { p, d };
+  }
+  return best?.p || null;
+}
+// Landing: low, descending, with an airport straight ahead (within 20 mi and 20° of its track).
+// Or: on the ground / very low and not climbing within 2 mi of a field (landing or just landed there).
+function inferredTo(a) {
+  const low = a.alt === 'ground' || (typeof a.alt === 'number' && a.alt < 600);
+  if (low && !(a.vr > 250)) {
+    let best = null;
+    for (const p of airportList) {
+      if (p.type === 'heliport') continue;
+      const d = distMi([a.lat, a.lon], [p.lat, p.lon]);
+      if (d < 2 && (!best || d < best.d)) best = { p, d };
+    }
+    if (best) return best.p;
+  }
+  if (typeof a.alt !== 'number' || a.alt > 5000 || !(a.vr < -250) || a.track == null) return null;
+  let best = null;
+  for (const p of airportList) {
+    if (p.type === 'heliport') continue;
+    const d = distMi([a.lat, a.lon], [p.lat, p.lon]);
+    const off = Math.abs(((bearing([a.lat, a.lon], [p.lat, p.lon]) - a.track + 540) % 360) - 180);
+    if (d < 20 && off < 20 && (!best || d < best.d)) best = { p, d };
+  }
+  return best?.p || null;
+}
+// {from, to, guessed} for display; guessed = worked out from the flight path, not a published route
+function routeParts(a) {
+  const leg = publishedLeg(a);
+  if (leg) return { from: leg.A.label, to: leg.B.label, guessed: false };
+  const f = inferredFrom(a), t = inferredTo(a);
+  return { from: f ? aptLabel(f) : null, to: t ? aptLabel(t) : null, guessed: true };
+}
+function routeOf(a) {
+  const r = routeParts(a);
+  if (!r.from && !r.to) return '';
+  if (!r.guessed) return `${r.from} → ${r.to}`;
+  return [r.from ? 'Departed ' + r.from : '', r.to ? (r.from ? 'likely landing ' : 'Likely landing ') + r.to : ''].filter(Boolean).join(' → ');
+}
+function trackedFor(a) {
+  if (!a.firstSeen) return '';
+  const m = Math.floor((Date.now() - a.firstSeen) / 60000);
+  return m < 1 ? '<1 min' : m < 60 ? m + ' min' : Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
+}
+
+// ---------- main update ----------
+function update(list) {
+  const now = Date.now();
+  const seen = new Set();
+  const rows = [];
+  for (const raw of list) {
+    if (raw.lat == null || raw.lon == null) continue;
+    const a = normalize(raw);
+    if (a.seenPos > 60) continue;
+    a.dist = home ? distMi(home, [a.lat, a.lon]) : null;
+    a.brg = home ? bearing(home, [a.lat, a.lon]) : null;
+    a.inside = home ? a.dist <= radius : true;
+    seen.add(a.hex);
+    rows.push(a);
+
+    let t = tracks.get(a.hex);
+    if (!t) { t = { points: [], marker: null, trail: null }; tracks.set(a.hex, t); }
+    const last = t.points[t.points.length - 1];
+    if (!last || last[0] !== a.lat || last[1] !== a.lon) t.points.push([a.lat, a.lon]);
+    if (t.points.length > 120) t.points.shift();
+    t.aircraft = a; t.updated = now;
+
+    const visible = a.inside || showAll || !!specialOf(a);
+    notifySpecial(a);
+    if (visible) {
+      if (!t.marker) {
+        t.marker = L.marker([a.lat, a.lon], { icon: planeIcon(a, a.inside) }).addTo(planeLayer);
+        t.marker.on('click', () => select(a.hex));
+      } else {
+        t.marker.setLatLng([a.lat, a.lon]).setIcon(planeIcon(a, a.inside));
+        if (!planeLayer.hasLayer(t.marker)) planeLayer.addLayer(t.marker);
+      }
+      t.marker.setZIndexOffset(specialOf(a) ? 700 : a.inside ? 500 : 0);
+      if (a.inside && t.points.length > 1) {
+        if (!t.trail) t.trail = L.polyline(t.points, { weight: 2, opacity: .55, interactive: false }).addTo(trailLayer);
+        t.trail.setLatLngs(t.points).setStyle({ color: altColor(a.alt) });
+        if (!trailLayer.hasLayer(t.trail)) trailLayer.addLayer(t.trail);
+      } else if (t.trail) trailLayer.removeLayer(t.trail);
+    } else {
+      if (t.marker) planeLayer.removeLayer(t.marker);
+      if (t.trail) trailLayer.removeLayer(t.trail);
+    }
+    if (a.inside) requestLookup(a.hex);
+  }
+  // drop aircraft we no longer hear
+  for (const [hex, t] of tracks) {
+    if (!seen.has(hex) && now - t.updated > 30000) {
+      if (t.marker) t.marker.remove();
+      if (t.trail) t.trail.remove();
+      tracks.delete(hex);
+      if (selected === hex) select(null);
+    }
+  }
+  current = rows;
+  render();
+}
+
+let current = [];
+function render() {
+  const inside = current.filter(a => a.inside).sort((a, b) => (a.dist ?? 0) - (b.dist ?? 0));
+  const insideSet = new Set(inside.map(a => a.hex));
+  const arrivals = firstLoad ? new Set() : new Set([...insideSet].filter(h => !lastInside.has(h)));
+
+  // stats
+  $('sCount').textContent = inside.length;
+  $('sCountSub').textContent = `within ${radius} mile${radius > 1 ? 's' : ''} · ${current.length} tracked total`;
+  const c = inside[0];
+  $('sClose').textContent = c ? c.dist.toFixed(1) + ' mi' : '–';
+  $('sCloseSub').textContent = c ? `${c.flight || c.reg || c.hex.toUpperCase()} · ${compass(c.brg)}` : 'nothing in range';
+  // skip planes on the runway (barometric altitude reads ≤ 0 near sea level)
+  const airborne = inside.filter(a => typeof a.alt === 'number' && a.alt > 0);
+  const low = airborne.slice().sort((a, b) => a.alt - b.alt)[0];
+  $('sLow').textContent = low ? fmtAlt(low.alt) : '–';
+  $('sLowSub').textContent = low ? (low.flight || low.reg || low.hex.toUpperCase()) : ' ';
+  const fast = inside.filter(a => a.gs != null).sort((a, b) => b.gs - a.gs)[0];
+  $('sFast').textContent = fast ? Math.round(fast.gs * 1.15078) + ' mph' : '–';
+  $('sFastSub').textContent = fast ? `${fast.flight || fast.reg || fast.hex.toUpperCase()} · ${Math.round(fast.gs)} kt` : ' ';
+
+  // list
+  $('listH').textContent = home ? `Within ${radius} mi of home · closest first` : 'All aircraft (set home to filter)';
+  if (!inside.length) {
+    $('cards').innerHTML = `<div class="empty">${home ? `Quiet skies. Nothing within ${radius} miles right now.<br>New arrivals will pop in here automatically.` : 'Set your home location to see what is flying nearby.'}</div>`;
+  } else {
+    $('cards').innerHTML = inside.map(a => {
+      const L = look(a.hex), photo = L.photo?.src;
+      const reg = a.reg || L.info?.reg || '';
+      const vr = a.vr > 300 ? ' ↑' : a.vr < -300 ? ' ↓' : '';
+      const sp = specialOf(a);
+      const badge = '<span class="badges">'
+        + (sp ? `<span class="badge sp" style="--bc:${SPECIAL[sp].color}">${sp === 'emergency' ? emergencyOf(a) : SPECIAL[sp].label}</span>` : '')
+        + (a.dist != null && a.dist < 1 ? '<span class="badge">OVERHEAD</span>' : a.dist != null && a.dist < 2 ? '<span class="badge near">NEAR</span>' : '')
+        + '</span>';
+      return `<div class="card ${selected === a.hex ? 'sel' : ''} ${arrivals.has(a.hex) ? 'new' : ''} ${sp ? 'special' : ''}" style="${sp ? `--bc:${SPECIAL[sp].color}` : ''}" data-hex="${a.hex}">
+        ${photo ? `<div class="thumb" style="background-image:url('${photo}')" title="${L.photo.stock ? 'Stock photo of this model (not this exact aircraft)' : ''}">${L.photo.stock ? '<span class="stock-tag">Model photo</span>' : ''}</div>` : ''}
+        <div style="min-width:0">
+          <div class="row1"><span class="cs">${a.flight && a.flight !== reg ? a.flight : reg ? tailLink(a.hex, reg) : a.hex.toUpperCase()}</span><span class="reg">${a.flight && reg && reg !== a.flight ? tailLink(a.hex, reg) : ''}</span>${badge}</div>
+          <div class="brand-l"><b>${brandOf(a)}</b> ${modelOnly(a)}${airlineOf(a) ? ` <span class="air">· ${airlineOf(a)}</span>` : ''}</div>
+          <div class="route ${routeOf(a) ? '' : 'none'}">${routeOf(a) || 'Route not published'}</div>
+          <div class="model">${ownerOf(a) ? 'Owner: ' + ownerOf(a) : 'Owner not listed'}</div>
+          <div class="metrics">
+            <span style="color:${altColor(a.alt)}">${fmtAlt(a.alt)}${vr}</span>
+            <span>${a.gs != null ? Math.round(a.gs * 1.15078) + ' <em>mph</em>' : ''}</span>
+            <span>${a.dist != null ? a.dist.toFixed(1) + ' <em>mi ' + compass(a.brg) + '</em>' : ''}</span>
+            ${trackedFor(a) ? `<span title="Time since it was first tracked">⏱ ${trackedFor(a)}</span>` : ''}
+            ${adsbxBtn(a.hex, a.flight || reg, '🌐 ADSBx', 'chip')}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  if (!firstLoad || current.length) { lastInside = insideSet; firstLoad = false; }
+  renderDetail();
+  renderTicker();
+  updateTakeover();
+}
+
+// ---------- overhead takeover: full-screen close-up when a plane is within ALERT_MI ----------
+let takeoverOn = load('skyTakeover', true);
+$('takeoverOn').checked = takeoverOn;
+$('takeoverOn').addEventListener('change', e => { takeoverOn = e.target.checked; save('skyTakeover', takeoverOn); if (!takeoverOn) closeTakeover(); });
+let toHex = null, toMap = null, toLayers = null, toLeaveTimer = null, toFitted = false, toOpenedAt = 0;
+const toDismissed = new Map(); // hex -> time the viewer closed it (don't re-open for that pass)
+
+// Closest point of approach to home on the current straight-line course (flat-earth is fine at this scale).
+function cpa(a) {
+  if (!home || a.gs == null || a.track == null || a.gs < 20) return null;
+  const kx = 69.17 * Math.cos(toRad(home[0])), ky = 69.05;
+  const x = (a.lon - home[1]) * kx, y = (a.lat - home[0]) * ky;
+  const v = a.gs * 1.15078 / 3600; // miles per second
+  const vx = v * Math.sin(toRad(a.track)), vy = v * Math.cos(toRad(a.track));
+  const t = -(x * vx + y * vy) / (vx * vx + vy * vy);
+  if (t <= 0) return { passed: true };
+  return { secs: t, dist: Math.hypot(x + vx * t, y + vy * t) };
+}
+// Point `secs` ahead on the current course.
+function ahead(a, secs) {
+  const d = a.gs * 1.15078 / 3600 * secs;
+  return [a.lat + d * Math.cos(toRad(a.track)) / 69.05, a.lon + d * Math.sin(toRad(a.track)) / (69.17 * Math.cos(toRad(a.lat)))];
+}
+
+function updateTakeover() {
+  if (!takeoverOn || !home) return;
+  const now = Date.now();
+  if (toHex) {
+    const a = current.find(x => x.hex === toHex);
+    // leave a few seconds after it moves out (or drops off), so it doesn't flicker at the edge
+    // jets cross the 1-mile circle in ~20 s, so keep it up at least 20 s from opening
+    if (!a || a.dist > ALERT_MI * 1.2) {
+      if (!toLeaveTimer) toLeaveTimer = setTimeout(closeTakeover, Math.max(5000, toOpenedAt + 20000 - now));
+    } else { clearTimeout(toLeaveTimer); toLeaveTimer = null; }
+    if (a) drawTakeover(a);
+    return;
+  }
+  const cand = current
+    .filter(a => a.dist != null && a.dist < ALERT_MI && a.alt !== 'ground' && !(now - (toDismissed.get(a.hex) || 0) < 15 * 60000))
+    .sort((a, b) => a.dist - b.dist)[0];
+  if (cand) openTakeover(cand);
+}
+
+function openTakeover(a) {
+  toHex = a.hex; toFitted = false; toOpenedAt = Date.now();
+  $('takeover').classList.add('show');
+  if (!toMap) {
+    toMap = L.map('toMap', { zoomControl: true, attributionControl: false, scrollWheelZoom: false });
+    L.tileLayer(ESRI + 'World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16 }).addTo(toMap);
+    L.tileLayer(ESRI + 'World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, pane: 'shadowPane' }).addTo(toMap);
+    toLayers = L.layerGroup().addTo(toMap);
+  }
+  setTimeout(() => { toMap.invalidateSize(); drawTakeover(a); }, 50);
+  requestLookup(a.hex);
+  alertSound(a.hex);
+}
+
+// ---------- audible alert: chime + spoken announcement when a plane goes overhead ----------
+let soundOn = load('skySound', true), audioCtx = null, soundBlockedShown = false;
+$('soundOn').checked = soundOn;
+$('soundOn').addEventListener('change', e => {
+  soundOn = e.target.checked; save('skySound', soundOn);
+  if (soundOn) { unlockAudio(); setTimeout(chime, 50); } else if ('speechSynthesis' in window) speechSynthesis.cancel();
+});
+// browsers only allow sound once the viewer has clicked or typed on the page, so unlock on any interaction
+function unlockAudio() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch (e) {}
+}
+['click', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, unlockAudio, { passive: true }));
+
+function chime() {
+  if (!audioCtx || audioCtx.state !== 'running') return false;
+  const t = audioCtx.currentTime;
+  for (const [freq, at] of [[880, 0], [660, .32], [990, .64]]) { // ding-dong-ding
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'sine'; o.frequency.value = freq;
+    g.gain.setValueAtTime(0, t + at);
+    g.gain.linearRampToValueAtTime(.35, t + at + .02);
+    g.gain.exponentialRampToValueAtTime(.001, t + at + .7);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(t + at); o.stop(t + at + .75);
+  }
+  return true;
+}
+
+// "Overhead now! [model], going to [destination]." in the browser's normal voice.
+function announce(a) {
+  if (!('speechSynthesis' in window)) return;
+  const rp = routeParts(a), city = s => (s || '').replace(/\s*\([^)]*\)\s*$/, '');
+  const model = modelOf(a).replace(/-/g, ' '); // "A-320" reads more naturally as "A 320"
+  speechSynthesis.cancel();
+  speechSynthesis.speak(new SpeechSynthesisUtterance(`Overhead now! ${model}${rp.to ? `, going to ${city(rp.to)}` : ''}.`));
+}
+
+function alertSound(hex) {
+  if (!soundOn) return;
+  unlockAudio();
+  if (!chime() && !soundBlockedShown) {
+    soundBlockedShown = true;
+    const el = document.createElement('div');
+    el.className = 'toast'; el.style.setProperty('--bc', '#ffb547');
+    el.innerHTML = '<b>🔇 Sound is blocked</b><br>Your browser needs one click on this page before it can play the overhead alert. Click anywhere to turn it on.';
+    el.onclick = () => el.remove();
+    $('toasts').appendChild(el);
+    setTimeout(() => el.remove(), 15000);
+  }
+  // give the route lookup a moment to arrive, then announce (after the chime finishes)
+  setTimeout(() => { const a = current.find(x => x.hex === hex); if (a && toHex === hex && soundOn) announce(a); }, 1800);
+}
+
+function closeTakeover() {
+  if (toHex) toDismissed.set(toHex, Date.now()); // one takeover per pass, whether closed by hand or automatically
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  toHex = null; clearTimeout(toLeaveTimer); toLeaveTimer = null;
+  $('takeover').classList.remove('show');
+}
+$('toClose').onclick = () => closeTakeover(true);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && toHex) closeTakeover(true); });
+
+function drawTakeover(a) {
+  if (!toMap) return;
+  toLayers.clearLayers();
+  const color = altColor(a.alt);
+  const trail = tracks.get(a.hex)?.points || [];
+  // 1-mile ring + home
+  L.circle(home, { radius: ALERT_MI * MI, color: '#ff5d73', weight: 2, opacity: .6, fillColor: '#ff5d73', fillOpacity: .05, dashArray: '6 6', interactive: false }).addTo(toLayers);
+  L.marker(home, { icon: L.divIcon({ className: '', html: '<div class="poi" style="--c:#4cc9f0"><i>🏠</i><span>Our Home</span></div>', iconSize: [0, 0] }) }).addTo(toLayers);
+  // flown path (solid) and projected path for the next 2 minutes (dashed)
+  if (trail.length > 1) L.polyline(trail, { color, weight: 5, opacity: .9, lineCap: 'round' }).addTo(toLayers);
+  let proj = null;
+  if (a.gs && a.track != null) {
+    proj = ahead(a, 120);
+    L.polyline([[a.lat, a.lon], proj], { color, weight: 3, opacity: .7, dashArray: '2 10', lineCap: 'round' }).addTo(toLayers);
+    const c = cpa(a);
+    if (c && !c.passed && c.secs < 600) {
+      const p = ahead(a, c.secs);
+      L.polyline([home, p], { color: '#ffb547', weight: 1.5, opacity: .8, dashArray: '4 4' }).addTo(toLayers);
+      L.circleMarker(p, { radius: 6, color: '#ffb547', weight: 2, fillColor: '#ffb547', fillOpacity: .4 })
+        .bindTooltip(`Closest: ${c.dist.toFixed(2)} mi`, { permanent: true, direction: 'right', className: 'apt-tip' }).addTo(toLayers);
+    }
+  }
+  L.marker([a.lat, a.lon], {
+    zIndexOffset: 1000,
+    icon: L.divIcon({ className: '', html: `<div class="to-plane"><span class="halo"></span><svg width="44" height="44" viewBox="0 0 24 24" style="transform:rotate(${a.track || 0}deg)"><path fill="${color}" stroke="#0b1020" stroke-width=".8" d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg></div>`, iconSize: [44, 44], iconAnchor: [22, 22] }),
+  }).addTo(toLayers);
+  // frame home, the plane, its recent trail and where it's heading; refit as it moves
+  const pts = [home, [a.lat, a.lon], ...trail.slice(-25)];
+  if (proj) pts.push(ahead(a, 45));
+  toMap.fitBounds(L.latLngBounds(pts).pad(0.25), { maxZoom: 15, animate: toFitted });
+  toFitted = true;
+
+  // top bar: who it is, and where it came from / is going
+  const rp = routeParts(a);
+  const who = [`<b>${a.flight || a.reg || a.hex.toUpperCase()}</b>`, airlineOf(a), modelOf(a), fmtAlt(a.alt)].filter(Boolean).join(' · ');
+  $('toBar').innerHTML = `<div class="l1">${who}</div>` + (rp.from || rp.to
+    ? `<div class="route"><em>From</em>${rp.from || 'unknown'} &nbsp;→&nbsp; <em>To</em>${rp.to || 'unknown'}${rp.guessed ? ' <span style="font-weight:400;font-size:12px;color:var(--muted)">(estimated)</span>' : ''}</div>`
+    : `<div class="route none">Route not published</div>`);
+
+  // info panel
+  const Lk = look(a.hex), i = Lk.info || {}, reg = a.reg || i.reg || '';
+  const c = cpa(a);
+  const cpaHtml = !c ? '' : c.passed
+    ? `<div class="to-cpa"><b>Moving away</b>Closest pass was just now · ${a.dist.toFixed(2)} mi from home</div>`
+    : `<div class="to-cpa"><b>${c.dist.toFixed(2)} mi in ${Math.round(c.secs)} s</b>Predicted closest approach to home</div>`;
+  const sp = specialOf(a);
+  $('toInfo').innerHTML = `
+    <div class="to-photo" style="${Lk.photo?.src ? `background-image:url('${Lk.photo.src}')` : ''}">${Lk.photo?.src ? '' : planeSvg('#26314f', 45)}
+      ${photoCredit(Lk.photo)}</div>
+    <div class="to-main">
+      <div class="to-cs">${a.flight || reg || a.hex.toUpperCase()}</div>
+      <div class="to-sub">${[reg ? tailLink(a.hex, reg, reg + ' · owner info') : '', airlineOf(a), ownerOf(a) ? 'Owner: ' + ownerOf(a) : ''].filter(Boolean).join(' · ')}</div>
+      ${sp ? `<div style="margin-top:8px"><span class="badge sp" style="--bc:${SPECIAL[sp].color};margin:0">${sp === 'emergency' ? emergencyOf(a) : SPECIAL[sp].label}</span></div>` : ''}
+      <div class="to-model"><b>${brandOf(a)}</b> ${modelOnly(a)}</div>
+      <div class="to-route ${routeOf(a) ? '' : 'none'}">${routeOf(a) || 'Route not published'}</div>
+      ${cpaHtml}
+      <div style="margin-top:12px">${adsbxBtn(a.hex, a.flight || reg, '🌐 View on ADS-B Exchange', 'big')}</div>
+      <div class="to-grid">
+        <div><div class="k">Altitude</div><div class="v" style="color:${color}">${fmtAlt(a.alt)}${a.vr > 300 ? ' ↑' : a.vr < -300 ? ' ↓' : ''}</div></div>
+        <div><div class="k">Speed</div><div class="v">${a.gs != null ? Math.round(a.gs * 1.15078) + ' mph' : '—'}</div></div>
+        <div><div class="k">Distance</div><div class="v">${a.dist.toFixed(2)} mi ${compass(a.brg)}</div></div>
+        <div><div class="k">Heading</div><div class="v">${a.track != null ? Math.round(a.track) + '° ' + compass(a.track) : '—'}</div></div>
+        <div><div class="k">Climb</div><div class="v">${a.vr != null ? (a.vr > 0 ? '+' : '') + a.vr + ' fpm' : '—'}</div></div>
+        <div><div class="k">Tracked</div><div class="v">${trackedFor(a) || '—'}</div></div>
+      </div>
+    </div>`;
+}
+
+// ---------- ADS-B Exchange viewer: their live globe for one aircraft, shown inside the dashboard ----------
+const adsbxUrl = hex => `https://globe.adsbexchange.com/?icao=${hex}`;
+const adsbxBtn = (hex, label, text, kind = '') => `<a class="adsbx ${kind}" href="${adsbxUrl(hex)}" data-adsbx="${hex}" data-label="${label || hex.toUpperCase()}" title="Show this aircraft on ADS-B Exchange">${text}</a>`;
+document.addEventListener('click', e => {
+  const b = e.target.closest('a[data-adsbx]');
+  if (!b || e.ctrlKey || e.metaKey || e.shiftKey) return; // modifier-click still opens a normal new tab
+  e.preventDefault(); e.stopPropagation();
+  openAdsbx(b.dataset.adsbx, b.dataset.label);
+}, true);
+function openAdsbx(hex, label) {
+  if ($('regDlg').open) $('regDlg').close();
+  $('axTitle').textContent = `ADS-B Exchange · ${label}`;
+  $('axNewTab').href = adsbxUrl(hex);
+  $('axFrame').src = adsbxUrl(hex);
+  $('axDlg').showModal();
+}
+$('axClose').onclick = () => $('axDlg').close();
+$('axDlg').addEventListener('close', () => { $('axFrame').src = 'about:blank'; }); // stop their map when closed
+
+// ---------- clickable tail numbers -> owner & registration panel ----------
+const tailLink = (hex, reg, text) => `<a class="tail" href="#" data-hex="${hex}" data-reg="${reg}" title="Owner & registration">${text || reg}</a>`;
+// capture phase so clicking a tail number doesn't also select the card underneath
+document.addEventListener('click', e => {
+  const t = e.target.closest('a.tail');
+  if (!t) return;
+  e.preventDefault(); e.stopPropagation();
+  openReg(t.dataset.hex, t.dataset.reg);
+}, true);
+$('regClose').onclick = () => $('regDlg').close();
+
+async function openReg(hex, reg) {
+  $('regBody').innerHTML = `<div class="rg-head"><div class="t">${reg}</div><div class="s">Looking up registration…</div></div>`;
+  if (!$('regDlg').open) $('regDlg').showModal();
+  let r = { faaLoaded: false, faa: null };
+  try { r = await fetch('/api/registry/' + encodeURIComponent(reg)).then(x => x.json()); } catch (e) {}
+  const a = tracks.get(hex)?.aircraft || { hex };
+  const Lk = look(hex), i = Lk.info || {}, F = r.faa;
+  const isUS = /^N[0-9A-Z]{1,5}$/.test(reg);
+  // owner: FAA record first, then what the live feed / adsbdb say
+  const owner = F?.owner ? nice(F.owner) : ownerOf(a);
+  let coOwners = F ? F.otherOwners.map(nice) : [];
+  if (!F && owner.includes(',')) coOwners = []; // feed already lists everyone in one line
+  const where = F ? [nice(F.city), F.state, F.country && F.country !== 'US' ? F.country : ''].filter(Boolean).join(', ') : (i.country || '');
+  const make = F?.manufacturer ? cleanMaker(F.manufacturer) : brandOf(a);
+  const model = F?.model || modelOnly(a);
+  const cell = (k, v) => v ? `<div><div class="k">${k}</div><div class="v">${v}</div></div>` : '';
+  const links = [
+    isUS ? `<a href="https://registry.faa.gov/AircraftInquiry/Search/NNumberResult?nNumberTxt=${reg.slice(1)}" target="_blank" rel="noopener">FAA Registry ↗</a>` : '',
+    `<a href="https://www.flightaware.com/resources/registration/${reg}" target="_blank" rel="noopener">FlightAware ↗</a>`,
+    `<a href="https://www.planespotters.net/search?q=${reg}" target="_blank" rel="noopener">Planespotters ↗</a>`,
+    hex ? adsbxBtn(hex, reg, '🌐 ADS-B Exchange') : '',
+  ].filter(Boolean).join('');
+  const src = F
+    ? `<div class="rg-src">Source: FAA Aircraft Registry database (file from ${F.fileDate}). Street addresses are intentionally not shown.</div>`
+    : isUS && !r.faaLoaded
+      ? `<div class="rg-src hint">Showing owner data from the live feed. For the full FAA record (co-owners, city/state, serial number, registration dates), download <a href="https://registry.faa.gov/database/ReleasableAircraft.zip" target="_blank" rel="noopener">ReleasableAircraft.zip</a> from the FAA (about 60 MB), put it in the same folder as Krabbz9999-FlightTracker.exe, and restart it. Or use the FAA Registry link below.</div>`
+      : isUS ? `<div class="rg-src">Not found in the FAA file (it may be newly registered or recently changed). Try the FAA Registry link below.</div>`
+      : `<div class="rg-src">Non-US registration; the FAA registry only covers N-numbers. Owner shown is from the live feed.</div>`;
+  $('regBody').innerHTML = `
+    ${Lk.photo?.src ? `<div class="rg-photo" style="background-image:url('${Lk.photo.src}')">${photoCredit(Lk.photo)}</div>` : ''}
+    <div class="rg-head"><div class="t">${reg}</div><div class="s">${[make, model].filter(Boolean).join(' ')}${a.flight && a.flight !== reg ? ' · flying as ' + a.flight : ''}${airlineOf(a) ? ' (' + airlineOf(a) + ')' : ''}</div></div>
+    <div class="rg-sec"><h4>Flight path</h4><div id="rgMap" class="rg-map"></div><div class="rg-cap" id="rgCap"></div></div>
+    <div class="rg-sec"><h4>Registered owner${F?.fractional ? ' · fractional ownership' : ''}</h4>
+      <div class="rg-owner">${owner || 'Not listed'}</div>
+      ${coOwners.length ? `<div class="rg-co">Also on the registration: ${coOwners.join(' · ')}</div>` : ''}
+      ${where || F?.registrantType ? `<div class="rg-co">${[F?.registrantType, where].filter(Boolean).join(' · ')}</div>` : ''}
+    </div>
+    <div class="rg-sec"><h4>Aircraft</h4><div class="rg-grid">
+      ${cell('Manufacturer', make)}${cell('Model', model)}${cell('Year built', F?.year || a.year)}
+      ${cell('Serial number', F?.serial)}${cell('Seats', F?.seats)}${cell('Engines', F?.engines)}
+      ${cell('ICAO hex', hex ? hex.toUpperCase() : '')}${cell('Type code', a.type || i.icao_type)}
+    </div></div>
+    ${F ? `<div class="rg-sec"><h4>Registration</h4><div class="rg-grid">
+      ${cell('Certificate issued', F.certIssued)}${cell('Airworthiness', F.airworthiness)}${cell('Expires', F.expires)}${cell('Status', F.status)}
+    </div></div>` : ''}
+    ${src}
+    <div class="rg-links">${links}</div>`;
+  startRegMap(hex);
+}
+
+// Flight path map inside the tail-number panel (track kept by the server while the plane is in range).
+let rgMap = null, rgLayers = null, rgTimer = null;
+function startRegMap(hex) {
+  if (rgMap) rgMap.remove();
+  clearInterval(rgTimer);
+  rgMap = L.map('rgMap', { zoomControl: true, attributionControl: false, scrollWheelZoom: false });
+  L.tileLayer(ESRI + 'World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16 }).addTo(rgMap);
+  L.tileLayer(ESRI + 'World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, pane: 'shadowPane' }).addTo(rgMap);
+  rgLayers = L.layerGroup().addTo(rgMap);
+  rgMap.setView(home || [27.95, -82.6], 9);
+  drawRegTrack(hex, true);
+  rgTimer = setInterval(() => drawRegTrack(hex, false), 5000);
+}
+$('regDlg').addEventListener('close', () => { clearInterval(rgTimer); if (rgMap) { rgMap.remove(); rgMap = null; } });
+
+async function drawRegTrack(hex, fit) {
+  if (!rgMap) return;
+  let pts = [];
+  try { pts = (await fetch('/api/track/' + hex).then(r => r.json())).points || []; } catch (e) {}
+  if (!rgMap) return;
+  const t = tracks.get(hex), a = t?.aircraft;
+  if (pts.length < 2 && t) pts = t.points.map(p => [p[0], p[1], a.alt, 0]); // fall back to what this page has seen
+  rgLayers.clearLayers();
+  if (home) L.marker(home, { icon: L.divIcon({ className: '', html: '<div style="font-size:16px;transform:translate(-8px,-10px)">🏠</div>', iconSize: [0, 0] }), interactive: false }).addTo(rgLayers);
+  if (!pts.length) { $('rgCap').textContent = 'No flight path recorded yet — it builds up while the plane is in range.'; return; }
+  // draw runs of the same altitude colour as one line, so long tracks stay light
+  let run = [[pts[0][0], pts[0][1]]], col = altColor(pts[0][2]);
+  for (let i = 1; i < pts.length; i++) {
+    const c = altColor(pts[i][2]);
+    run.push([pts[i][0], pts[i][1]]);
+    if (c !== col || i === pts.length - 1) {
+      L.polyline(run, { color: col, weight: 4, opacity: .95, lineCap: 'round' }).addTo(rgLayers);
+      run = [[pts[i][0], pts[i][1]]]; col = c;
+    }
+  }
+  const first = pts[0];
+  L.circleMarker([first[0], first[1]], { radius: 5, color: '#fff', weight: 2, fillColor: altColor(first[2]), fillOpacity: 1 })
+    .bindTooltip(`First seen${first[3] ? ' ' + timeOf(first[3]) : ''} · ${fmtAlt(first[2])}`).addTo(rgLayers);
+  const now = a ? [a.lat, a.lon] : [pts[pts.length - 1][0], pts[pts.length - 1][1]];
+  L.marker(now, { icon: L.divIcon({ className: '', html: planeSvg(a ? altColor(a.alt) : '#cfd6e6', a?.track || 0), iconSize: [26, 26], iconAnchor: [13, 13] }) }).addTo(rgLayers);
+  if (fit) rgMap.fitBounds(L.latLngBounds(pts.map(p => [p[0], p[1]]).concat([now])).pad(0.2), { maxZoom: 13 });
+  const mins = first[3] ? Math.round((Date.now() - first[3]) / 60000) : null;
+  $('rgCap').textContent = `Path while in range${mins != null ? ` · last ${mins} min` : ''} · coloured by altitude${a ? ` · now ${fmtAlt(a.alt)}` : ' · no longer in range'}`;
+}
+
+// ---------- nearby scrolling alert ----------
+const ALERT_MI = 1;
+let tickerKey = '';
+function renderTicker() {
+  const close = current.filter(a => a.dist != null && a.dist < ALERT_MI).sort((a, b) => a.dist - b.dist);
+  const el = $('ticker'), track = $('tickerTrack');
+  if (!close.length) { el.className = ''; tickerKey = ''; return; }
+  el.className = 'show';
+  $('tickerLbl').textContent = `${close.length} within ${ALERT_MI} mi`;
+  const items = close.map(a => {
+    const Lk = look(a.hex), i = Lk.info || {};
+    const reg = a.reg || i.reg || '';
+    const vr = a.vr > 300 ? ' ↑ climbing' : a.vr < -300 ? ' ↓ descending' : '';
+    const parts = [
+      `<b>${a.flight || reg || a.hex.toUpperCase()}</b>`,
+      a.flight && reg && reg !== a.flight ? reg : '',
+      modelOf(a),
+      airlineOf(a),
+      routeOf(a) ? `<span style="color:var(--accent)">${routeOf(a)}</span>` : '',
+      ownerOf(a) ? 'owner ' + ownerOf(a) : '',
+      trackedFor(a) ? 'tracked ' + trackedFor(a) : '',
+      `<span style="color:${altColor(a.alt)}">${fmtAlt(a.alt)}${vr}</span>`,
+      a.gs != null ? Math.round(a.gs * 1.15078) + ' mph' : '',
+      `${a.dist.toFixed(2)} mi ${compass(a.brg)} of home`,
+      a.track != null ? 'heading ' + Math.round(a.track) + '°' : '',
+      a.squawk ? 'squawk ' + a.squawk : '',
+    ].filter(Boolean).join(' <span class="dot">·</span> ');
+    const img = Lk.photo?.src ? `<img src="${Lk.photo.src}" alt="">` : '';
+    return `<span class="item" data-hex="${a.hex}">✈ ${img}${parts}</span>`;
+  }).join('');
+  // Two copies side by side so translateX(-50%) loops seamlessly.
+  track.innerHTML = items + items;
+  // Only reset the speed when the set of aircraft changes, so the scroll doesn't jump every update.
+  const key = close.map(a => a.hex).join(',');
+  if (key !== tickerKey) {
+    tickerKey = key;
+    requestAnimationFrame(() => track.style.setProperty('--dur', Math.max(15, track.scrollWidth / 2 / 70) + 's'));
+  }
+  close.forEach(a => requestLookup(a.hex));
+}
+$('tickerTrack').addEventListener('click', e => {
+  const item = e.target.closest('.item');
+  if (item) select(item.dataset.hex, true);
+});
+
+$('cards').addEventListener('click', e => {
+  const card = e.target.closest('.card');
+  if (card) select(card.dataset.hex, true);
+});
+
+function select(hex, pan) {
+  selected = hex;
+  const t = hex && tracks.get(hex);
+  if (t && pan) map.panTo([t.aircraft.lat, t.aircraft.lon]);
+  if (hex) requestLookup(hex);
+  render();
+}
+
+function renderDetail() {
+  const el = $('detail');
+  const t = selected && tracks.get(selected);
+  if (!t) { el.className = ''; el.innerHTML = ''; return; }
+  const a = t.aircraft, Lk = look(a.hex), i = Lk.info || {};
+  const reg = a.reg || i.reg || '';
+  const photo = Lk.photo;
+  el.className = 'show';
+  el.innerHTML = `
+    <div class="hero" style="${photo?.src ? `background-image:url('${photo.src}')` : ''}">
+      ${photoCredit(photo)}
+      <button class="x" onclick="select(null)">✕</button>
+    </div>
+    <div class="d-body">
+      <div class="d-title"><span class="cs">${a.flight || reg || a.hex.toUpperCase()}</span><span class="reg">${reg ? tailLink(a.hex, reg) + ' · ' : ''}${a.hex.toUpperCase()}</span>${specialOf(a) ? `<span class="badge sp" style="--bc:${SPECIAL[specialOf(a)].color};margin-left:auto">${specialOf(a) === 'emergency' ? emergencyOf(a) : SPECIAL[specialOf(a)].label}</span>` : ''}</div>
+      <div class="grid2 wide">
+        <div><div class="k">From${routeParts(a).guessed && routeParts(a).from ? ' (seen departing)' : ''}</div><div class="v" style="color:var(--accent)">${routeParts(a).from || '—'}</div></div>
+        <div><div class="k">To${routeParts(a).guessed && routeParts(a).to ? ' (likely)' : ''}</div><div class="v" style="color:var(--accent)">${routeParts(a).to || '—'}</div></div>
+        <div><div class="k">Brand</div><div class="v">${brandOf(a) || '—'}</div></div>
+        <div><div class="k">Model</div><div class="v">${modelOnly(a) || '—'}</div></div>
+        <div><div class="k">Airline</div><div class="v">${airlineOf(a) || '—'}</div></div>
+        <div><div class="k">Owner</div><div class="v">${ownerOf(a) || '—'}</div></div>
+      </div>
+      <div class="grid2">
+        <div><div class="k">Altitude</div><div class="v" style="color:${altColor(a.alt)}">${fmtAlt(a.alt)}</div></div>
+        <div><div class="k">Speed</div><div class="v">${a.gs != null ? Math.round(a.gs * 1.15078) + ' mph' : '—'}</div></div>
+        <div><div class="k">Climb</div><div class="v">${a.vr != null ? (a.vr > 0 ? '+' : '') + a.vr + ' fpm' : '—'}</div></div>
+        <div><div class="k">Distance</div><div class="v">${a.dist != null ? a.dist.toFixed(2) + ' mi' : '—'}</div></div>
+        <div><div class="k">Bearing</div><div class="v">${a.brg != null ? Math.round(a.brg) + '° ' + compass(a.brg) : '—'}</div></div>
+        <div><div class="k">Squawk</div><div class="v">${a.squawk || '—'}</div></div>
+        <div><div class="k">Tracked for</div><div class="v">${trackedFor(a) || '—'}</div></div>
+        <div><div class="k">Heading</div><div class="v">${a.track != null ? Math.round(a.track) + '°' : '—'}</div></div>
+        <div><div class="k">ICAO hex</div><div class="v">${a.hex.toUpperCase()}</div></div>
+      </div>
+      <div class="links">
+        ${a.flight ? `<a href="https://www.flightaware.com/live/flight/${a.flight}" target="_blank" rel="noopener">FlightAware ↗</a>` : ''}
+        ${adsbxBtn(a.hex, a.flight || reg, '🌐 ADS-B Exchange')}
+        ${reg ? `<a href="https://www.planespotters.net/search?q=${reg}" target="_blank" rel="noopener">Photos ↗</a>` : ''}
+      </div>
+    </div>`;
+}
+
+// ---------- data source ----------
+let DEMO_NO_SERVER = false;
+let attribution = null;
+async function poll() {
+  try {
+    let list;
+    if (DEMO) list = demoTick();
+    else {
+      const r = await fetch('/api/aircraft', { cache: 'no-store' });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || r.status);
+      list = j.aircraft || [];
+      attribution = j.attribution || null;
+    }
+    update(list);
+    $('live').className = 'live';
+    // public data must credit its source (adsb.fi terms)
+    const src = DEMO ? 'Demo data' : `Live via <a href="${attribution?.link || 'https://adsb.fi'}" target="_blank" rel="noopener">${attribution?.name || 'adsb.fi'}</a>`;
+    $('liveTxt').innerHTML = `${src} · ${new Date().toLocaleTimeString()}`;
+    $('banner').className = 'banner';
+  } catch (e) {
+    $('live').className = 'live off';
+    $('liveTxt').textContent = 'Data offline';
+    $('banner').className = 'banner show';
+    $('banner').textContent = `Can't get aircraft data (${e.message}). Retrying every few seconds. It will keep retrying.`;
+  }
+}
+
+async function init() {
+  if (!DEMO) {
+    await loadCfg();
+    home = cfg.home || null;
+    // carry over a home that an older version saved in this browser only
+    const old = load('skyHome', null);
+    if (!home && old) { home = old; postHome(); }
+  }
+  if (!home && DEMO) home = [27.9506, -82.4572];
+  drawHome(); fitRadius(); loadAirports(); drawPois();
+  if (!home && !DEMO) openHome(true, true); // first run ever: ask for the home address
+  poll(); setInterval(poll, 2000);
+  pollFa(); setInterval(pollFa, 10 * 60000);
+  pollLog(); setInterval(pollLog, 30000);
+  checkVersion(); setInterval(checkVersion, 60000);
+}
+
+// ---------- updates: show the running build, reload when the app has updated itself ----------
+let loadedBuild = null;
+async function checkVersion() {
+  let v;
+  try { v = await fetch('/api/version', { cache: 'no-store' }).then(r => r.json()); } catch (e) { return; } // app restarting
+  $('version').textContent = `v${v.version} · build ${v.build}${v.date ? ' · ' + v.date : ''}`;
+  if (loadedBuild === null) { loadedBuild = v.build; return; }
+  // the app updated itself: reload so this page runs the new version too (not in the middle of an overhead alert)
+  if (v.build !== loadedBuild && !toHex) {
+    const el = document.createElement('div');
+    el.className = 'toast'; el.style.setProperty('--bc', '#52d39b');
+    el.innerHTML = `<b>⬆ Updated to build ${v.build}</b><br>Reloading to the new version…`;
+    $('toasts').appendChild(el);
+    setTimeout(() => location.reload(), 3000);
+  }
+}
+async function refreshUpdatePanel(action) {
+  let u;
+  try { u = await fetch('/api/update', action ? { method: 'POST', body: JSON.stringify(action) } : {}).then(r => r.json()); } catch (e) { return; }
+  $('autoUpd').checked = u.autoUpdate; $('autoUpd').disabled = !u.exe;
+  let msg = `You're on build ${u.current.build}.`;
+  if (!u.exe) msg += ' (Running from source; updates install only in the .exe.)';
+  if (u.error) msg += ` Couldn't check: ${u.error}.`;
+  else if (u.status === 'installing') msg += ' Installing an update… the page will reload when it\'s done.';
+  else if (u.available) msg += ` Build ${u.latest.build} is available.`;
+  else if (u.checkedAt) msg += ` That's the latest (checked ${ago(u.checkedAt)}).`;
+  $('updCur').innerHTML = msg + (u.latest?.url ? ` <a href="${u.latest.url}" target="_blank" rel="noopener" style="color:var(--accent)">Release notes ↗</a>` : '');
+  $('updInstall').style.display = u.available && u.exe && u.status !== 'installing' ? '' : 'none';
+}
+$('autoUpd').addEventListener('change', e => refreshUpdatePanel({ autoUpdate: e.target.checked }));
+$('updCheck').onclick = async () => { $('updCheck').textContent = 'Checking…'; await refreshUpdatePanel({ check: true }); $('updCheck').textContent = 'Check for updates'; };
+$('updInstall').onclick = () => refreshUpdatePanel({ install: true });
+
+// Tell the server where home is, so the daily log measures "closest pass" from the right spot.
+function postHome() {
+  if (!home || DEMO) return;
+  saveCfg({ home });
+}
+
+// ---------- today's log ----------
+const AIRLINES = {
+  AAL: 'American', DAL: 'Delta', UAL: 'United', SWA: 'Southwest', JBU: 'JetBlue', NKS: 'Spirit', FFT: 'Frontier',
+  AAY: 'Allegiant', ASA: 'Alaska', SKW: 'SkyWest', RPA: 'Republic', ENY: 'Envoy', EDV: 'Endeavor', JIA: 'PSA',
+  ASH: 'Mesa', SCX: 'Sun Country', MXY: 'Breeze', FDX: 'FedEx', UPS: 'UPS', GTI: 'Atlas Air', ABX: 'ABX Air',
+  ACA: 'Air Canada', ROU: 'Air Canada Rouge', WJA: 'WestJet', TSC: 'Air Transat', SWG: 'Sunwing', AVA: 'Avianca',
+  TAI: 'Avianca El Salvador', CMP: 'Copa', VOI: 'Volaris', AMX: 'Aeroméxico', BAW: 'British Airways', VIR: 'Virgin Atlantic',
+  DLH: 'Lufthansa', AFR: 'Air France', KLM: 'KLM', IBE: 'Iberia', EIN: 'Aer Lingus', SVA: 'Saudia', EJA: 'NetJets',
+  LXJ: 'Flexjet', JTL: 'Jet Linx', XOJ: 'XO', VJT: 'VistaJet', GAJ: 'Wheels Up', FLE: 'Flair', CXK: 'Corporate Air (training)',
+  AWI: 'Air Wisconsin', GJS: 'GoJet', QXE: 'Horizon', CPZ: 'Compass', BPX: 'Pilot training', KAP: 'Cape Air', SIL: 'Silver Airways',
+};
+let logData = null, logTab = load('skyLogTab', 'closest');
+$('today').open = load('skyTodayOpen', true);
+$('today').addEventListener('toggle', () => save('skyTodayOpen', $('today').open));
+const hourName = h => (h % 12 || 12) + (h < 12 ? ' AM' : ' PM');
+const timeOf = t => t ? new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+
+async function pollLog() {
+  if (DEMO) return;
+  try {
+    const r = await fetch('/api/log', { cache: 'no-store' });
+    if (!r.ok) return;
+    logData = await r.json();
+    renderLog();
+  } catch (e) {}
+}
+
+function renderLog() {
+  const L = logData;
+  if (!L) return;
+  $('tdUnique').textContent = L.unique.toLocaleString();
+  const y = L.history[L.history.length - 1];
+  $('tdYest').textContent = y ? `${y.unique.toLocaleString()} yesterday` : 'counting since start';
+  $('tdMil').innerHTML = `<span style="color:${L.military ? SPECIAL.military.color : 'inherit'}">${L.military}</span>`;
+  const peak = L.hourly.indexOf(Math.max(...L.hourly));
+  $('tdBusy').textContent = L.hourly[peak] ? hourName(peak) : '–';
+  $('tdBusySub').textContent = L.hourly[peak] ? `${L.hourly[peak]} aircraft` : ' ';
+  $('tdSum').textContent = `· ${L.unique.toLocaleString()} aircraft · ${L.military} military`;
+
+  // by-hour bars, current hour highlighted
+  const max = Math.max(1, ...L.hourly), nowH = new Date().getHours();
+  $('tdHours').innerHTML = L.hourly.map((v, h) => {
+    const bh = v / max * 46;
+    return `<rect x="${h * 10 + 1}" y="${50 - bh}" width="8" height="${Math.max(bh, v ? 1 : 0)}" rx="1.5" fill="${h === nowH ? '#4cc9f0' : '#3a4a74'}"><title>${hourName(h)}: ${v} aircraft</title></rect>`;
+  }).join('');
+
+  document.querySelectorAll('#tdTabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === logTab));
+  const name = p => `<b>${p.flight || p.reg || p.hex.toUpperCase()}</b> <small>${p.desc ? nice(p.desc) : p.type}</small>`;
+  const row = (i, p, val, sub) => `<div class="lb ${tracks.has(p.hex) ? 'live' : ''}" data-hex="${p.hex}"><span class="rk">${i + 1}</span><div class="nm">${p.mil ? (p.mil & 1 ? '🎖 ' : '★ ') : ''}${name(p)}</div><div class="val">${val}${sub ? `<small>${sub}</small>` : ''}</div></div>`;
+  const countRow = (i, label, count, maxC) => `<div class="lb"><span class="rk">${i + 1}</span><div class="nm">${label}<div class="bar" style="width:${count / maxC * 100}%"></div></div><div class="val">${count}</div></div>`;
+  let html = '';
+  switch (logTab) {
+    case 'closest': html = L.closest.map((p, i) => row(i, p, p.value.toFixed(2) + ' mi', `${fmtAlt(p.alt)} · ${timeOf(p.at)}`)).join(''); break;
+    case 'lowest': html = L.lowest.map((p, i) => row(i, p, p.value.toLocaleString() + ' ft', `within 2 mi · ${timeOf(p.at)}`)).join(''); break;
+    case 'fastest': html = L.fastest.map((p, i) => row(i, p, Math.round(p.value * 1.15078) + ' mph', p.value + ' kt')).join(''); break;
+    case 'highest': html = L.highest.map((p, i) => row(i, p, p.value.toLocaleString() + ' ft')).join(''); break;
+    case 'airlines': html = L.airlines.map((a, i) => countRow(i, `<b>${AIRLINES[a.key] || a.key}</b> <small>${a.key}</small>`, a.count, L.airlines[0].count)).join(''); break;
+    case 'types': html = L.types.map((t, i) => countRow(i, nice(t.key), t.count, L.types[0].count)).join(''); break;
+    case 'special': html = L.special.map((p, i) => row(i, p, p.mil & 1 ? '<span style="color:#9be15d">MILITARY</span>' : '<span style="color:#c58cff">INTERESTING</span>', `first seen ${timeOf(p.first)}${p.cd != null ? ' · ' + p.cd.toFixed(1) + ' mi' : ''}`)).join(''); break;
+  }
+  $('tdList').innerHTML = html || `<div class="lb-empty">Nothing yet today${logTab === 'lowest' ? ' within 2 miles of home' : ''}.</div>`;
+}
+$('tdTabs').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  logTab = b.dataset.tab; save('skyLogTab', logTab); renderLog();
+});
+$('tdList').addEventListener('click', e => {
+  const r = e.target.closest('.lb.live');
+  if (r) select(r.dataset.hex, true);
+});
+
+// ---------- FlightAware feeder stats (from your FlightAware stats page, refreshed every 30 min) ----------
+// Panel starts closed; remember if the viewer opens it.
+$('stats').open = load('skyStatsOpen', false);
+$('stats').addEventListener('toggle', () => save('skyStatsOpen', $('stats').open));
+let fa = null;
+const faOnline = () => fa?.lastCheckin && Date.now() - fa.lastCheckin < 15 * 60000;
+function renderStatsHeader() {
+  $('stLive').className = faOnline() ? 'live' : 'live off';
+  $('stSum').textContent = fa ? `· ${faOnline() ? 'online' : 'offline'}${fa.rank ? ' · rank #' + fa.rank.toLocaleString() : ''}` : '· not set up';
+}
+const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' hr ago' : Math.round(m / 1440) + ' days ago'; };
+const big = n => n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n.toLocaleString();
+async function pollFa() {
+  if (DEMO) return;
+  try {
+    const r = await fetch('/api/fastats', { cache: 'no-store' });
+    if (!r.ok) throw new Error((await r.json()).error);
+    fa = await r.json();
+    if (fa.notSet) {
+      fa = null;
+      $('faSec').innerHTML = '<div class="fa-note">Feed FlightAware? Add your FlightAware username under ⚙ Settings to see your feeder stats here.</div>';
+      renderStatsHeader(); return;
+    }
+  } catch (e) { $('faSec').innerHTML = `<div class="fa-note">FlightAware stats unavailable right now (${e.message}).</div>`; renderStatsHeader(); return; }
+  const cell = (k, v) => `<div><div class="k">${k}</div><div class="v">${v ?? '—'}</div></div>`;
+  const ver = fa.feeder ? fa.feeder.replace(/\s*\(.*?\)/, '') : null;
+  const days = fa.days || [], today = days[days.length - 1], yday = days[days.length - 2];
+  const max = Math.max(1, ...days.map(d => d.aircraft));
+  $('faSec').innerHTML = `
+    <div class="fa-h">✈ FlightAware feeder<a href="${fa.link}" target="_blank" rel="noopener">${fa.user} ↗</a></div>
+    <div class="st-grid">
+      ${cell('Status', `<span style="color:${faOnline() ? 'var(--good)' : 'var(--hot)'}">${faOnline() ? 'Online' : 'Offline'}</span> <small>${fa.lastCheckin ? ago(fa.lastCheckin) : ''}</small>`)}
+      ${cell('Site rank', fa.rank ? '#' + fa.rank.toLocaleString() + (fa.bestRank ? ` <small>best #${fa.bestRank.toLocaleString()}</small>` : '') : null)}
+      ${cell('Aircraft today', today ? today.aircraft.toLocaleString() : null)}
+      ${cell('Yesterday', yday ? yday.aircraft.toLocaleString() : null)}
+      ${cell('Lifetime aircraft', fa.totalAircraft ? big(fa.totalAircraft) : null)}
+      ${cell('Lifetime positions', fa.totalPositions ? big(fa.totalPositions) : null)}
+      ${cell('Nearest airport', fa.airport)}
+      ${cell('Longest streak', fa.longestStreak ? fa.longestStreak + ' days' : null)}
+      ${cell('Feeder', ver ? `${ver} <small>${fa.upToDate === false ? '· update ' + fa.latestVersion : '· up to date'}</small>` : null)}
+      ${cell('MLAT', fa.mlat == null ? null : fa.mlat ? 'Enabled' : 'Off')}
+    </div>
+    ${days.length ? `<div class="spark"><div class="top"><span class="k">Aircraft per day · last ${days.length} days</span><span class="v">${today ? today.aircraft.toLocaleString() : ''}</span></div>
+      <svg id="faDays" viewBox="0 0 ${days.length * 10} 40" preserveAspectRatio="none">${days.map((d, i) => {
+        const h = d.aircraft / max * 38;
+        return `<rect x="${i * 10 + 1}" y="${40 - h}" width="8" height="${Math.max(h, d.aircraft ? 1 : 0)}" rx="1.5" fill="${i === days.length - 1 ? '#4cc9f0' : '#3a4a74'}"><title>${new Date(d.date * 1000).toLocaleDateString(undefined, { timeZone: 'UTC' })}: ${d.aircraft.toLocaleString()} aircraft</title></rect>`;
+      }).join('')}</svg></div>` : ''}
+    <div class="fa-note">From your FlightAware stats page, refreshed every 30 minutes.</div>`;
+  renderStatsHeader();
+}
+
+// ---------- controls ----------
+$('radius').addEventListener('input', e => {
+  radius = +e.target.value; $('radiusVal').textContent = radius + ' mi'; save('skyRadius', radius);
+  drawHome(); update(current.length ? rawCache() : []);
+});
+$('radius').addEventListener('change', fitRadius);
+$('radiusVal').textContent = radius + ' mi';
+$('showAll').addEventListener('change', e => { showAll = e.target.checked; save('skyShowAll', showAll); update(rawCache()); });
+// rebuild raw-ish rows from tracked state so control changes apply instantly
+function rawCache() {
+  return [...tracks.values()].map(t => { const a = t.aircraft; return { hex: a.hex, flight: a.flight, lat: a.lat, lon: a.lon, alt_baro: a.alt, gs: a.gs, track: a.track, baro_rate: a.vr, squawk: a.squawk, r: a.reg, t: a.type, desc: a.desc, ownOp: a.owner, seen_pos: a.seenPos, emergency: a.emergency, first_seen: a.firstSeen, first_pos: a.firstPos, dbFlags: a.flags, year: a.year }; });
+}
+
+// ---------- settings: Home, Office, data source and accounts (saved in settings.json next to the app) ----------
+let cfg = {}; // last settings from the server
+let office = null; // { name, pos: [lat, lon], label }
+const poiLayer = L.layerGroup().addTo(map);
+function drawPois() {
+  poiLayer.clearLayers();
+  if (office?.pos) {
+    L.marker(office.pos, {
+      zIndexOffset: 900,
+      icon: L.divIcon({ className: '', html: `<div class="poi" style="--c:#2a7de1"><i>🏢</i><span>${esc(office.name || 'Office')}</span></div>`, iconSize: [0, 0] }),
+    }).bindTooltip(home ? `${distMi(home, office.pos).toFixed(1)} mi from home` : esc(office.name || 'Office'), { direction: 'top', offset: [0, -16] }).addTo(poiLayer);
+  }
+}
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// header button to the user's own FlightAware feeder page (only when they've entered a username)
+function applyCfg() {
+  const b = $('faBtn');
+  if (cfg.faUser) { b.href = 'https://www.flightaware.com/adsb/stats/user/' + encodeURIComponent(cfg.faUser); b.style.display = ''; }
+  else b.style.display = 'none';
+}
+async function loadCfg() {
+  try { cfg = await fetch('/api/settings').then(r => r.json()); } catch (e) { cfg = {}; }
+  office = cfg.office || null;
+  applyCfg();
+  return cfg;
+}
+async function saveCfg(patch) {
+  try { cfg = await fetch('/api/settings', { method: 'POST', body: JSON.stringify(patch) }).then(r => r.json()); } catch (e) {}
+  office = cfg.office || null;
+  applyCfg();
+}
+
+let picking = null; // 'home' | 'office' while choosing a spot on the map
+async function openHome(focusHome, firstRun) {
+  $('setTitle').textContent = firstRun ? "👋 Welcome! Where's home?" : 'Settings';
+  $('welcome').hidden = !firstRun;
+  await loadCfg();
+  if (home) { $('latIn').value = home[0]; $('lonIn').value = home[1]; }
+  $('homeAddr').value = cfg.homeLabel || '';
+  $('homeCur').textContent = home ? `Currently: ${cfg.homeLabel || home[0].toFixed(4) + ', ' + home[1].toFixed(4)}` : 'Not set yet';
+  $('offName').value = office?.name || '';
+  $('offAddr').value = office?.label || '';
+  $('offLat').value = office?.pos ? office.pos[0] : '';
+  $('offLon').value = office?.pos ? office.pos[1] : '';
+  $('faIn').value = cfg.faUser || '';
+  $('contactIn').value = cfg.contact || '';
+  refreshUpdatePanel();
+  $('homePlace').classList.toggle('focus', !!focusHome);
+  if (!$('homeDlg').open) $('homeDlg').showModal();
+  if (focusHome) { $('homeAddr').focus(); $('homeAddr').select(); }
+}
+$('changeHomeBtn').onclick = () => openHome(true);
+$('cancelHome').onclick = () => $('homeDlg').close();
+$('clearOffice').onclick = () => { for (const id of ['offName', 'offAddr', 'offLat', 'offLon']) $(id).value = ''; };
+document.querySelectorAll('[data-find]').forEach(btn => btn.onclick = async () => {
+  const which = btn.dataset.find, q = $(which === 'home' ? 'homeAddr' : 'offAddr').value.trim();
+  if (!q) return;
+  btn.textContent = '…';
+  try {
+    const r = await fetch('/api/geocode?q=' + encodeURIComponent(q));
+    const g = await r.json();
+    if (!g) throw new Error('No match for that address');
+    $(which === 'home' ? 'latIn' : 'offLat').value = g.lat.toFixed(5);
+    $(which === 'home' ? 'lonIn' : 'offLon').value = g.lon.toFixed(5);
+  } catch (e) { alert(e.message || 'Address lookup failed'); }
+  btn.textContent = 'Find';
+});
+document.querySelectorAll('[data-pick]').forEach(btn => btn.onclick = () => {
+  picking = btn.dataset.pick; $('homeDlg').close(); $('map').style.cursor = 'crosshair';
+});
+function setHome(lat, lon) {
+  home = [+lat, +lon];
+  drawHome(); fitRadius(); update(rawCache()); loadAirports(); drawPois(); postHome();
+}
+$('homeBtn').onclick = () => openHome(false);
+$('saveHome').onclick = async () => {
+  const lat = parseFloat($('latIn').value), lon = parseFloat($('lonIn').value);
+  const oLat = parseFloat($('offLat').value), oLon = parseFloat($('offLon').value);
+  const homeChanged = isFinite(lat) && isFinite(lon) && (!home || lat !== home[0] || lon !== home[1]);
+  const patch = {
+    homeLabel: $('homeAddr').value.trim(),
+    office: isFinite(oLat) && isFinite(oLon) ? { name: $('offName').value.trim() || 'Office', pos: [oLat, oLon], label: $('offAddr').value.trim() } : null,
+    faUser: $('faIn').value.trim(),
+    contact: $('contactIn').value.trim(),
+  };
+  if (isFinite(lat) && isFinite(lon)) patch.home = [lat, lon];
+  await saveCfg(patch);
+  if (homeChanged) setHome(lat, lon);
+  drawPois();
+  pollFa();
+  $('homeDlg').close();
+};
+$('geoBtn').onclick = () => navigator.geolocation?.getCurrentPosition(p => {
+  $('latIn').value = p.coords.latitude.toFixed(5); $('lonIn').value = p.coords.longitude.toFixed(5);
+}, err => alert('Location not available: ' + err.message));
+map.on('click', e => {
+  if (!picking) return;
+  // drop the picked spot into the dialog so it can be reviewed, then saved
+  const [la, lo] = [e.latlng.lat.toFixed(5), e.latlng.lng.toFixed(5)];
+  if (picking === 'home') { $('latIn').value = la; $('lonIn').value = lo; }
+  else { $('offLat').value = la; $('offLon').value = lo; }
+  picking = null; $('map').style.cursor = '';
+  $('homeDlg').showModal();
+});
+
+// ---------- demo traffic (?demo in the URL: simulated planes for previewing) ----------
+let demoPlanes = null;
+function demoTick() {
+  const c = home || [27.9506, -82.4572];
+  if (!demoPlanes) {
+    const seeds = [
+      ['a1b2c3', 'SWA1842', 'N8652B', 'B38M', 'BOEING 737 MAX 8', 3200, 180, 45],
+      ['a4d5e6', 'DAL2231', 'N915DU', 'A321', 'AIRBUS A-321', 9800, 290, 110],
+      ['a7f8a9', 'N172SP', 'N172SP', 'C172', 'CESSNA 172 Skyhawk', 1500, 95, 300],
+      ['abcdef', 'JBU618', 'N2002J', 'A320', 'AIRBUS A-320', 24000, 410, 200],
+      ['a0b1c2', 'LIFE1', 'N911FL', 'EC35', 'EUROCOPTER EC-135', 900, 120, 15],
+      ['adb4e7', 'AAL1180', 'N994AN', 'B738', 'BOEING 737-800', 36000, 470, 250],
+      ['a33c21', 'UAL455', 'N37502', 'B39M', 'BOEING 737 MAX 9', 14500, 330, 160],
+    ];
+    demoPlanes = seeds.map((s, i) => {
+      const ang = (i / seeds.length) * Math.PI * 2, d = 0.02 + i * 0.012;
+      return { hex: s[0], flight: s[1], r: s[2], t: s[3], desc: s[4], alt_baro: s[5], gs: s[6], track: s[7], lat: c[0] + Math.sin(ang) * d, lon: c[1] + Math.cos(ang) * d, baro_rate: (i % 3 - 1) * 800, squawk: String(1200 + i * 111), seen_pos: 0 };
+    });
+  }
+  for (const p of demoPlanes) {
+    const step = p.gs * 1.852 / 3600 * 2 / 111; // degrees per 2s tick
+    p.lat += Math.cos(toRad(p.track)) * step;
+    p.lon += Math.sin(toRad(p.track)) * step / Math.cos(toRad(p.lat));
+    if (distMi(c, [p.lat, p.lon]) > 9) { p.track = (bearing([p.lat, p.lon], c) + (Math.random() * 40 - 20) + 360) % 360; }
+  }
+  return demoPlanes;
+}
+
+init();
+</script>
+</body>
+</html>
