@@ -52,6 +52,8 @@ home address, an optional office, your FlightAware username, and an optional con
 | Aircraft and owner info | [adsbdb](https://www.adsbdb.com), optional FAA registry file |
 | Routes | [adsb.lol](https://adsb.lol) route data, adsbdb |
 | Airports | [OurAirports](https://ourairports.com) (public domain) |
+| Airline logos | [sexym0nk3y/airline-logos](https://github.com/sexym0nk3y/airline-logos) via jsDelivr (logos are trademarks of their airlines) |
+| Weather radar | NWS NEXRAD via [Iowa Environmental Mesonet](https://mesonet.agron.iastate.edu) |
 | Map | Esri World Dark Gray, [Leaflet](https://leafletjs.com) |
 | Address lookup | [OpenStreetMap Nominatim](https://nominatim.org) |
 
@@ -98,7 +100,7 @@ contacts these services directly from your computer:
 - **Planespotters.net, adsbdb, adsb.lol, Wikipedia**: aircraft identifiers, callsigns and registrations, to look up photos, owners and routes
 - **FlightAware**: the feeder username in Settings, to show its public stats page
 - **GitHub**: to check for and download updates
-- **Esri** (map tiles), **OurAirports** (airport list), **ADS-B Exchange** (only when you open its viewer)
+- **Esri** (map tiles), **OurAirports** (airport list), **jsDelivr** (airline logos), **Iowa Environmental Mesonet** (weather radar), **ADS-B Exchange** (only when you open its viewer)
 
 ## License
 
