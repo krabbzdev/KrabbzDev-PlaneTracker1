@@ -232,6 +232,9 @@
     .to-photo { height: 160px; }
   }
   #version { position: fixed; right: 10px; bottom: 6px; z-index: 1500; font: 11px var(--mono); color: var(--muted); background: rgba(11,16,32,.75); padding: 2px 8px; border-radius: 6px; pointer-events: none; }
+  .leaflet-control.zoom-pct { clear: none; margin-left: 6px; padding: 0 8px; height: 30px; line-height: 30px; min-width: 52px; text-align: center;
+    background: #fff; color: #333; font: 600 12px var(--mono); cursor: pointer; }
+  .leaflet-control.zoom-pct:hover { background: #f4f4f4; }
   #version a { color: var(--accent); text-decoration: none; pointer-events: auto; }
   #version a:hover { text-decoration: underline; }
   #toasts { position: fixed; right: 16px; bottom: 32px; display: flex; flex-direction: column; gap: 8px; z-index: 2000; max-width: min(380px, calc(100vw - 32px)); }
@@ -639,10 +642,30 @@ function atcLinks(a) {
 map.on('zoomend', drawAirports);
 $('showApts').addEventListener('change', e => { showApts = e.target.checked; save('skyShowApts', showApts); drawAirports(); });
 
+const radiusBounds = () => L.latLng(home).toBounds(radius * MI * 2.2);
 function fitRadius() {
   if (!home) return;
-  map.fitBounds(L.latLng(home).toBounds(radius * MI * 2.2), { animate: true });
+  map.fitBounds(radiusBounds(), { animate: true });
 }
+
+// Zoom level as a percentage beside +/-: 100% shows the whole Tracker Radius, each zoom step doubles or halves it.
+// Click it to go back to 100%.
+const zoomPct = L.control({ position: 'topleft' });
+zoomPct.onAdd = () => {
+  const el = L.DomUtil.create('div', 'leaflet-bar zoom-pct');
+  el.title = 'Zoom level (100% shows your whole Tracker Radius). Click to reset.';
+  L.DomEvent.disableClickPropagation(el);
+  el.onclick = fitRadius;
+  return el;
+};
+zoomPct.addTo(map);
+function showZoomPct() {
+  const el = zoomPct.getContainer();
+  if (!home) { el.textContent = Math.round(2 ** (map.getZoom() - 11) * 100) + '%'; return; }
+  el.textContent = Math.round(2 ** (map.getZoom() - map.getBoundsZoom(radiusBounds())) * 100) + '%';
+}
+map.on('zoomend', showZoomPct);
+showZoomPct();
 
 // ---------- state ----------
 const tracks = new Map();   // hex -> {marker, trail, points, aircraft}
@@ -1655,7 +1678,7 @@ async function pollFa() {
 // ---------- controls ----------
 $('radius').addEventListener('input', e => {
   radius = +e.target.value; $('radiusVal').textContent = radius + ' mi'; save('skyRadius', radius);
-  drawHome(); update(current.length ? rawCache() : []);
+  drawHome(); update(current.length ? rawCache() : []); showZoomPct();
 });
 $('radius').addEventListener('change', fitRadius);
 $('radiusVal').textContent = radius + ' mi';
