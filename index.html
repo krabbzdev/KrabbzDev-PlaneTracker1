@@ -440,6 +440,14 @@
     <p class="src-note">Planespotters asks each app for a contact. If you leave it blank, your FlightAware page is used; with neither, planes show stock model photos.</p>
   </div>
   <div class="place">
+    <h4>🖥 Display</h4>
+    <div class="row"><label for="uiScale" style="align-self:center;white-space:nowrap">UI scale</label><select id="uiScale">
+      <option value="0.75">75%</option><option value="0.9">90%</option><option value="1">100%</option><option value="1.1">110%</option>
+      <option value="1.25">125%</option><option value="1.5">150%</option><option value="1.75">175%</option><option value="2">200%</option>
+    </select></div>
+    <p class="src-note">Makes all text, buttons and panels bigger or smaller. Applies right away and is remembered by this browser.</p>
+  </div>
+  <div class="place">
     <h4>🗣 Overhead voice</h4>
     <div class="row"><select id="voiceSel"></select><button id="voiceTest">▶ Test</button></div>
     <p class="src-note">"TikTok style" picks an upbeat natural voice on this computer and speeds it up a little. Voices come from your browser and Windows, so the list differs between PCs.</p>
@@ -497,6 +505,15 @@ function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch 
 let home = null; // comes from the app's settings (see init)
 let radius = load('skyRadius', 20);
 let showAll = load('skyShowAll', false);
+// UI scale (Settings > Display): CSS zoom on the whole page, remembered per browser
+let uiScale = load('skyUiScale', 1);
+document.documentElement.style.zoom = uiScale;
+$('uiScale').value = String(uiScale);
+$('uiScale').addEventListener('change', e => {
+  uiScale = +e.target.value; save('skyUiScale', uiScale);
+  document.documentElement.style.zoom = uiScale;
+  map.invalidateSize(); // the map measures its own size, so tell it the page changed
+});
 $('radius').value = radius; $('showAll').checked = showAll;
 
 // ---------- geo math ----------
