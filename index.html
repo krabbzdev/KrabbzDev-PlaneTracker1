@@ -185,6 +185,18 @@
   .plane svg { filter: drop-shadow(0 1px 2px rgba(0,0,0,.8)); }
   .plane .tag { position: absolute; left: 22px; top: -2px; font: 600 10px var(--mono); color: #fff; white-space: nowrap; text-shadow: 0 1px 2px #000, 0 0 4px #000; }
   .plane .tag em { font-style: normal; font-weight: 700; }
+  .plane .logo { position: absolute; left: -24px; top: 3px; width: 20px; height: 20px; padding: 1px; border-radius: 5px; background: #fff; object-fit: contain; box-shadow: 0 1px 3px rgba(0,0,0,.7); }
+  .leaflet-tooltip.plane-tip { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 0; box-shadow: 0 6px 24px rgba(0,0,0,.6); width: 240px; white-space: normal; overflow: hidden; }
+  .leaflet-tooltip.plane-tip::before { display: none; }
+  .plane-tip img.ph { display: block; width: 100%; height: 120px; object-fit: cover; }
+  .plane-tip .pt { padding: 8px 10px 10px; font-size: 12px; line-height: 1.45; }
+  .plane-tip .pt-h { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .plane-tip .pt-h img { width: 26px; height: 26px; padding: 1px; border-radius: 5px; background: #fff; object-fit: contain; }
+  .plane-tip .pt-h b { font: 700 14px var(--mono); }
+  .plane-tip .pt-h small { display: block; color: var(--muted); font-size: 11px; }
+  .plane-tip .pt-g { display: grid; grid-template-columns: auto 1fr; gap: 1px 10px; }
+  .plane-tip .pt-g span:nth-child(odd) { color: var(--muted); }
+  .plane-tip .pt-f { margin-top: 6px; color: var(--muted); font-size: 11px; }
   .plane .halo { position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--hc); box-shadow: 0 0 10px var(--hc); animation: halo 1.6s ease-in-out infinite; }
   @keyframes halo { 50% { opacity: .35; transform: scale(1.15); } }
   .badges { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
@@ -717,7 +729,42 @@ function planeIcon(a, inside) {
   const name = a.flight || a.reg;
   const label = show && name ? `<span class="tag">${sp ? `<em style="color:${SPECIAL[sp].color}">${SPECIAL[sp].tag}</em> ` : ''}${name}</span>` : '';
   const halo = sp ? `<span class="halo" style="--hc:${SPECIAL[sp].color}"></span>` : '';
-  return L.divIcon({ className: 'plane', html: halo + planeSvg(color, a.track || 0) + label, iconSize: [26, 26], iconAnchor: [13, 13] });
+  const logo = show && logoUrl(a) ? `<img class="logo" src="${logoUrl(a)}" alt="" onerror="this.remove()">` : '';
+  return L.divIcon({ className: 'plane', html: halo + logo + planeSvg(color, a.track || 0) + label, iconSize: [26, 26], iconAnchor: [13, 13] });
+}
+
+// Airline logo from the callsign's 3-letter ICAO airline code (AAL1373 -> AAL), from the public
+// sexym0nk3y/airline-logos set via jsDelivr. Private tail-number callsigns have no airline, so no logo.
+const LOGO_MISSING = new Set(); // codes with no logo in the set, so a missing one isn't re-requested every update
+function logoUrl(a) {
+  const m = (a.flight || '').match(/^([A-Z]{3})\d/);
+  if (!m || LOGO_MISSING.has(m[1]) || specialOf(a) === 'military') return '';
+  return `https://cdn.jsdelivr.net/gh/sexym0nk3y/airline-logos@main/logos/${m[1]}.png`;
+}
+document.addEventListener('error', e => { // logo 404s: remember the code
+  const m = e.target?.src?.match?.(/airline-logos@main\/logos\/([A-Z]{3})\.png/);
+  if (m) LOGO_MISSING.add(m[1]);
+}, true);
+
+// Hover card for a plane on the map: photo, airline, model, route, altitude, speed and distance.
+function planeTip(a) {
+  const L_ = look(a.hex), rp = routeParts(a), sp = specialOf(a);
+  const photo = L_.photo?.src ? `<img class="ph" src="${esc(L_.photo.src)}" alt="">` : '';
+  const logo = logoUrl(a) ? `<img src="${logoUrl(a)}" alt="" onerror="this.remove()">` : '';
+  const ids = [a.flight, a.reg && a.reg !== a.flight ? a.reg : ''].filter(Boolean).join(' · ') || a.hex.toUpperCase();
+  const row = (k, v) => v ? `<span>${k}</span><span>${esc(v)}</span>` : '';
+  const vr = a.vr > 300 ? ' ↑' : a.vr < -300 ? ' ↓' : '';
+  return `${photo}<div class="pt">
+    <div class="pt-h">${logo}<div><b>${esc(ids)}</b><small>${esc(airlineOf(a) || ownerOf(a) || '')}</small></div></div>
+    <div class="pt-g">
+      ${row('Aircraft', modelOf(a) || a.type)}
+      ${row('Route', rp.from || rp.to ? `${rp.from || '?'} → ${rp.to || '?'}${rp.guessed ? ' (likely)' : ''}` : '')}
+      ${row('Altitude', fmtAlt(a.alt) + vr)}
+      ${row('Speed', a.gs != null ? Math.round(a.gs * 1.15078) + ' mph' : '')}
+      ${row('Distance', a.dist != null ? `${a.dist.toFixed(1)} mi ${compass(a.brg)} of home` : '')}
+      ${row('Status', sp ? SPECIAL[sp].label : '')}
+    </div>
+    <div class="pt-f">Click for full details</div></div>`;
 }
 
 function normalize(raw) {
@@ -915,9 +962,19 @@ function update(list) {
       if (!t.marker) {
         t.marker = L.marker([a.lat, a.lon], { icon: planeIcon(a, a.inside) }).addTo(planeLayer);
         t.marker.on('click', () => select(a.hex));
+        // hover card; fetch the photo/route as soon as someone hovers
+        t.marker.bindTooltip(() => planeTip(tracks.get(a.hex).aircraft), { className: 'plane-tip', direction: 'top', offset: [0, -14], opacity: 1 });
+        t.marker.on('tooltipopen', e => {
+          requestLookup(a.hex);
+          // open above planes in the lower half of the map and below ones in the upper half, so the card isn't cut off
+          const below = map.latLngToContainerPoint(t.marker.getLatLng()).y < map.getSize().y / 2;
+          Object.assign(e.tooltip.options, { direction: below ? 'bottom' : 'top', offset: [0, below ? 14 : -14] });
+          e.tooltip.update();
+        });
       } else {
         t.marker.setLatLng([a.lat, a.lon]).setIcon(planeIcon(a, a.inside));
         if (!planeLayer.hasLayer(t.marker)) planeLayer.addLayer(t.marker);
+        if (t.marker.isTooltipOpen()) t.marker.setTooltipContent(planeTip(a)); // keep an open card live
       }
       t.marker.setZIndexOffset(specialOf(a) ? 700 : a.inside ? 500 : 0);
       if (a.inside && t.points.length > 1) {
