@@ -330,6 +330,7 @@
   <label class="chk"><input type="checkbox" id="showApts" checked> Airports</label>
   <label class="chk" title="Take over the screen with a close-up when a plane passes within 1 mile"><input type="checkbox" id="takeoverOn" checked> Overhead takeover</label>
   <label class="chk" title="Chime and spoken announcement when a plane is overhead"><input type="checkbox" id="soundOn" checked> 🔔 Sound</label>
+  <label class="chk" title="Two cat meows before the chime when a plane is overhead"><input type="checkbox" id="meowOn"> 🐱 Meow</label>
   <a class="btn" id="faBtn" href="#" target="_blank" rel="noopener" title="Your feeder's stats on FlightAware" style="display:none">📡 My ADSB ↗</a>
   <button id="changeHomeBtn" title="Change your home address">🏠 Home</button>
   <button id="homeBtn">⚙ Settings</button>
@@ -927,6 +928,13 @@ $('soundOn').addEventListener('change', e => {
   soundOn = e.target.checked; save('skySound', soundOn);
   if (soundOn) { unlockAudio(); setTimeout(chime, 50); } else if ('speechSynthesis' in window) speechSynthesis.cancel();
 });
+// optional extra: two cat meows before the chime
+let meowOn = load('skyMeow', false);
+$('meowOn').checked = meowOn;
+$('meowOn').addEventListener('change', e => {
+  meowOn = e.target.checked; save('skyMeow', meowOn);
+  if (meowOn) { unlockAudio(); setTimeout(doubleMeow, 50); } // preview it
+});
 // browsers only allow sound once the viewer has clicked or typed on the page, so unlock on any interaction
 function unlockAudio() {
   try {
@@ -936,9 +944,37 @@ function unlockAudio() {
 }
 ['click', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, unlockAudio, { passive: true }));
 
-function chime() {
+// Synthesized cat "meow": a nasal tone that slides up then down with a little vibrato,
+// filtered to sound vocal. `delay` is seconds from now.
+function meow(delay = 0) {
   if (!audioCtx || audioCtx.state !== 'running') return false;
-  const t = audioCtx.currentTime;
+  const t = audioCtx.currentTime + delay;
+  const o = audioCtx.createOscillator(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+  const vib = audioCtx.createOscillator(), vibAmt = audioCtx.createGain();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(560, t);
+  o.frequency.exponentialRampToValueAtTime(1050, t + .16);  // "mee-"
+  o.frequency.exponentialRampToValueAtTime(640, t + .58);   // "-ow"
+  vib.frequency.value = 7; vibAmt.gain.value = 18;
+  vib.connect(vibAmt).connect(o.frequency);
+  f.type = 'bandpass'; f.Q.value = 3.5;
+  f.frequency.setValueAtTime(1500, t);
+  f.frequency.linearRampToValueAtTime(2700, t + .18);
+  f.frequency.linearRampToValueAtTime(950, t + .6);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(.5, t + .05);
+  g.gain.setValueAtTime(.5, t + .42);
+  g.gain.exponentialRampToValueAtTime(.001, t + .66);
+  o.connect(f).connect(g).connect(audioCtx.destination);
+  o.start(t); vib.start(t); o.stop(t + .68); vib.stop(t + .68);
+  return true;
+}
+const MEOW_LEAD = 1.7; // seconds the two meows take before the chime starts
+function doubleMeow() { return meow(0) && meow(.85); }
+
+function chime(delay = 0) {
+  if (!audioCtx || audioCtx.state !== 'running') return false;
+  const t = audioCtx.currentTime + (typeof delay === 'number' ? delay : 0);
   for (const [freq, at] of [[880, 0], [660, .32], [990, .64]]) { // ding-dong-ding
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
     o.type = 'sine'; o.frequency.value = freq;
@@ -963,7 +999,10 @@ function announce(a) {
 function alertSound(hex) {
   if (!soundOn) return;
   unlockAudio();
-  if (!chime() && !soundBlockedShown) {
+  // optional: meow, meow, then the chime and the spoken announcement as usual
+  const lead = meowOn ? MEOW_LEAD : 0;
+  const played = (meowOn ? doubleMeow() : true) && chime(lead);
+  if (!played && !soundBlockedShown) {
     soundBlockedShown = true;
     const el = document.createElement('div');
     el.className = 'toast'; el.style.setProperty('--bc', '#ffb547');
@@ -973,7 +1012,7 @@ function alertSound(hex) {
     setTimeout(() => el.remove(), 15000);
   }
   // give the route lookup a moment to arrive, then announce (after the chime finishes)
-  setTimeout(() => { const a = current.find(x => x.hex === hex); if (a && toHex === hex && soundOn) announce(a); }, 1800);
+  setTimeout(() => { const a = current.find(x => x.hex === hex); if (a && toHex === hex && soundOn) announce(a); }, 1800 + lead * 1000);
 }
 
 function closeTakeover() {
