@@ -414,11 +414,10 @@
   <div class="spacer"></div>
   <div class="ctl">Tracker Radius <input type="range" id="radius" min="1" max="25" step="1" value="20"><b id="radiusVal">20 mi</b></div>
   <label class="chk"><input type="checkbox" id="showAll"> Show outside radius</label>
-  <label class="chk"><input type="checkbox" id="showApts" checked> Airports</label>
-  <label class="chk" title="Live rain radar on the map (US, refreshes every 5 minutes)"><input type="checkbox" id="wxOn" checked> 🌧 Weather</label>
+  <label class="chk"><input type="checkbox" id="showApts" checked> Show Airports</label>
+  <label class="chk" title="Live rain radar on the map (US, refreshes every 5 minutes)"><input type="checkbox" id="wxOn" checked> 🌧 Show Weather</label>
   <label class="chk" title="Take over the screen with a close-up when a plane passes within 1 mile"><input type="checkbox" id="takeoverOn" checked> Overhead takeover</label>
   <label class="chk" title="Chime and spoken announcement when a plane is overhead"><input type="checkbox" id="soundOn" checked> 🔔 Sound</label>
-  <button id="changeHomeBtn" title="Change your home address">🏠 Home</button>
   <button id="homeBtn">⚙ Settings</button>
 </header>
 
@@ -1941,7 +1940,6 @@ async function openHome(focusHome, firstRun) {
   if (!$('homeDlg').open) $('homeDlg').showModal();
   if (focusHome || firstRun) $('homeAddr').focus();
 }
-$('changeHomeBtn').onclick = () => openHome(true);
 $('homeBtn').onclick = () => openHome(false);
 $('cancelHome').onclick = $('setX').onclick = () => $('homeDlg').close();
 $('voiceTest').onclick = () => say('Overhead now! Boeing 737, going to Orlando, at 280 miles per hour.', $('voiceSel').value);
