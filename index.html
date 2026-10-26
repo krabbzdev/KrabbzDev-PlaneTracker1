@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root {
+    --ui: 1; /* UI scale (Settings > Display); vh/vw sizes are divided by it so the page still fills the window */
     --bg: #0b1020;
     --panel: #121a30;
     --panel-2: #18223d;
@@ -23,7 +24,7 @@
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: Inter, system-ui, sans-serif; }
-  body { display: flex; flex-direction: column; min-height: 100vh; }
+  body { display: flex; flex-direction: column; min-height: calc(100vh / var(--ui)); }
   body > main { flex: 1; }
 
   /* Under-1-mile alert ticker */
@@ -64,11 +65,11 @@
   .stat .s { font-size: 12px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   /* list | map | panels; each column scrolls on its own */
-  main { display: grid; grid-template-columns: 380px minmax(0, 1fr) 380px; grid-template-rows: minmax(560px, calc(100vh - 140px)); grid-template-areas: "list map aside"; gap: 12px; padding: 0 20px 20px; min-height: 0; }
+  main { display: grid; grid-template-columns: 380px minmax(0, 1fr) 380px; grid-template-rows: minmax(560px, calc(calc(100vh / var(--ui)) - 140px)); grid-template-areas: "list map aside"; gap: 12px; padding: 0 20px 20px; min-height: 0; }
   #map { grid-area: map; border-radius: 14px; border: 1px solid var(--line); min-height: 420px; background: #0a0f1c; }
   aside { grid-area: aside; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "stats" "today" "atc" "detail"; align-content: start; gap: 12px; min-height: 0; overflow-y: auto; }
   @media (max-width: 1250px) {
-    main { grid-template-columns: 360px minmax(0, 1fr); grid-template-rows: minmax(520px, calc(100vh - 140px)) auto; grid-template-areas: "list map" "aside aside"; }
+    main { grid-template-columns: 360px minmax(0, 1fr); grid-template-rows: minmax(520px, calc(calc(100vh / var(--ui)) - 140px)) auto; grid-template-areas: "list map" "aside aside"; }
     aside { overflow: visible; }
   }
   #stats { grid-area: stats; }
@@ -240,7 +241,7 @@
   .to-plane svg { filter: drop-shadow(0 2px 6px rgba(0,0,0,.9)); }
   @media (max-width: 960px) {
     .to-body { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
-    .to-info { max-height: 45vh; border-left: 0; border-top: 1px solid var(--line); }
+    .to-info { max-height: calc(45vh / var(--ui)); border-left: 0; border-top: 1px solid var(--line); }
     .to-photo { height: 160px; }
   }
   #version { position: fixed; right: 10px; bottom: 6px; z-index: 1500; font: 11px var(--mono); color: var(--muted); background: rgba(11,16,32,.75); padding: 2px 8px; border-radius: 6px; pointer-events: none; }
@@ -249,7 +250,7 @@
   .leaflet-control.zoom-pct:hover { background: #f4f4f4; }
   #version a { color: var(--accent); text-decoration: none; pointer-events: auto; }
   #version a:hover { text-decoration: underline; }
-  #toasts { position: fixed; right: 16px; bottom: 32px; display: flex; flex-direction: column; gap: 8px; z-index: 2000; max-width: min(380px, calc(100vw - 32px)); }
+  #toasts { position: fixed; right: 16px; bottom: 32px; display: flex; flex-direction: column; gap: 8px; z-index: 2000; max-width: min(380px, calc(calc(100vw / var(--ui)) - 32px)); }
   .toast { background: var(--panel); border: 1px solid var(--bc); border-left-width: 4px; border-radius: 10px; padding: 10px 14px; font-size: 13px; box-shadow: 0 6px 24px rgba(0,0,0,.5); cursor: pointer; animation: toastIn .25s ease-out; }
   .toast b { color: var(--bc); }
   @keyframes toastIn { from { transform: translateY(12px); opacity: 0; } }
@@ -267,7 +268,7 @@
   .apt-tip small { color: var(--muted); }
   .home-pin { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(76,201,240,.25); }
 
-  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px; padding: 20px; width: min(440px, 92vw); }
+  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px; padding: 20px; width: min(440px, calc(92vw / var(--ui))); }
   dialog::backdrop { background: rgba(0,0,0,.6); }
   dialog h3 { margin: 0 0 6px; }
   dialog p { color: var(--muted); font-size: 13px; margin: 0 0 14px; line-height: 1.5; }
@@ -281,7 +282,7 @@
   dialog .src-note a, .live a { color: var(--accent); }
   dialog .cur { font-size: 12px; color: var(--muted); margin: -4px 0 8px; }
   /* Settings window: tabs, one scrolling body, buttons pinned at the bottom */
-  dialog.set-dlg { width: min(520px, 94vw); max-height: 90vh; padding: 0; display: none; flex-direction: column; overflow: hidden; }
+  dialog.set-dlg { width: min(520px, calc(94vw / var(--ui))); max-height: calc(90vh / var(--ui)); padding: 0; display: none; flex-direction: column; overflow: hidden; }
   dialog.set-dlg[open] { display: flex; }
   .set-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 6px; }
   .set-head h3 { margin: 0; font-size: 18px; }
@@ -328,7 +329,7 @@
   a.adsbx.chip { font: 600 11px Inter, sans-serif; padding: 1px 7px; border-radius: 999px; border: 1px solid rgba(76,201,240,.4); background: rgba(76,201,240,.08); }
   a.adsbx.chip:hover { text-decoration: none; background: rgba(76,201,240,.18); }
   a.adsbx.big { display: inline-block; font: 600 14px Inter, sans-serif; padding: 8px 14px; border-radius: 10px; border: 1px solid rgba(76,201,240,.5); background: rgba(76,201,240,.1); }
-  dialog.ax-dlg { width: 94vw; height: 90vh; max-width: none; max-height: none; padding: 0; display: none; flex-direction: column; overflow: hidden; }
+  dialog.ax-dlg { width: calc(94vw / var(--ui)); height: calc(90vh / var(--ui)); max-width: none; max-height: none; padding: 0; display: none; flex-direction: column; overflow: hidden; }
   dialog.ax-dlg[open] { display: flex; }
   .ax-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
   .ax-bar b { margin-right: auto; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -355,7 +356,7 @@
   .fb-share:hover { background: #166fe5; border-color: #fff3; }
   .fb-share.big { font-size: 14px; padding: 8px 14px; border-radius: 10px; }
   /* fits the window: the content scrolls, the Close bar stays pinned at the bottom */
-  dialog.reg-dlg { width: min(560px, 94vw); max-height: 92vh; padding: 0; overflow: hidden; }
+  dialog.reg-dlg { width: min(560px, calc(94vw / var(--ui))); max-height: calc(92vh / var(--ui)); padding: 0; overflow: hidden; }
   dialog.reg-dlg[open] { display: flex; flex-direction: column; }
   dialog.reg-dlg #regBody { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
   dialog.reg-dlg .acts { flex: none; padding: 12px 20px; border-top: 1px solid var(--line); background: var(--panel); }
@@ -395,9 +396,9 @@
   .poi span { font: 700 11px Inter, sans-serif; color: #fff; background: rgba(11,16,32,.85); border: 1px solid var(--c); padding: 2px 7px; border-radius: 6px; white-space: nowrap; }
 
   @media (max-width: 960px) {
-    main { grid-template-columns: minmax(0, 1fr); grid-template-rows: 55vh 60vh auto; grid-template-areas: "map" "list" "aside"; }
+    main { grid-template-columns: minmax(0, 1fr); grid-template-rows: calc(55vh / var(--ui)) calc(60vh / var(--ui)) auto; grid-template-areas: "map" "list" "aside"; }
     aside { grid-template-columns: minmax(0, 1fr); }
-    #map { height: 55vh; }
+    #map { height: calc(55vh / var(--ui)); }
     .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px 16px; }
     header, main { padding-left: 16px; padding-right: 16px; }
   }
@@ -610,11 +611,13 @@ let radius = load('skyRadius', 20);
 let showAll = load('skyShowAll', false);
 // UI scale (Settings > Display): CSS zoom on the whole page, remembered per browser
 let uiScale = load('skyUiScale', 1);
-document.documentElement.style.zoom = uiScale;
+// --ui lets the CSS divide window-relative sizes (vh/vw) by the zoom, so the page still fills the window
+const applyUiScale = () => { const r = document.documentElement; r.style.zoom = uiScale; r.style.setProperty('--ui', uiScale); };
+applyUiScale();
 $('uiScale').value = String(uiScale);
 $('uiScale').addEventListener('change', e => {
   uiScale = +e.target.value; save('skyUiScale', uiScale);
-  document.documentElement.style.zoom = uiScale;
+  applyUiScale();
   map.invalidateSize(); // the map measures its own size, so tell it the page changed
 });
 $('radius').value = radius; $('showAll').checked = showAll;
