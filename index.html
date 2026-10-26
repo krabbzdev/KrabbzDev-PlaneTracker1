@@ -311,6 +311,9 @@
   .results { display: flex; flex-direction: column; gap: 4px; margin: -2px 0 10px; }
   .results:empty { display: none; }
   .results button small { color: var(--muted); margin-left: 6px; }
+  #voiceStatus:empty { display: none; }
+  #voiceStatus { color: var(--accent); }
+  #voiceStatus.err { color: #ffb547; }
   dialog.set-dlg label.chk { display: flex; align-items: center; gap: 8px; font-size: 13px; }
   dialog.set-dlg label.chk input { width: auto; margin: 0; }
   .results button { text-align: left; background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 8px 10px; font: 13px Inter, sans-serif; cursor: pointer; }
@@ -522,8 +525,17 @@
       <div class="place">
         <h4>🗣 Announcement voice</h4>
         <p class="hint">The voice that says "Overhead now!" when a plane passes within a mile.</p>
+        <label class="lbl" for="voiceEngine">Voice type</label>
+        <select id="voiceEngine" style="margin-bottom:10px">
+          <option value="browser">Built-in voices: instant, nothing to download</option>
+          <option value="kokoro">Kokoro: the most natural (one-time download)</option>
+          <option value="piper">Piper: natural (one-time download)</option>
+          <option value="espeak">eSpeak NG: classic robot voice, tiny</option>
+        </select>
+        <label class="lbl" for="voiceSel">Voice</label>
         <div class="row"><select id="voiceSel"></select><button id="voiceTest">▶ Test</button></div>
-        <p class="hint">"TikTok style" picks the most upbeat voice on this PC. Microsoft Edge has the most natural-sounding voices.</p>
+        <p class="hint" id="voiceStatus" style="margin-top:8px"></p>
+        <p class="hint" id="voiceNote"></p>
       </div>
       <p class="hint">To turn the alerts on or off, use <b>Overhead Plane Alert</b> and <b>🔔 Sound</b> at the top of the page.</p>
     </section>
@@ -804,6 +816,17 @@ let firstLoad = true;
 
 const planeSvg = (color, rot) =>
   `<svg width="26" height="26" viewBox="0 0 24 24" style="transform:rotate(${rot}deg)"><path fill="${color}" stroke="#0b1020" stroke-width="1" d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg>`;
+// Helicopter seen from above: body, tail boom and tail rotor, with the main rotor blades crossed over the top
+const heliSvg = (color, rot) =>
+  `<svg width="28" height="28" viewBox="0 0 24 24" style="transform:rotate(${rot}deg)">`
+  + `<g stroke="#0b1020" stroke-width="3.2" stroke-linecap="round"><path d="M3.5 1.5 20.5 18.5M20.5 1.5 3.5 18.5M9.3 21h5.4"/></g>`
+  + `<path fill="${color}" stroke="#0b1020" stroke-width="1" d="M12 4.6c2 0 3.3 2.2 3.3 5.1 0 2.4-1 4-2.4 4.6V21h-1.8v-6.7c-1.4-.6-2.4-2.2-2.4-4.6 0-2.9 1.3-5.1 3.3-5.1z"/>`
+  + `<g stroke="${color}" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 1.5 20.5 18.5M20.5 1.5 3.5 18.5M9.3 21h5.4"/></g>`
+  + `<circle cx="12" cy="10" r="1.3" fill="#0b1020"/></svg>`;
+// ADS-B emitter category A7 = rotorcraft; type codes and descriptions catch helicopters that don't send it
+const HELI_TYPES = /^(R22|R44|R66|EC(20|25|30|35|45|55|75)|AS(32|50|55|65)|H(47|53|60|64|65|125|135|145|155|160|175)|B(06|05|212|222|230|407|412|427|429|430|505|525)|BK17|S(61|64|70|76|92)|A(109|119|129|139|149|169|189)|MD(52|60|90)|H500|UH1|UH60|CH47|AH64|EH10|NH90|MI(8|17|24|26)|KA(32|50|52)|G2CA|EN28|EN48|CABR|S300)$/;
+const isHeli = a => a.category === 'A7' || HELI_TYPES.test(a.type || '') || /HELICOPTER|COPTER|ROTORCRAFT/i.test(a.desc || '');
+const aircraftSvg = (a, color, rot) => (a && isHeli(a) ? heliSvg : planeSvg)(color, rot);
 
 // Military / interesting / emergency aircraft
 const EMERGENCY_SQUAWKS = { '7500': 'HIJACK', '7600': 'RADIO FAILURE', '7700': 'EMERGENCY' };
@@ -824,7 +847,7 @@ function planeIcon(a, inside) {
   const label = show && name ? `<span class="tag">${sp ? `<em style="color:${SPECIAL[sp].color}">${SPECIAL[sp].tag}</em> ` : ''}${name}</span>` : '';
   const halo = sp ? `<span class="halo" style="--hc:${SPECIAL[sp].color}"></span>` : '';
   const logo = show && logoUrl(a) ? `<img class="logo" src="${logoUrl(a)}" alt="" onerror="this.remove()">` : '';
-  return L.divIcon({ className: 'plane', html: halo + logo + planeSvg(color, a.track || 0) + label, iconSize: [26, 26], iconAnchor: [13, 13] });
+  return L.divIcon({ className: 'plane', html: halo + logo + aircraftSvg(a, color, a.track || 0) + label, iconSize: [26, 26], iconAnchor: [13, 13] });
 }
 
 // Airline logo from the callsign's 3-letter ICAO airline code (AAL1373 -> AAL), from the public
@@ -877,6 +900,7 @@ function normalize(raw) {
     firstPos: raw.first_pos ?? null,
     flags: (raw.dbFlags || 0) & 3, // 1 = military, 2 = interesting; privacy flags (4, 8) deliberately ignored
     year: raw.year || null,
+    category: raw.category || '',
   };
 }
 
@@ -1191,6 +1215,12 @@ function updateTakeover() {
   if (!takeoverOn || !home) return;
   const now = Date.now();
   trackAnnounced(now);
+  // get the voice ready for planes about to pass within a mile (see prepareAnnouncement)
+  for (const a of current) {
+    if (!a.inside || announced.has(a.hex) || a.alt === 'ground' || a.dist == null || a.dist > 6) continue;
+    const c = cpa(a);
+    if (a.dist < ALERT_MI * 1.5 || (c && !c.passed && c.dist < ALERT_MI && c.secs < 150)) { requestLookup(a.hex); prepareAnnouncement(a); }
+  }
   if (toHex) {
     const a = current.find(x => x.hex === toHex);
     // leave a few seconds after it moves out (or drops off), so it doesn't flicker at the edge
@@ -1227,7 +1257,7 @@ let soundOn = load('skySound', true), audioCtx = null, soundBlockedShown = false
 $('soundOn').checked = soundOn;
 $('soundOn').addEventListener('change', e => {
   soundOn = e.target.checked; save('skySound', soundOn);
-  if (soundOn) { unlockAudio(); setTimeout(chime, 50); } else if ('speechSynthesis' in window) speechSynthesis.cancel();
+  if (soundOn) { unlockAudio(); setTimeout(chime, 50); } else stopSpeech();
 });
 // browsers only allow sound once the viewer has clicked or typed on the page, so unlock on any interaction
 function unlockAudio() {
@@ -1253,37 +1283,185 @@ function chime(delay = 0) {
   return true;
 }
 
-// Voice for announcements, picked in Settings (per browser, since each PC has its own voices).
-// 'tiktok' = an upbeat natural en-US voice, pitched and sped up a little; '' = browser default.
+// ---------- announcement voices ----------
+// Four voice engines, picked in Settings > Alerts (each browser keeps its own choice):
+//   browser  the voices built into Windows / the browser: instant, nothing to download
+//   kokoro   Kokoro-82M neural voices (Apache 2.0): the most natural. Uses the graphics card (WebGPU) when there
+//            is one: ~0.5 s per sentence after a ~300 MB one-time download. Otherwise the processor: 10-15 s per
+//            sentence, ~90 MB. That's why announcements are prepared before the plane arrives (see below).
+//   piper    Piper neural voices: natural, ~1.5 s per sentence, ~60 MB per voice. Only public-domain / CC0 voices.
+//   espeak   eSpeak NG (GPL): the classic robotic computer voice, tiny and instant.
+// The three add-on engines run entirely inside this page (WebAssembly / WebGPU). Their files download once from
+// jsDelivr and Hugging Face and the browser keeps them; the text being spoken never leaves the PC.
+// The choice is stored as "engine:voice" (e.g. "kokoro:af_heart"); older plain values mean the built-in engine.
+const ENGINES = {
+  browser: { voices: null, note: '"TikTok style" picks the most upbeat voice on this PC. Microsoft Edge has the most natural-sounding ones.' },
+  kokoro: {
+    voices: [['af_heart', 'Heart (female)'], ['af_bella', 'Bella (female)'], ['af_nova', 'Nova (female)'], ['af_sky', 'Sky (female)'],
+      ['af_nicole', 'Nicole (female, soft)'], ['af_sarah', 'Sarah (female)'], ['af_aoede', 'Aoede (female)'], ['af_kore', 'Kore (female)'],
+      ['am_michael', 'Michael (male)'], ['am_adam', 'Adam (male)'], ['am_puck', 'Puck (male)'], ['am_eric', 'Eric (male)'],
+      ['am_liam', 'Liam (male)'], ['am_onyx', 'Onyx (male, deep)'], ['am_echo', 'Echo (male)']],
+    note: 'The most natural voices. With a graphics card it speaks in about half a second (first use downloads about 300 MB). Without one it takes 10 to 15 seconds, so the app prepares each announcement before the plane arrives (about 90 MB). Downloads once; the browser keeps it.',
+  },
+  piper: {
+    voices: [['en_US-kristin-medium', 'Kristin (female)'], ['en_US-ljspeech-medium', 'Linda (female)'], ['en_US-joe-medium', 'Joe (male)'],
+      ['en_US-john-medium', 'John (male)'], ['en_US-norman-medium', 'Norman (male)'], ['en_US-bryce-medium', 'Bryce (male)']],
+    note: 'Natural voices that take about 1 to 2 seconds per announcement. Each voice downloads once (about 60 MB) and the browser keeps it.',
+  },
+  espeak: {
+    voices: [['en-us+f3', 'American (female)'], ['en-us+f4', 'American (female, higher)'], ['en-us', 'American (male)'], ['en-gb', 'British (male)']],
+    note: 'The classic robotic computer voice. Tiny and instant.',
+  },
+};
+const parseVoice = v => { const m = /^(kokoro|piper|espeak):(.+)$/.exec(v || ''); return m ? { engine: m[1], voice: m[2] } : { engine: 'browser', voice: v ?? 'tiktok' }; };
 let voicePref = load('skyVoice', 'tiktok');
 const TIKTOK_LIKE = /jenny|aria|ava|emma|michelle|samantha|google us english|zira/i;
-function voiceOptions(sel) {
-  const voices = 'speechSynthesis' in window ? speechSynthesis.getVoices() : [];
-  sel.innerHTML = `<option value="tiktok">TikTok style (upbeat)</option><option value="">Browser default</option>`
-    + voices.filter(v => /^en/i.test(v.lang)).map(v => `<option value="${esc(v.name)}">${esc(v.name)} (${esc(v.lang)})</option>`).join('');
-  sel.value = voicePref;
-  if (sel.value !== voicePref) sel.value = 'tiktok';
+
+function setVoiceStatus(msg, err) { const el = $('voiceStatus'); if (el) { el.textContent = msg || ''; el.classList.toggle('err', !!err); } }
+
+// Settings: the engine drop-down, then that engine's voices
+function voiceOptions(sel, engine) {
+  const cur = parseVoice(voicePref);
+  engine = engine || cur.engine;
+  $('voiceEngine').value = engine;
+  $('voiceNote').textContent = ENGINES[engine].note;
+  if (engine === 'browser') {
+    const voices = 'speechSynthesis' in window ? speechSynthesis.getVoices() : [];
+    sel.innerHTML = `<option value="tiktok">TikTok style (upbeat)</option><option value="">Browser default</option>`
+      + voices.filter(v => /^en/i.test(v.lang)).map(v => `<option value="${esc(v.name)}">${esc(v.name)} (${esc(v.lang)})</option>`).join('');
+  } else sel.innerHTML = ENGINES[engine].voices.map(([id, name]) => `<option value="${id}">${esc(name)}</option>`).join('');
+  sel.value = cur.engine === engine ? cur.voice : '';
+  if (sel.selectedIndex < 0) sel.selectedIndex = 0;
 }
-function say(text, pref = voicePref) {
+const chosenVoice = () => { const e = $('voiceEngine').value, v = $('voiceSel').value; return e === 'browser' ? v : `${e}:${v}`; };
+$('voiceEngine').addEventListener('change', e => { voiceOptions($('voiceSel'), e.target.value); setVoiceStatus(''); });
+if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => { if ($('voiceEngine').value === 'browser') voiceOptions($('voiceSel'), 'browser'); };
+
+function sayBrowser(text, voice) {
   if (!('speechSynthesis' in window)) return;
   const u = new SpeechSynthesisUtterance(text), voices = speechSynthesis.getVoices();
-  if (pref === 'tiktok') {
+  if (voice === 'tiktok') {
     const en = voices.filter(v => /^en-US/i.test(v.lang));
     u.voice = en.find(v => TIKTOK_LIKE.test(v.name) && /natural|online/i.test(v.name)) || en.find(v => TIKTOK_LIKE.test(v.name)) || en[0] || null;
     u.pitch = 1.25; u.rate = 1.12;
-  } else if (pref) u.voice = voices.find(v => v.name === pref) || null;
-  speechSynthesis.cancel();
+  } else if (voice) u.voice = voices.find(v => v.name === voice) || null;
   speechSynthesis.speak(u);
 }
-if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => voiceOptions($('voiceSel'));
+
+// --- the add-on engines, each loaded the first time it's used ---
+const KOKORO_JS = 'https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/+esm';
+const KOKORO_MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX';
+const PIPER_JS = 'https://cdn.jsdelivr.net/npm/@mintplex-labs/piper-tts-web@1.0.5/+esm';
+const PIPER_ORT = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/'; // must match the onnxruntime piper-tts-web loads
+const ESPEAK_JS = 'https://cdn.jsdelivr.net/npm/espeak-ng@1.0.2/+esm';
+const pct = (done, total) => total ? ` ${Math.round(done / total * 100)}%` : '';
+
+let kokoro = null; // Promise of the loaded model
+function loadKokoro() {
+  if (!kokoro) kokoro = (async () => {
+    const { KokoroTTS } = await import(KOKORO_JS);
+    const progress_callback = p => { if (p.status === 'progress' && /onnx/.test(p.file || '')) setVoiceStatus('Downloading the Kokoro voice model (one time only)…' + pct(p.loaded, p.total)); };
+    if (navigator.gpu) {
+      // graphics card: full-precision model (the smaller ones make silent or slow audio on WebGPU)
+      try { return await KokoroTTS.from_pretrained(KOKORO_MODEL, { dtype: 'fp32', device: 'webgpu', progress_callback }); }
+      catch (e) { console.log('Kokoro on the graphics card failed, using the processor: ' + e.message); }
+    }
+    return KokoroTTS.from_pretrained(KOKORO_MODEL, { dtype: 'q8', device: 'wasm', progress_callback });
+  })().catch(e => { kokoro = null; throw e; });
+  return kokoro;
+}
+
+let piperMod = null, piperSession = null, piperVoice = '';
+async function piperSynth(voice, text) {
+  const P = await (piperMod = piperMod || import(PIPER_JS));
+  if (!piperSession || piperVoice !== voice) {
+    P.TtsSession._instance = null; // the library keeps a single session; start a fresh one for a different voice
+    piperVoice = voice;
+    piperSession = P.TtsSession.create({
+      voiceId: voice,
+      progress: p => setVoiceStatus('Downloading the Piper voice (one time only)…' + pct(p.loaded, p.total)),
+      wasmPaths: { onnxWasm: PIPER_ORT, piperData: P.WASM_BASE + '.data', piperWasm: P.WASM_BASE + '.wasm' },
+    }).catch(e => { piperSession = null; throw e; });
+  }
+  return (await piperSession).predict(text);
+}
+
+let espeakMod = null;
+async function espeakSynth(voice, text) {
+  const mod = await (espeakMod = espeakMod || import(ESPEAK_JS));
+  const es = await (mod.default || mod)({ arguments: ['-v', voice, '-s', '170', '-p', '55', '-w', 'say.wav', text] });
+  return new Blob([es.FS.readFile('say.wav')], { type: 'audio/wav' });
+}
+
+async function synth(engine, voice, text) {
+  if (engine === 'kokoro') return (await (await loadKokoro()).generate(text, { voice })).toBlob();
+  if (engine === 'piper') return piperSynth(voice, text);
+  if (engine === 'espeak') return espeakSynth(voice, text);
+  throw new Error('Unknown voice engine ' + engine);
+}
+// one sentence at a time: the neural engines use the whole processor or graphics card
+let synthChain = Promise.resolve();
+function serial(fn) { const run = synthChain.then(fn); synthChain = run.catch(() => {}); return run; }
+
+let speechAudio = null;
+function stopSpeech() {
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  if (speechAudio) { speechAudio.pause(); speechAudio = null; }
+}
+function playBlob(blob) {
+  stopSpeech();
+  const url = URL.createObjectURL(blob), audio = speechAudio = new Audio(url);
+  audio.onended = () => URL.revokeObjectURL(url);
+  return audio.play();
+}
+
+// Speak with the chosen voice. If an add-on engine fails (offline, old browser), the built-in voice is used instead.
+function say(text, pref = voicePref) {
+  const { engine, voice } = parseVoice(pref);
+  stopSpeech();
+  if (engine === 'browser') return Promise.resolve(sayBrowser(text, voice));
+  return serial(() => synth(engine, voice, text)).then(playBlob).catch(e => {
+    console.log('Voice engine failed, using the built-in voice: ' + (e && e.message));
+    setVoiceStatus('That voice could not load (' + ((e && e.message) || 'unknown error') + '). Using the built-in voice instead.', true);
+    sayBrowser(text, 'tiktok');
+  });
+}
 
 // "Overhead now! [model], going to [destination], at [speed] miles per hour."
-function announce(a) {
+function announcementText(a) {
   const rp = routeParts(a), city = s => (s || '').replace(/\s*\([^)]*\)\s*$/, '');
   const model = modelOf(a).replace(/-/g, ' '); // "A-320" reads more naturally as "A 320"
   const speed = a.gs != null ? `, at ${Math.round(a.gs * 1.15078)} miles per hour` : '';
-  say(`Overhead now! ${model}${rp.to ? `, going to ${city(rp.to)}` : ''}${speed}.`);
+  return `Overhead now! ${model}${rp.to ? `, going to ${city(rp.to)}` : ''}${speed}.`;
 }
+const sameWords = (x, y) => x.replace(/at \d+ miles/, '') === y.replace(/at \d+ miles/, ''); // speed may have drifted a little
+
+// The add-on voices can take a while (Kokoro without a graphics card: 10-15 s), so for a plane that's predicted to pass
+// within a mile, the announcement is made ahead of time and played the moment it arrives.
+const prepared = new Map(); // hex -> { pref, text, at, blob: Promise<Blob|null> }
+function prepareAnnouncement(a) {
+  if (!soundOn || parseVoice(voicePref).engine === 'browser') return;
+  const text = announcementText(a), p = prepared.get(a.hex);
+  if (p && p.pref === voicePref && (sameWords(p.text, text) || Date.now() - p.at < 20000)) return;
+  const { engine, voice } = parseVoice(voicePref);
+  prepared.set(a.hex, { pref: voicePref, text, at: Date.now(), blob: serial(() => synth(engine, voice, text)).catch(() => null) });
+  if (prepared.size > 8) prepared.delete(prepared.keys().next().value);
+}
+async function announce(a) {
+  const text = announcementText(a), p = prepared.get(a.hex);
+  prepared.delete(a.hex);
+  if (p && p.pref === voicePref && sameWords(p.text, text)) {
+    const blob = await p.blob;
+    if (toHex !== a.hex || !soundOn) return; // closed while it was still being made
+    if (blob) return playBlob(blob).catch(() => say(text));
+  }
+  say(text);
+}
+// warm up the chosen add-on engine shortly after the page opens, so the first real announcement isn't slow
+setTimeout(() => {
+  const { engine, voice } = parseVoice(voicePref);
+  if (engine !== 'browser' && soundOn) serial(() => synth(engine, voice, 'Ready.')).catch(() => {});
+}, 8000);
 
 function alertSound(hex) {
   if (!soundOn) return;
@@ -1311,7 +1489,7 @@ function alertSound(hex) {
 }
 
 function closeTakeover() {
-  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  stopSpeech();
   toHex = null; clearTimeout(toLeaveTimer); toLeaveTimer = null;
   $('takeover').classList.remove('show');
 }
@@ -1571,7 +1749,7 @@ async function drawRegTrack(hex, fit) {
   L.circleMarker([first[0], first[1]], { radius: 5, color: '#fff', weight: 2, fillColor: altColor(first[2]), fillOpacity: 1 })
     .bindTooltip(`First seen${first[3] ? ' ' + timeOf(first[3]) : ''} · ${fmtAlt(first[2])}`).addTo(rgLayers);
   const now = a ? [a.lat, a.lon] : [pts[pts.length - 1][0], pts[pts.length - 1][1]];
-  L.marker(now, { icon: L.divIcon({ className: '', html: planeSvg(a ? altColor(a.alt) : '#cfd6e6', a?.track || 0), iconSize: [26, 26], iconAnchor: [13, 13] }) }).addTo(rgLayers);
+  L.marker(now, { icon: L.divIcon({ className: '', html: aircraftSvg(a, a ? altColor(a.alt) : '#cfd6e6', a?.track || 0), iconSize: [26, 26], iconAnchor: [13, 13] }) }).addTo(rgLayers);
   if (fit) rgMap.fitBounds(L.latLngBounds(pts.map(p => [p[0], p[1]]).concat([now])).pad(0.2), { maxZoom: 13 });
   const mins = first[3] ? Math.round((Date.now() - first[3]) / 60000) : null;
   $('rgCap').textContent = `Path while in range${mins != null ? ` · last ${mins} min` : ''} · coloured by altitude${a ? ` · now ${fmtAlt(a.alt)}` : ' · no longer in range'}`;
@@ -1859,7 +2037,7 @@ $('radiusVal').textContent = radius + ' mi';
 $('showAll').addEventListener('change', e => { showAll = e.target.checked; save('skyShowAll', showAll); update(rawCache()); });
 // rebuild raw-ish rows from tracked state so control changes apply instantly
 function rawCache() {
-  return [...tracks.values()].map(t => { const a = t.aircraft; return { hex: a.hex, flight: a.flight, lat: a.lat, lon: a.lon, alt_baro: a.alt, gs: a.gs, track: a.track, baro_rate: a.vr, squawk: a.squawk, r: a.reg, t: a.type, desc: a.desc, ownOp: a.owner, seen_pos: a.seenPos, emergency: a.emergency, first_seen: a.firstSeen, first_pos: a.firstPos, dbFlags: a.flags, year: a.year }; });
+  return [...tracks.values()].map(t => { const a = t.aircraft; return { hex: a.hex, flight: a.flight, lat: a.lat, lon: a.lon, alt_baro: a.alt, gs: a.gs, track: a.track, baro_rate: a.vr, squawk: a.squawk, r: a.reg, t: a.type, desc: a.desc, ownOp: a.owner, seen_pos: a.seenPos, emergency: a.emergency, first_seen: a.firstSeen, first_pos: a.firstPos, dbFlags: a.flags, year: a.year, category: a.category }; });
 }
 
 // ---------- settings: Home, Office, data source and accounts (saved in settings.json next to the app) ----------
@@ -1942,7 +2120,14 @@ async function openHome(focusHome, firstRun) {
 }
 $('homeBtn').onclick = () => openHome(false);
 $('cancelHome').onclick = $('setX').onclick = () => $('homeDlg').close();
-$('voiceTest').onclick = () => say('Overhead now! Boeing 737, going to Orlando, at 280 miles per hour.', $('voiceSel').value);
+$('voiceTest').onclick = async () => {
+  const pref = chosenVoice(), btn = $('voiceTest');
+  btn.disabled = true;
+  if (parseVoice(pref).engine !== 'browser') setVoiceStatus('Getting the voice ready… (the first time can take a minute while it downloads)');
+  await say('Overhead now! Boeing 737, going to Orlando, at 280 miles per hour.', pref);
+  if (!$('voiceStatus').classList.contains('err')) setVoiceStatus(parseVoice(pref).engine === 'browser' ? '' : '✓ Ready. This voice is saved on this PC now.');
+  btn.disabled = false;
+};
 $('clearOffice').onclick = () => {
   for (const id of ['offName', 'offAddr', 'offLat', 'offLon']) $(id).value = '';
   placeLabel.office = ''; $('officeResults').innerHTML = ''; showWhere('office');
@@ -2014,7 +2199,7 @@ $('saveHome').onclick = async () => {
     faUser: $('faIn').value.trim(),
     contact: $('contactIn').value.trim(),
   };
-  voicePref = $('voiceSel').value; save('skyVoice', voicePref);
+  voicePref = chosenVoice(); save('skyVoice', voicePref);
   await saveCfg(patch);
   if (homeChanged) setHome(lat, lon); else drawHome(); // redraw so a new pin name shows
   drawPois();
