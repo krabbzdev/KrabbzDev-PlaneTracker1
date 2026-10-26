@@ -54,6 +54,7 @@ home address, an optional office, your FlightAware username, and an optional con
 | Airports | [OurAirports](https://ourairports.com) (public domain) |
 | Airline logos | [sexym0nk3y/airline-logos](https://github.com/sexym0nk3y/airline-logos) via jsDelivr (logos are trademarks of their airlines) |
 | Weather radar | NWS NEXRAD via [Iowa Environmental Mesonet](https://mesonet.agron.iastate.edu) |
+| Announcement voices (optional) | [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) via [kokoro-js](https://github.com/hexgrad/kokoro) (Apache 2.0); [Piper](https://github.com/rhasspy/piper) voices (public domain / CC0) via [piper-tts-web](https://github.com/Mintplex-Labs/piper-tts-web) (MIT); [eSpeak NG](https://github.com/espeak-ng/espeak-ng) (GPL-3.0). Downloaded on first use from jsDelivr and Hugging Face; they run in your browser |
 | Map | Esri World Dark Gray, [Leaflet](https://leafletjs.com) |
 | Address lookup | [OpenStreetMap Nominatim](https://nominatim.org) |
 
@@ -91,7 +92,7 @@ contacts these services directly from your computer:
 - **Planespotters.net, adsbdb, adsb.lol, Wikipedia**: aircraft identifiers, callsigns and registrations, to look up photos, owners and routes
 - **FlightAware**: the feeder username in Settings, to show its public stats page
 - **GitHub**: to check for and download updates
-- **Esri** (map tiles), **OurAirports** (airport list), **jsDelivr** (airline logos), **Iowa Environmental Mesonet** (weather radar), **ADS-B Exchange** (only when you open its viewer)
+- **Esri** (map tiles), **OurAirports** (airport list), **jsDelivr** (airline logos), **Iowa Environmental Mesonet** (weather radar), **jsDelivr** and **Hugging Face** (voice files, only if you pick Kokoro, Piper or eSpeak NG; the text spoken never leaves your PC), **ADS-B Exchange** (only when you open its viewer)
 
 ## License
 
