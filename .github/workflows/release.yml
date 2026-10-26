@@ -1,11 +1,5 @@
 # Builds Krabbz9999-FlightTracker.exe on GitHub and publishes it as a release.
 # Triggered by pushing a version tag (release.cmd does this).
-#
-# Code signing (SignPath Foundation): runs only once these are set in the repo
-# (Settings -> Secrets and variables -> Actions):
-#   secret   SIGNPATH_API_TOKEN
-#   variable SIGNPATH_ORGANIZATION_ID, SIGNPATH_PROJECT_SLUG, SIGNPATH_SIGNING_POLICY_SLUG
-# Until then, releases are published unsigned exactly as before.
 
 name: Build and release
 
@@ -41,31 +35,6 @@ jobs:
           $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe' | Sort-Object FullName -Descending | Select-Object -First 1
           & $signtool.FullName remove /s Krabbz9999-FlightTracker.exe
           npx --yes postject@1.0.0-alpha.6 Krabbz9999-FlightTracker.exe NODE_SEA_BLOB build/sea-prep.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
-
-      - name: Upload the unsigned build
-        id: unsigned
-        uses: actions/upload-artifact@v4
-        with:
-          name: unsigned-exe
-          path: Krabbz9999-FlightTracker.exe
-          if-no-files-found: error
-
-      - name: Sign with SignPath
-        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
-        uses: signpath/github-action-submit-signing-request@v1
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
-          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
-          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
-          wait-for-completion: true
-          output-artifact-directory: signed
-
-      - name: Use the signed file
-        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
-        shell: pwsh
-        run: Copy-Item signed/Krabbz9999-FlightTracker.exe . -Force
 
       - name: Publish the release
         shell: pwsh

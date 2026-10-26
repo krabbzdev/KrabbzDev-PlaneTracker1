@@ -1,6 +1,6 @@
 @echo off
 rem Publishes a new version: bumps the build number, commits, tags and pushes.
-rem GitHub then builds the .exe (signed, once SignPath is set up) and publishes the release;
+rem GitHub then builds the .exe and publishes the release;
 rem running copies update themselves to it.
 rem Usage:  release.cmd "What changed in this build"
 rem Needs: Node.js and Git (signed in to GitHub).

@@ -80,15 +80,6 @@ release.cmd "notes"   rem bump the build number, tag and push; GitHub builds and
 Published `.exe` files are always built from this repository by
 [GitHub Actions](.github/workflows/release.yml), never on a personal computer.
 
-## Code signing policy
-
-Free code signing for this project will be provided by [SignPath.io](https://about.signpath.io),
-with a certificate by [SignPath Foundation](https://signpath.org) (application in progress).
-
-- **Author, reviewer and release approver:** [@showtechclove1](https://github.com/showtechclove1) (Krabbz9999)
-- Every release is built by GitHub Actions from the tagged source in this repository.
-- Only the maintainer above can push release tags, and each signing request is approved by them.
-
 ## Privacy
 
 This program does not collect, store or send personal information to the author, and has no
