@@ -29,7 +29,7 @@ bottom-right corner.
 - **Live map** of aircraft around home (default 20 mile radius), with airports, your home and an optional office
 - **Weather overlay**: live rain radar on the map (US, NWS NEXRAD via Iowa Environmental Mesonet), switched on with 🌧 Weather
 - **Tray icon**: a ✈ in the Windows system tray while it runs; click to open the dashboard, right-click → Quit to stop it (a tiny helper, tray/Tray.cs, carried inside the .exe and unpacked next to it)
-- **Overhead takeover**: within 1 mile, a full-screen close-up with the flight path, predicted closest
+- **Overhead Plane Alert**: within 1 mile, a full-screen close-up with the flight path, predicted closest
   approach, where it's from and going, plus a chime and a spoken "Overhead now!" alert (🔔 Sound toggle)
 - **Aircraft details**: photo, maker and model, airline, owner, route, altitude, speed and time tracked
 - **Tail-number panel**: click any registration for owner and registration details and a flight-path map

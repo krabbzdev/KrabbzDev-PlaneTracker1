@@ -416,7 +416,7 @@
   <label class="chk"><input type="checkbox" id="showAll"> Show outside radius</label>
   <label class="chk"><input type="checkbox" id="showApts" checked> Show Airports</label>
   <label class="chk" title="Live rain radar on the map (US, refreshes every 5 minutes)"><input type="checkbox" id="wxOn" checked> 🌧 Show Weather</label>
-  <label class="chk" title="Take over the screen with a close-up when a plane passes within 1 mile"><input type="checkbox" id="takeoverOn" checked> Overhead takeover</label>
+  <label class="chk" title="Take over the screen with a close-up when a plane passes within 1 mile"><input type="checkbox" id="takeoverOn" checked> Overhead Plane Alert</label>
   <label class="chk" title="Chime and spoken announcement when a plane is overhead"><input type="checkbox" id="soundOn" checked> 🔔 Sound</label>
   <button id="homeBtn">⚙ Settings</button>
 </header>
@@ -525,7 +525,7 @@
         <div class="row"><select id="voiceSel"></select><button id="voiceTest">▶ Test</button></div>
         <p class="hint">"TikTok style" picks the most upbeat voice on this PC. Microsoft Edge has the most natural-sounding voices.</p>
       </div>
-      <p class="hint">To turn the alerts on or off, use <b>Overhead takeover</b> and <b>🔔 Sound</b> at the top of the page.</p>
+      <p class="hint">To turn the alerts on or off, use <b>Overhead Plane Alert</b> and <b>🔔 Sound</b> at the top of the page.</p>
     </section>
 
     <!-- Display -->
@@ -770,18 +770,18 @@ map.on('zoomend', drawAirports);
 $('showApts').addEventListener('change', e => { showApts = e.target.checked; save('skyShowApts', showApts); drawAirports(); });
 
 const radiusBounds = () => L.latLng(home).toBounds(radius * MI * 2.2);
-const DEFAULT_ZOOM_STEPS = 2; // start at 400%: two steps closer than the view that fits the whole Tracker Radius
+const DEFAULT_ZOOM_STEPS = 1; // start at 200%: one step closer than the view that fits the whole Tracker Radius
 function fitRadius() {
   if (!home) return;
   map.setView(home, map.getBoundsZoom(radiusBounds()) + DEFAULT_ZOOM_STEPS, { animate: true });
 }
 
 // Zoom level as a percentage beside +/-: 100% shows the whole Tracker Radius, each zoom step doubles or halves it.
-// Click it to go back to the default (400%).
+// Click it to go back to the default (200%).
 const zoomPct = L.control({ position: 'topleft' });
 zoomPct.onAdd = () => {
   const el = L.DomUtil.create('div', 'leaflet-bar zoom-pct');
-  el.title = 'Zoom level (100% shows your whole Tracker Radius). Click to go back to the default, 400%.';
+  el.title = 'Zoom level (100% shows your whole Tracker Radius). Click to go back to the default, 200%.';
   L.DomEvent.disableClickPropagation(el);
   el.onclick = fitRadius;
   return el;
