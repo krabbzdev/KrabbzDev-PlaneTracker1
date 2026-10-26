@@ -487,6 +487,35 @@ async function faStats() {
   return data;
 }
 
+// ---------- place search for Settings ----------
+// A US ZIP code ("33606" or "33606-1234") goes to Zippopotam.us, which knows every ZIP's town and centre;
+// anything else is an address search on OpenStreetMap Nominatim (US only), returning up to 5 matches.
+// With a current home, address matches near it are preferred and listed closest first
+// (so "100 Main St Clearwater" finds the one in Florida, not Nebraska).
+async function geocode(q, near) {
+  const zip = q.match(/^(\d{5})(?:-\d{4})?$/);
+  if (zip) {
+    try {
+      const r = await get('https://api.zippopotam.us/us/' + zip[1], 8000);
+      const p = r.status === 200 && JSON.parse(r.body).places?.[0];
+      if (p) return { zip: true, results: [{ lat: +p.latitude, lon: +p.longitude, label: `${p['place name']}, ${p['state abbreviation']} ${zip[1]}` }] };
+    } catch (e) {}
+  }
+  const bias = near ? `&viewbox=${near[1] - 1.5},${near[0] + 1.5},${near[1] + 1.5},${near[0] - 1.5}` : '';
+  const r = await get('https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=us&addressdetails=1' + bias + '&'
+    + (zip ? 'postalcode=' + zip[1] : 'q=' + encodeURIComponent(q)), 8000);
+  if (r.status !== 200) throw new Error('Address search is unavailable right now (HTTP ' + r.status + ')');
+  const results = JSON.parse(r.body).map(h => {
+    const a = h.address || {};
+    const street = [a.house_number, a.road].filter(Boolean).join(' ');
+    const town = a.city || a.town || a.village || a.hamlet || a.suburb || a.county;
+    const label = [street, town, [a.state, a.postcode].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    return { lat: +h.lat, lon: +h.lon, label: label || h.display_name };
+  });
+  if (near) results.sort((a, b) => distMi(near, [a.lat, a.lon]) - distMi(near, [b.lat, b.lon]));
+  return { zip: !!zip, results };
+}
+
 const readBody = req => new Promise(resolve => { let s = ''; req.on('data', d => s += d); req.on('end', () => resolve(s)); });
 
 function send(res, status, body, type = 'application/json') {
@@ -557,10 +586,10 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, '{"ok":true}');
     }
     if (url.pathname === '/api/geocode') {
-      // address -> lat/lon via OpenStreetMap Nominatim (light, user-triggered use only)
-      const r = await get('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=' + encodeURIComponent(url.searchParams.get('q') || ''));
-      const hit = JSON.parse(r.body)[0];
-      return send(res, 200, JSON.stringify(hit ? { lat: +hit.lat, lon: +hit.lon, name: hit.display_name } : null));
+      // ZIP code or address -> up to 5 places to choose from. Only runs when someone clicks Search in Settings.
+      const q = (url.searchParams.get('q') || '').trim().slice(0, 200);
+      const near = (url.searchParams.get('near') || '').split(',').map(Number);
+      return send(res, 200, JSON.stringify(q ? await geocode(q, near.length === 2 && near.every(isFinite) ? near : settings.home) : { results: [] }));
     }
     if (url.pathname === '/api/airports') {
       await loadAirports();

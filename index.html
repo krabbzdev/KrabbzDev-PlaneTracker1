@@ -280,6 +280,48 @@
   dialog .src-note { margin: 8px 0 0; font-size: 12px; }
   dialog .src-note a, .live a { color: var(--accent); }
   dialog .cur { font-size: 12px; color: var(--muted); margin: -4px 0 8px; }
+  /* Settings window: tabs, one scrolling body, buttons pinned at the bottom */
+  dialog.set-dlg { width: min(520px, 94vw); max-height: 90vh; padding: 0; display: none; flex-direction: column; overflow: hidden; }
+  dialog.set-dlg[open] { display: flex; }
+  .set-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 6px; }
+  .set-head h3 { margin: 0; font-size: 18px; }
+  .set-x { background: none; border: 0; color: var(--muted); font-size: 18px; cursor: pointer; padding: 4px 8px; border-radius: 8px; }
+  .set-x:hover { color: var(--text); background: var(--bg); }
+  dialog.set-dlg .welcome { margin: 4px 18px 10px; }
+  .set-tabs { display: flex; gap: 4px; padding: 0 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .set-tabs button { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); font: 600 13px Inter, sans-serif; padding: 9px 10px; cursor: pointer; margin-bottom: -1px; }
+  .set-tabs button:hover { color: var(--text); }
+  .set-tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+  .set-body { padding: 14px 18px; overflow-y: auto; flex: 1; }
+  .set-foot { display: flex; gap: 8px; justify-content: flex-end; padding: 12px 18px; border-top: 1px solid var(--line); background: var(--panel); }
+  dialog.set-dlg button.primary { background: var(--accent); color: #06121f; border-color: var(--accent); font-weight: 700; }
+  dialog.set-dlg .acts.left { justify-content: flex-start; margin: 4px 0 10px; }
+  dialog.set-dlg .row { display: flex; gap: 8px; }
+  dialog.set-dlg .row input { flex: 1; min-width: 0; }
+  dialog.set-dlg .row button { flex: none; height: 37px; }
+  dialog.set-dlg .lbl { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin: 2px 0 5px; }
+  dialog.set-dlg .hint { font-size: 12px; color: var(--muted); margin: 0 0 10px; line-height: 1.5; }
+  dialog.set-dlg h4 small, .set-dlg summary small { font-weight: 400; color: var(--muted); font-size: 12px; margin-left: 4px; }
+  dialog.set-dlg .where { font-size: 13px; margin: 0 0 12px; padding: 8px 10px; border-radius: 8px; background: rgba(76,201,240,.08); border: 1px solid rgba(76,201,240,.25); }
+  dialog.set-dlg .where:empty { display: none; }
+  dialog.set-dlg .where.unset { background: rgba(255,181,71,.08); border-color: rgba(255,181,71,.35); }
+  dialog.set-dlg .where small { display: block; color: var(--muted); font: 11px var(--mono); margin-top: 2px; }
+  dialog.set-dlg .where.changed { border-color: var(--accent); }
+  .results { display: flex; flex-direction: column; gap: 4px; margin: -2px 0 10px; }
+  .results:empty { display: none; }
+  .results button small { color: var(--muted); margin-left: 6px; }
+  dialog.set-dlg label.chk { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  dialog.set-dlg label.chk input { width: auto; margin: 0; }
+  .results button { text-align: left; background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 8px 10px; font: 13px Inter, sans-serif; cursor: pointer; }
+  .results button:hover, .results button:focus-visible { border-color: var(--accent); }
+  .results .msg { font-size: 12px; color: var(--muted); padding: 2px 2px; }
+  .results .msg.err { color: #ffb547; }
+  details.more { margin: 2px 0 6px; }
+  details.more > summary, details.place.opt > summary { cursor: pointer; color: var(--accent); font-size: 13px; list-style: none; padding: 2px 0 8px; }
+  details.more > summary::before, details.place.opt > summary::before { content: '▸ '; }
+  details[open].more > summary::before, details[open].place.opt > summary::before { content: '▾ '; }
+  details.place.opt > summary { color: var(--text); font-weight: 600; font-size: 14px; padding: 0; }
+  details[open].place.opt > summary { margin-bottom: 10px; }
   /* ADS-B Exchange buttons + viewer */
   a.adsbx { color: var(--accent); text-decoration: none; cursor: pointer; }
   a.adsbx:hover { text-decoration: underline; }
@@ -425,51 +467,101 @@
   </aside>
 </main>
 
-<dialog id="homeDlg">
-  <h3 id="setTitle">Settings</h3>
-  <p id="welcome" class="welcome" hidden>What's your home address? That's where we'll watch the sky for planes overhead. You only need to do this once; you can change it any time with 🏠 Home.</p>
-  <p>Search an address, type coordinates, or click the spot on the map.</p>
-  <div class="place" id="homePlace">
-    <h4>🏠 Home</h4>
-    <div class="cur" id="homeCur"></div>
-    <div class="row"><input id="homeNameIn" maxlength="40" placeholder="Name shown on the map, e.g. Our Home"></div>
-    <div class="row"><input id="homeAddr" placeholder="Street address"><button data-find="home">Find</button></div>
-    <div class="row"><input id="latIn" placeholder="Latitude"><input id="lonIn" placeholder="Longitude"></div>
-    <div class="acts"><button id="geoBtn">Use my location</button><button data-pick="home">Click on map</button></div>
+<dialog id="homeDlg" class="set-dlg">
+  <div class="set-head">
+    <h3 id="setTitle">Settings</h3>
+    <button class="set-x" id="setX" aria-label="Close">✕</button>
   </div>
-  <div class="place">
-    <h4>🏢 Office <span style="font-weight:400;color:var(--muted)">(optional)</span></h4>
-    <div class="row"><input id="offName" placeholder="Name shown on the map, e.g. Work"></div>
-    <div class="row"><input id="offAddr" placeholder="Street address"><button data-find="office">Find</button></div>
-    <div class="row"><input id="offLat" placeholder="Latitude"><input id="offLon" placeholder="Longitude"></div>
-    <div class="acts"><button id="clearOffice">Remove office</button><button data-pick="office">Click on map</button></div>
+  <p id="welcome" class="welcome" hidden>Type your <b>ZIP code</b> or <b>address</b> below and pick your home from the list. That's where we'll watch the sky for planes overhead. You only need to do this once.</p>
+  <div class="set-tabs" role="tablist">
+    <button role="tab" data-tab="loc" class="on">📍 Location</button>
+    <button role="tab" data-tab="alerts">🔔 Alerts</button>
+    <button role="tab" data-tab="display">🖥 Display</button>
+    <button role="tab" data-tab="more">⚙ More</button>
   </div>
-  <div class="place">
-    <h4>👤 Your accounts <span style="font-weight:400;color:var(--muted)">(all optional)</span></h4>
-    <div class="row"><input id="faIn" placeholder="FlightAware username (shows your feeder stats)"></div>
-    <div class="row"><input id="contactIn" placeholder="Email or web page for photo lookups (Planespotters)"></div>
-    <p class="src-note">Planespotters asks each app for a contact. If you leave it blank, your FlightAware page is used; with neither, planes show stock model photos.</p>
+
+  <div class="set-body">
+    <!-- Location: home (required) and an optional second place -->
+    <section data-pane="loc">
+      <div class="place" id="homePlace">
+        <h4>🏠 Your home</h4>
+        <div class="where" id="homeCur"></div>
+        <label class="lbl" for="homeAddr">Search by ZIP code or address</label>
+        <div class="row"><input id="homeAddr" placeholder="e.g. 33606  or  200 N Pierce St, Tampa" autocomplete="off"><button class="primary" data-find="home">Search</button></div>
+        <div class="results" id="homeResults"></div>
+        <label class="lbl" for="homeNameIn">Name on the map</label>
+        <input id="homeNameIn" maxlength="40" placeholder="Our Home">
+        <details class="more">
+          <summary>Other ways to set your home</summary>
+          <div class="acts left"><button id="geoBtn">📡 Use my current location</button><button data-pick="home">🖱 Pick a spot on the map</button></div>
+          <label class="lbl">Exact coordinates</label>
+          <div class="row"><input id="latIn" placeholder="Latitude" inputmode="decimal"><input id="lonIn" placeholder="Longitude" inputmode="decimal"></div>
+        </details>
+      </div>
+
+      <details class="place opt" id="offPlace">
+        <summary><span>🏢 Second place <small>optional, e.g. work</small></span></summary>
+        <div class="where" id="offCur"></div>
+        <label class="lbl" for="offAddr">Search by ZIP code or address</label>
+        <div class="row"><input id="offAddr" placeholder="e.g. 33602  or  401 E Jackson St, Tampa" autocomplete="off"><button class="primary" data-find="office">Search</button></div>
+        <div class="results" id="officeResults"></div>
+        <label class="lbl" for="offName">Name on the map</label>
+        <input id="offName" maxlength="40" placeholder="Work">
+        <details class="more">
+          <summary>Other ways to set it</summary>
+          <div class="acts left"><button data-pick="office">🖱 Pick a spot on the map</button></div>
+          <label class="lbl">Exact coordinates</label>
+          <div class="row"><input id="offLat" placeholder="Latitude" inputmode="decimal"><input id="offLon" placeholder="Longitude" inputmode="decimal"></div>
+        </details>
+        <div class="acts left"><button id="clearOffice">🗑 Remove this place</button></div>
+      </details>
+    </section>
+
+    <!-- Alerts: the spoken announcement -->
+    <section data-pane="alerts" hidden>
+      <div class="place">
+        <h4>🗣 Announcement voice</h4>
+        <p class="hint">The voice that says "Overhead now!" when a plane passes within a mile.</p>
+        <div class="row"><select id="voiceSel"></select><button id="voiceTest">▶ Test</button></div>
+        <p class="hint">"TikTok style" picks the most upbeat voice on this PC. Microsoft Edge has the most natural-sounding voices.</p>
+      </div>
+      <p class="hint">To turn the alerts on or off, use <b>Overhead takeover</b> and <b>🔔 Sound</b> at the top of the page.</p>
+    </section>
+
+    <!-- Display -->
+    <section data-pane="display" hidden>
+      <div class="place">
+        <h4>🔍 Size of everything</h4>
+        <p class="hint">Make text, buttons and panels bigger or smaller. Handy on a TV or wall screen. Changes right away.</p>
+        <select id="uiScale">
+          <option value="0.75">75% (smaller)</option><option value="0.9">90%</option><option value="1">100% (normal)</option><option value="1.1">110%</option>
+          <option value="1.25">125%</option><option value="1.5">150%</option><option value="1.75">175%</option><option value="2">200% (biggest)</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- More: updates and optional accounts -->
+    <section data-pane="more" hidden>
+      <div class="place">
+        <h4>⬆ Updates</h4>
+        <div class="where" id="updCur"></div>
+        <label class="chk" style="margin:4px 0 8px"><input type="checkbox" id="autoUpd"> Install updates automatically</label>
+        <div class="acts left"><button id="updCheck">Check for updates</button><button id="updInstall" class="primary" style="display:none">Install now</button></div>
+      </div>
+      <div class="place">
+        <h4>📡 FlightAware feeder <small>optional</small></h4>
+        <p class="hint">Only if you run your own ADS-B receiver that feeds FlightAware. Your stats then show in the right-hand panel.</p>
+        <input id="faIn" placeholder="FlightAware username">
+        <details class="more">
+          <summary>Advanced: photo lookup contact</summary>
+          <p class="hint">Planespotters.net asks each app for a contact email or web page. Leave the default unless you have a reason to change it.</p>
+          <input id="contactIn" placeholder="Email or web page">
+        </details>
+      </div>
+    </section>
   </div>
-  <div class="place">
-    <h4>🖥 Display</h4>
-    <div class="row"><label for="uiScale" style="align-self:center;white-space:nowrap">UI scale</label><select id="uiScale">
-      <option value="0.75">75%</option><option value="0.9">90%</option><option value="1">100%</option><option value="1.1">110%</option>
-      <option value="1.25">125%</option><option value="1.5">150%</option><option value="1.75">175%</option><option value="2">200%</option>
-    </select></div>
-    <p class="src-note">Makes all text, buttons and panels bigger or smaller. Applies right away and is remembered by this browser.</p>
-  </div>
-  <div class="place">
-    <h4>🗣 Overhead voice</h4>
-    <div class="row"><select id="voiceSel"></select><button id="voiceTest">▶ Test</button></div>
-    <p class="src-note">"TikTok style" picks an upbeat natural voice on this computer and speeds it up a little. Voices come from your browser and Windows, so the list differs between PCs.</p>
-  </div>
-  <div class="place">
-    <h4>⬆ Updates</h4>
-    <div class="cur" id="updCur"></div>
-    <label class="chk" style="margin:4px 0 8px"><input type="checkbox" id="autoUpd"> Install updates automatically</label>
-    <div class="acts"><button id="updCheck">Check for updates</button><button id="updInstall" style="display:none;border-color:var(--accent)">Install now</button></div>
-  </div>
-  <div class="acts"><button id="cancelHome">Cancel</button><button id="saveHome" style="border-color:var(--accent)">Save</button></div>
+
+  <div class="set-foot"><button id="cancelHome">Cancel</button><button id="saveHome" class="primary">Save</button></div>
 </dialog>
 
 <div id="toasts"></div>
@@ -1795,63 +1887,132 @@ async function saveCfg(patch) {
 }
 
 let picking = null; // 'home' | 'office' while choosing a spot on the map
+// Each place's label is the name of the place picked from the search results ("Tampa, FL 33606"); typing
+// coordinates or picking on the map clears it, since we then don't know the address.
+const placeLabel = { home: '', office: '' };
+
+function showTab(name) {
+  document.querySelectorAll('.set-tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+  document.querySelectorAll('.set-body [data-pane]').forEach(s => s.hidden = s.dataset.pane !== name);
+}
+document.querySelectorAll('.set-tabs [data-tab]').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+// the "📍 where" line above each search box: what's set now, or what will be saved
+function showWhere(which, changed) {
+  const home_ = which === 'home';
+  const lat = parseFloat($(home_ ? 'latIn' : 'offLat').value), lon = parseFloat($(home_ ? 'lonIn' : 'offLon').value);
+  const el = $(home_ ? 'homeCur' : 'offCur'), set = isFinite(lat) && isFinite(lon);
+  el.className = 'where' + (set ? '' : ' unset') + (set && changed ? ' changed' : '');
+  el.innerHTML = !set
+    ? (home_ ? '⚠ Not set yet. Search for your ZIP code or address below.' : '')
+    : `📍 ${esc(placeLabel[which] || 'Location set')}${changed ? ' <b style="color:var(--accent)">· click Save to keep it</b>' : ''}<small>${lat.toFixed(4)}, ${lon.toFixed(4)}</small>`;
+}
+function setPlace(which, lat, lon, label) {
+  $(which === 'home' ? 'latIn' : 'offLat').value = (+lat).toFixed(5);
+  $(which === 'home' ? 'lonIn' : 'offLon').value = (+lon).toFixed(5);
+  placeLabel[which] = label || '';
+  showWhere(which, true);
+}
+
 async function openHome(focusHome, firstRun) {
   $('setTitle').textContent = firstRun ? "👋 Welcome! Where's home?" : 'Settings';
   $('welcome').hidden = !firstRun;
   await loadCfg();
-  if (home) { $('latIn').value = home[0]; $('lonIn').value = home[1]; }
-  $('homeAddr').value = cfg.homeLabel || '';
+  $('latIn').value = home ? home[0] : ''; $('lonIn').value = home ? home[1] : '';
+  placeLabel.home = cfg.homeLabel || '';
+  $('homeAddr').value = '';
   $('homeNameIn').value = cfg.homeName || '';
-  $('homeCur').textContent = home ? `Currently: ${cfg.homeLabel || home[0].toFixed(4) + ', ' + home[1].toFixed(4)}` : 'Not set yet';
   $('offName').value = office?.name || '';
-  $('offAddr').value = office?.label || '';
+  $('offAddr').value = '';
   $('offLat').value = office?.pos ? office.pos[0] : '';
   $('offLon').value = office?.pos ? office.pos[1] : '';
+  placeLabel.office = office?.label || '';
+  $('offPlace').open = !!office?.pos;
+  $('homeResults').innerHTML = $('officeResults').innerHTML = '';
+  showWhere('home'); showWhere('office');
   $('faIn').value = cfg.faUser || '';
   $('contactIn').value = cfg.contact || '';
   voiceOptions($('voiceSel'));
   refreshUpdatePanel();
-  $('homePlace').classList.toggle('focus', !!focusHome);
+  showTab('loc');
   if (!$('homeDlg').open) $('homeDlg').showModal();
-  if (focusHome) { $('homeAddr').focus(); $('homeAddr').select(); }
+  if (focusHome || firstRun) $('homeAddr').focus();
 }
 $('changeHomeBtn').onclick = () => openHome(true);
-$('cancelHome').onclick = () => $('homeDlg').close();
+$('homeBtn').onclick = () => openHome(false);
+$('cancelHome').onclick = $('setX').onclick = () => $('homeDlg').close();
 $('voiceTest').onclick = () => say('Overhead now! Boeing 737, going to Orlando, at 280 miles per hour.', $('voiceSel').value);
-$('clearOffice').onclick = () => { for (const id of ['offName', 'offAddr', 'offLat', 'offLon']) $(id).value = ''; };
-document.querySelectorAll('[data-find]').forEach(btn => btn.onclick = async () => {
-  const which = btn.dataset.find, q = $(which === 'home' ? 'homeAddr' : 'offAddr').value.trim();
-  if (!q) return;
-  btn.textContent = '…';
+$('clearOffice').onclick = () => {
+  for (const id of ['offName', 'offAddr', 'offLat', 'offLon']) $(id).value = '';
+  placeLabel.office = ''; $('officeResults').innerHTML = ''; showWhere('office');
+};
+
+// ZIP code / address search: one match is picked straight away; several are listed to choose from
+async function findPlace(which) {
+  const input = $(which === 'home' ? 'homeAddr' : 'offAddr'), box = $(which === 'home' ? 'homeResults' : 'officeResults');
+  const q = input.value.trim();
+  if (!q) { input.focus(); return; }
+  box.innerHTML = '<div class="msg">Searching…</div>';
   try {
-    const r = await fetch('/api/geocode?q=' + encodeURIComponent(q));
+    const hLat = parseFloat($('latIn').value), hLon = parseFloat($('lonIn').value); // prefer matches near home
+    const r = await fetch('/api/geocode?q=' + encodeURIComponent(q) + (isFinite(hLat) && isFinite(hLon) ? `&near=${hLat},${hLon}` : ''));
     const g = await r.json();
-    if (!g) throw new Error('No match for that address');
-    $(which === 'home' ? 'latIn' : 'offLat').value = g.lat.toFixed(5);
-    $(which === 'home' ? 'lonIn' : 'offLon').value = g.lon.toFixed(5);
-  } catch (e) { alert(e.message || 'Address lookup failed'); }
-  btn.textContent = 'Find';
-});
+    if (!r.ok) throw new Error(g.error || 'Search failed');
+    const list = g.results || [];
+    if (!list.length) throw new Error(/^\d{5}/.test(q) ? "That ZIP code wasn't found. Check the 5 digits." : 'No match. Try adding the city and state, or just your ZIP code.');
+    const zipNote = g.zip ? '<div class="msg">A ZIP code puts you in the middle of that area. For accurate overhead alerts, search your street address instead.</div>' : '';
+    if (list.length === 1) {
+      setPlace(which, list[0].lat, list[0].lon, list[0].label);
+      box.innerHTML = zipNote;
+      return;
+    }
+    const away = p => isFinite(hLat) && isFinite(hLon) ? `<small>${Math.round(distMi([hLat, hLon], [p.lat, p.lon])).toLocaleString()} mi from current home</small>` : '';
+    box.innerHTML = '<div class="msg">Pick the right one:</div>' + list.map((p, i) => `<button type="button" data-i="${i}">📍 ${esc(p.label)}${away(p)}</button>`).join('');
+    box.querySelectorAll('button').forEach(b => b.onclick = () => {
+      const p = list[+b.dataset.i];
+      setPlace(which, p.lat, p.lon, p.label);
+      box.innerHTML = '';
+    });
+  } catch (e) {
+    box.innerHTML = `<div class="msg err">${esc(e.message || 'Search failed. Check your internet connection.')}</div>`;
+  }
+}
+document.querySelectorAll('[data-find]').forEach(btn => btn.onclick = () => findPlace(btn.dataset.find));
+for (const [id, which] of [['homeAddr', 'home'], ['offAddr', 'office']]) {
+  $(id).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); findPlace(which); } });
+}
+// typing coordinates by hand
+for (const [id, which] of [['latIn', 'home'], ['lonIn', 'home'], ['offLat', 'office'], ['offLon', 'office']]) {
+  $(id).addEventListener('input', () => { placeLabel[which] = ''; showWhere(which, true); });
+}
 document.querySelectorAll('[data-pick]').forEach(btn => btn.onclick = () => {
   picking = btn.dataset.pick; $('homeDlg').close(); $('map').style.cursor = 'crosshair';
 });
+$('geoBtn').onclick = () => navigator.geolocation?.getCurrentPosition(
+  p => setPlace('home', p.coords.latitude, p.coords.longitude, 'My current location'),
+  err => { $('homeResults').innerHTML = `<div class="msg err">Location not available: ${esc(err.message)}</div>`; });
+
 function setHome(lat, lon) {
   home = [+lat, +lon];
   drawHome(); fitRadius(); update(rawCache()); loadAirports(); drawPois(); postHome();
 }
-$('homeBtn').onclick = () => openHome(false);
 $('saveHome').onclick = async () => {
   const lat = parseFloat($('latIn').value), lon = parseFloat($('lonIn').value);
   const oLat = parseFloat($('offLat').value), oLon = parseFloat($('offLon').value);
-  const homeChanged = isFinite(lat) && isFinite(lon) && (!home || lat !== home[0] || lon !== home[1]);
+  if (!isFinite(lat) || !isFinite(lon)) {
+    showTab('loc'); $('homeAddr').focus();
+    $('homeResults').innerHTML = '<div class="msg err">Search for your ZIP code or address first, so we know where home is.</div>';
+    return;
+  }
+  const homeChanged = !home || lat !== home[0] || lon !== home[1];
   const patch = {
-    homeLabel: $('homeAddr').value.trim(),
+    home: [lat, lon],
+    homeLabel: placeLabel.home,
     homeName: $('homeNameIn').value.trim(),
-    office: isFinite(oLat) && isFinite(oLon) ? { name: $('offName').value.trim() || 'Office', pos: [oLat, oLon], label: $('offAddr').value.trim() } : null,
+    office: isFinite(oLat) && isFinite(oLon) ? { name: $('offName').value.trim() || 'Office', pos: [oLat, oLon], label: placeLabel.office } : null,
     faUser: $('faIn').value.trim(),
     contact: $('contactIn').value.trim(),
   };
-  if (isFinite(lat) && isFinite(lon)) patch.home = [lat, lon];
   voicePref = $('voiceSel').value; save('skyVoice', voicePref);
   await saveCfg(patch);
   if (homeChanged) setHome(lat, lon); else drawHome(); // redraw so a new pin name shows
@@ -1859,15 +2020,10 @@ $('saveHome').onclick = async () => {
   pollFa();
   $('homeDlg').close();
 };
-$('geoBtn').onclick = () => navigator.geolocation?.getCurrentPosition(p => {
-  $('latIn').value = p.coords.latitude.toFixed(5); $('lonIn').value = p.coords.longitude.toFixed(5);
-}, err => alert('Location not available: ' + err.message));
 map.on('click', e => {
   if (!picking) return;
   // drop the picked spot into the dialog so it can be reviewed, then saved
-  const [la, lo] = [e.latlng.lat.toFixed(5), e.latlng.lng.toFixed(5)];
-  if (picking === 'home') { $('latIn').value = la; $('lonIn').value = lo; }
-  else { $('offLat').value = la; $('offLon').value = lo; }
+  setPlace(picking, e.latlng.lat, e.latlng.lng, 'Spot picked on the map');
   picking = null; $('map').style.cursor = '';
   $('homeDlg').showModal();
 });
