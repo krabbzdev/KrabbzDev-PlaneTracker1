@@ -377,6 +377,18 @@
     background: rgba(18,26,48,.92); border: 1px solid var(--accent); border-radius: 999px; padding: 6px 8px 6px 14px; font-size: 13px; white-space: nowrap;
     box-shadow: 0 4px 16px rgba(0,0,0,.5); max-width: calc(100% - 120px); overflow: hidden; }
   .explore-bar[hidden] { display: none; }
+  .jump-box { width: 270px; }
+  .jump-box input { width: 100%; font: 13px Inter, sans-serif; color: var(--text); background: rgba(18,26,48,.95); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; box-shadow: 0 2px 10px rgba(0,0,0,.5); }
+  .jump-box input:focus { outline: none; border-color: var(--accent); }
+  .jump-results { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
+  .jump-results:empty { display: none; }
+  .jump-results button { text-align: left; background: rgba(18,26,48,.97); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 7px 9px; font: 12.5px Inter, sans-serif; cursor: pointer; }
+  .jump-results button:hover { border-color: var(--accent); }
+  .jump-results .msg { background: rgba(18,26,48,.97); border-radius: 8px; padding: 7px 9px; font-size: 12px; color: var(--muted); }
+  .jump-results .msg.err { color: #ffb547; }
+  .jump-results .msg a { color: var(--accent); }
+  .jump-results .msg b { color: var(--text); }
+  @media (max-width: 700px) { .jump-box { width: 190px; } }
   .explore-bar button { background: var(--accent); color: #06121f; border: 0; border-radius: 999px; padding: 4px 10px; font: 700 12px Inter, sans-serif; cursor: pointer; }
   .ship .ship-logo { position: absolute; left: -26px; top: 7px; width: 22px; height: 22px; padding: 1px; border-radius: 5px; background: #fff; object-fit: contain; box-shadow: 0 1px 3px rgba(0,0,0,.7); }
   .ship-logo-lg { width: 30px; height: 30px; padding: 2px; border-radius: 6px; background: #fff; object-fit: contain; flex: none; }
@@ -2553,6 +2565,87 @@ function explorePopup(a) {
   return planeTip(a).replace('<div class="pt-f">Click for full details</div>',
     `<div class="pt-f">${cs ? `<a href="https://www.flightaware.com/live/flight/${encodeURIComponent(cs)}" target="_blank" rel="noopener">FlightAware ↗</a> · ` : ''}<a href="https://globe.adsbexchange.com/?icao=${a.hex}" target="_blank" rel="noopener">ADS-B Exchange ↗</a></div>`);
 }
+
+// ---------- Jump to: type a place ("Miami", "NYC", "Nassau") or airport code ("JFK") and the map goes there ----------
+// Exploring then kicks in by itself and loads the live planes and ships around it.
+const jumpBox = L.control({ position: 'topright' });
+jumpBox.onAdd = () => {
+  const el = L.DomUtil.create('div', 'jump-box');
+  el.innerHTML = `<form autocomplete="off"><input id="jumpIn" type="search" placeholder="🔎 Jump to a place, airport or ship" aria-label="Jump to a place on the map"></form><div class="jump-results" id="jumpResults"></div>`;
+  L.DomEvent.disableClickPropagation(el);
+  L.DomEvent.disableScrollPropagation(el);
+  return el;
+};
+jumpBox.addTo(map);
+// Cruise Finder: a ship from the Jump to box. If it's already on the map, go there; otherwise ask the app to look for it
+// worldwide over AIS and go there as soon as it reports in.
+let finding = null;
+function openShipCard(mmsi, tries = 0) {
+  const m = shipMarkers.get(mmsi);
+  if (m) { m.openPopup(); return; }
+  if (tries < 6) setTimeout(() => pollShips().then(() => openShipCard(mmsi, tries + 1)), 1500);
+}
+async function findShipLive(p) {
+  const box = $('jumpResults'), me = finding = { mmsi: p.ship, started: Date.now() };
+  const vf = `https://www.vesselfinder.com/${p.imo ? 'vessels/details/' + p.imo : '?mmsi=' + p.ship}`;
+  while (finding === me) {
+    let r;
+    try { r = await fetch(`/api/findship?mmsi=${p.ship}&name=${encodeURIComponent(p.name || '')}`).then(x => x.json()); } catch (e) { r = null; }
+    if (finding !== me) return;
+    if (r?.status === 'nokey') {
+      box.innerHTML = `<div class="msg">Finding ships needs ship tracking set up (free). <a href="#" id="jumpSetup">Set it up</a></div>`;
+      $('jumpSetup').onclick = e => { e.preventDefault(); box.innerHTML = ''; openHome(false).then(() => { showTab('more'); $('aisIn').focus(); }); };
+      finding = null; return;
+    }
+    if (r?.status === 'found') {
+      finding = null; box.innerHTML = '';
+      map.setView([r.ship.lat, r.ship.lon], 11);
+      await pollShips();
+      openShipCard(p.ship);
+      return;
+    }
+    const secs = Math.round((Date.now() - me.started) / 1000);
+    if (secs > 240) {
+      box.innerHTML = `<div class="msg">${esc(p.name)} hasn't reported in. It's probably out at sea, beyond the reach of AISStream's coastal receivers. It will show up here when it nears a coast. <a href="${vf}" target="_blank" rel="noopener">Check VesselFinder ↗</a></div>`;
+      finding = null; return;
+    }
+    box.innerHTML = `<div class="msg">🔎 Looking for <b>${esc(p.name)}</b>… ${secs}s<br><small>Ships report every few seconds when moving and every few minutes in port. This finds ships near a coast.</small> <a href="#" id="jumpCancel">Cancel</a></div>`;
+    $('jumpCancel').onclick = e => { e.preventDefault(); finding = null; box.innerHTML = ''; };
+    await new Promise(res => setTimeout(res, 4000));
+  }
+}
+function jumpTo(p) {
+  $('jumpResults').innerHTML = '';
+  finding = null;
+  if (p.find) return findShipLive(p); // a ship that isn't on the map yet
+  if (p.ship) { map.setView([p.lat, p.lon], 12); pollShips().then(() => openShipCard(p.ship)); return; }
+  $('jumpIn').blur();
+  if (p.bbox) {
+    const [s, n, w, e] = p.bbox;
+    // fit the place, but not so far out that live traffic can't be loaded (and not closer than street level)
+    const z = Math.min(12, Math.max(8, map.getBoundsZoom([[s, w], [n, e]])));
+    map.setView([p.lat, p.lon], z);
+  } else map.setView([p.lat, p.lon], p.zoom || 11);
+}
+$('jumpIn').closest('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const q = $('jumpIn').value.trim(), box = $('jumpResults');
+  if (!q) return;
+  if (/^(home|my home)$/i.test(q)) { stopExplore(); fitRadius(); box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="msg">Searching…</div>';
+  try {
+    const r = await fetch('/api/places?q=' + encodeURIComponent(q));
+    const g = await r.json();
+    if (!r.ok) throw new Error(g.error || 'Search failed');
+    if (!g.length) throw new Error('Nothing found. Try a city name, or add the state or country.');
+    if (g.length === 1) return jumpTo(g[0]);
+    box.innerHTML = g.map((p, i) => `<button type="button" data-i="${i}">📍 ${esc(p.label)}</button>`).join('');
+    box.querySelectorAll('button').forEach(b => b.onclick = () => jumpTo(g[+b.dataset.i]));
+  } catch (err) {
+    box.innerHTML = `<div class="msg err">${esc(err.message || 'Search failed')}</div>`;
+  }
+});
+$('jumpIn').addEventListener('keydown', e => { if (e.key === 'Escape') { $('jumpResults').innerHTML = ''; e.target.blur(); } });
 
 pollShips(); setInterval(pollShips, 10000);
 

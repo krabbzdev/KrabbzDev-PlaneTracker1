@@ -511,6 +511,50 @@ async function faStats() {
   return data;
 }
 
+// ---------- Jump to: find any place in the world for the map's search box ----------
+// A 3-4 letter airport code ("MIA", "KJFK", "NAS") goes straight to the airport (OurAirports list); anything else
+// is a worldwide OpenStreetMap search ("Miami", "NYC", "Nassau, Bahamas"). Only runs when someone searches.
+async function placeSearch(q) {
+  const out = [], code = q.trim().toUpperCase();
+  // ships: one already on the map whose name matches, else a ship Wikipedia knows by that exact name (Cruise Finder)
+  if (code.length >= 4) {
+    for (const sh of ships.values()) {
+      if (sh.lat != null && sh.name && sh.name.toUpperCase().includes(code) && out.length < 3)
+        out.push({ ship: sh.mmsi, lat: sh.lat, lon: sh.lon, label: `🚢 ${sh.name} (live now)`, zoom: 12 });
+    }
+    if (!out.length && /[A-Z]{3}/.test(code) && /\s/.test(code)) {
+      const id = await shipIds(q.trim());
+      if (id) {
+        const sh = ships.get(id.mmsi);
+        out.push(sh && sh.lat != null
+          ? { ship: id.mmsi, lat: sh.lat, lon: sh.lon, label: `🚢 ${sh.name || id.title} (live now)`, zoom: 12 }
+          : { ship: id.mmsi, find: true, name: id.title, imo: id.imo, label: `🚢 Find ${id.title} (ship)` });
+      }
+    }
+    if (out.length) return out; // a ship name: go straight to it rather than listing look-alike places
+  }
+  if (/^[A-Z0-9]{3,4}$/.test(code)) {
+    try {
+      await loadAirports();
+      const rank = { large_airport: 0, medium_airport: 1, small_airport: 2, seaplane_base: 3, heliport: 4 };
+      const a = airports.filter(r => r[2] === code || r[1] === code).sort((x, y) => rank[x[0]] - rank[y[0]])[0];
+      if (a) out.push({ lat: a[4], lon: a[5], label: `✈ ${a[3]} (${a[2] || a[1]})${a[7] ? ', ' + a[7] : ''}`, zoom: 12 });
+    } catch (e) {}
+  }
+  const r = await get('https://nominatim.openstreetmap.org/search?format=json&limit=5&q=' + encodeURIComponent(q), 8000);
+  if (r.status !== 200) {
+    if (out.length) return out;
+    throw new Error('Place search is unavailable right now (HTTP ' + r.status + ')');
+  }
+  for (const h of JSON.parse(r.body)) {
+    const parts = String(h.display_name || '').split(', ');
+    const label = parts.length > 3 ? [parts[0], ...parts.slice(-2)].join(', ') : parts.join(', '); // "Miami, Florida, United States"
+    const b = (h.boundingbox || []).map(Number); // south, north, west, east
+    out.push({ lat: +h.lat, lon: +h.lon, label, bbox: b.length === 4 && b.every(isFinite) ? b : null });
+  }
+  return out.slice(0, 6);
+}
+
 // ---------- place search for Settings ----------
 // A US ZIP code ("33606" or "33606-1234") goes to Zippopotam.us, which knows every ZIP's town and centre;
 // anything else is an address search on OpenStreetMap Nominatim (US only), returning up to 5 matches.
@@ -637,6 +681,19 @@ const server = http.createServer(async (req, res) => {
       const h = JSON.parse(await readBody(req));
       if (isFinite(h.lat) && isFinite(h.lon)) { settings.home = [+h.lat, +h.lon]; fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings)); aisRefresh(); }
       return send(res, 200, '{"ok":true}');
+    }
+    if (url.pathname === '/api/findship') {
+      const mmsi = String(url.searchParams.get('mmsi') || '');
+      if (!/^\d{9}$/.test(mmsi)) return send(res, 400, '{"error":"bad MMSI"}');
+      if (!aisKey()) return send(res, 200, '{"status":"nokey"}');
+      findShip(mmsi, (url.searchParams.get('name') || '').slice(0, 60));
+      const sh = ships.get(mmsi);
+      return send(res, 200, JSON.stringify(sh && sh.lat != null ? { status: 'found', ship: sh }
+        : { status: 'searching', seconds: Math.round((Date.now() - finder.started) / 1000), connected: !!finder.ws && finder.ws.readyState === 1 }));
+    }
+    if (url.pathname === '/api/places') {
+      const q = (url.searchParams.get('q') || '').trim().slice(0, 120);
+      return send(res, 200, JSON.stringify(q ? await placeSearch(q) : []));
     }
     if (url.pathname === '/api/geocode') {
       // ZIP code or address -> up to 5 places to choose from. Only runs when someone clicks Search in Settings.
@@ -805,6 +862,54 @@ function onAisMessage(m) {
   const nav = pick(body, 'NavigationalStatus');
   if (nav != null) s.nav = nav;
   s.seen = Date.now();
+}
+
+// ---------- Cruise Finder: locate one named ship anywhere in the world ----------
+// Type a ship's name in the Jump to box: if it isn't already on the map, the ship's radio ID (MMSI) is read from its
+// Wikipedia article and a second AISStream connection asks for just that ship, worldwide. It's found as soon as
+// it reports (every few seconds when moving, every few minutes in port), but only near coasts with receivers.
+const shipIdCache = new Map();
+async function shipIds(name) {
+  const key = name.toUpperCase();
+  if (shipIdCache.has(key)) return shipIdCache.get(key);
+  let out = null;
+  try {
+    const r = await get('https://en.wikipedia.org/w/api.php?action=query&prop=revisions&rvprop=content&rvslots=main&format=json&redirects=1&titles='
+      + encodeURIComponent(name), 10000);
+    if (r.status !== 200) return null; // not cached: try again next time
+    const p = Object.values(JSON.parse(r.body).query?.pages || {})[0];
+    const text = p?.revisions?.[0]?.slots?.main?.['*'] || '';
+    const mmsi = (text.match(/MMSI[^\d\n]{0,40}(\d{9})/) || [])[1];
+    if (mmsi) out = { title: p.title, mmsi, imo: (text.match(/IMO[^\d\n]{0,30}(\d{7})/i) || [])[1] || null };
+  } catch (e) { return null; }
+  shipIdCache.set(key, out);
+  return out;
+}
+
+const finder = { ws: null, mmsi: null, name: '', started: 0, timer: null };
+function stopFinder() {
+  clearTimeout(finder.timer);
+  if (finder.ws) { const w = finder.ws; finder.ws = null; try { w.close(); } catch (e) {} }
+  finder.mmsi = null;
+}
+function findShip(mmsi, name) {
+  if (finder.mmsi === mmsi && finder.ws) { clearTimeout(finder.timer); finder.timer = setTimeout(stopFinder, 900000); return; }
+  stopFinder();
+  if (!aisKey() || typeof WebSocket !== 'function') return;
+  Object.assign(finder, { mmsi, name, started: Date.now() });
+  const ws = finder.ws = new WebSocket('wss://stream.aisstream.io/v0/stream');
+  ws.binaryType = 'arraybuffer';
+  ws.onopen = () => ws.send(JSON.stringify({ APIKey: aisKey(), BoundingBoxes: [[[-90, -180], [90, 180]]], FiltersShipMMSI: [mmsi],
+    FilterMessageTypes: ['PositionReport', 'StandardClassBPositionReport', 'ShipStaticData'] }));
+  ws.onmessage = e => {
+    try {
+      const m = JSON.parse(typeof e.data === 'string' ? e.data : Buffer.from(e.data).toString('utf8'));
+      if (m.MessageType && m.MessageType !== 'SubscriptionConfirmation') onAisMessage(m); // joins the normal ship list
+    } catch (err) {}
+  };
+  ws.onerror = () => {};
+  ws.onclose = () => { if (finder.ws === ws) finder.ws = null; };
+  finder.timer = setTimeout(stopFinder, 900000); // keep following it for 15 minutes
 }
 
 // ---------- self-update from GitHub Releases (only when running as the .exe) ----------
