@@ -57,9 +57,9 @@ Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExe}"; Parameters: "--ba
 Filename: "{app}\{#AppExe}"; Description: "Start {#AppName} now"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
-; stop the app and its tray icon so their files can be removed
-Filename: "{sys}\taskkill.exe"; Parameters: "/F /T /IM {#AppExe}"; Flags: runhidden; RunOnceId: "StopApp"
-Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM {#TrayExe}"; Flags: runhidden; RunOnceId: "StopTray"
+; stop the app and its tray icon so their files can be removed: only the ones running FROM THIS FOLDER
+; (matching by name alone would also close a separate copy running somewhere else)
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -Command ""Get-Process -Name 'Krabbz9999-FlightTracker','Krabbz9999-FlightTracker-Tray' -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -like '{app}\*' } | Stop-Process -Force"""; Flags: runhidden waituntilterminated; RunOnceId: "StopApp"
 
 [UninstallDelete]
 ; files the app creates itself. Your settings, daily log, cruise sightings and FAA data are left in place,
