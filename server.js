@@ -533,6 +533,10 @@ const server = http.createServer(async (req, res) => {
       if (!latest || Date.now() - latest.at > 5000) await refreshAircraft();
       return send(res, 200, latest.body);
     }
+    if (url.pathname === '/api/ships') {
+      return send(res, 200, JSON.stringify({ keySet: !!aisKey(), status: ais.status, error: ais.error,
+        ships: [...ships.values()].filter(x => x.lat != null) }));
+    }
     if (url.pathname === '/api/fastats') return send(res, 200, JSON.stringify(await faStats()));
     // Quit from the tray icon: only from this PC, and the custom header keeps other web pages from triggering it
     if (url.pathname === '/api/quit' && req.method === 'POST') {
@@ -556,7 +560,9 @@ const server = http.createServer(async (req, res) => {
           ? { name: String(b.office.name || 'Office').slice(0, 40), pos: pt(b.office.pos), label: String(b.office.label || '').slice(0, 120) } : null;
         if ('faUser' in b && /^[A-Za-z0-9_.-]{0,40}$/.test(b.faUser || '')) { settings.faUser = b.faUser || ''; faCache = null; }
         if ('contact' in b) settings.contact = String(b.contact || '').slice(0, 100);
+        if ('aisKey' in b) settings.aisKey = String(b.aisKey || '').trim().slice(0, 100);
         fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 1));
+        aisRefresh();
         latest = null; // next page poll fetches for the new location
         lastPublic = null;
         await refreshAircraft().catch(() => {});
@@ -564,6 +570,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, JSON.stringify({
         home: settings.home || null, homeLabel: settings.homeLabel || '', homeName: settings.homeName || '', office: settings.office || null,
         faUser: faUser(), contact: contactSetting() || '',
+        aisKeySet: !!aisKey(), aisKeyHint: aisKey() ? '••••' + aisKey().slice(-4) : '',
       }));
     }
     if (url.pathname === '/api/version') return send(res, 200, JSON.stringify({ ...VERSION, exe: !!sea }));
@@ -582,7 +589,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/home' && req.method === 'POST') {
       // the page tells us where home is, so the daily log's "closest pass" uses the right spot
       const h = JSON.parse(await readBody(req));
-      if (isFinite(h.lat) && isFinite(h.lon)) { settings.home = [+h.lat, +h.lon]; fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings)); }
+      if (isFinite(h.lat) && isFinite(h.lon)) { settings.home = [+h.lat, +h.lon]; fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings)); aisRefresh(); }
       return send(res, 200, '{"ok":true}');
     }
     if (url.pathname === '/api/geocode') {
@@ -615,6 +622,100 @@ const openBrowser = () => {
   if (process.env.NO_BROWSER) return;
   require('child_process').exec(`start "" http://localhost:${PORT}`);
 };
+// ---------- ships: live AIS positions from AISStream.io (optional, needs a free API key) ----------
+// AISStream only accepts server connections (never straight from a browser), so this keeps one WebSocket open for
+// the area around home and the page reads /api/ships. Ships report positions over AIS, the ship version of ADS-B.
+// The key is kept in settings.json and is never sent to the page.
+const ships = new Map(); // MMSI -> { mmsi, name, lat, lon, sog, cog, heading, nav, type, length, beam, destination, eta, imo, callsign, seen }
+const ais = { status: 'off', error: null, ws: null, timer: null, tries: 0, sub: '', lastMsg: 0 };
+const aisKey = () => String(settings.aisKey || process.env.AISSTREAM_API_KEY || '').trim();
+// JSON keys are capitalised (Name, Sog...) but the published models are camelCase; accept either
+const pick = (o, k) => o == null ? undefined : o[k] ?? o[k[0].toLowerCase() + k.slice(1)];
+const AIS_BOX_DEG = 0.6; // ~40 miles north/south of home, so ships show up before they reach the Tracker Radius
+function aisBox() {
+  const h = settings.home;
+  if (!h) return null;
+  const dLon = AIS_BOX_DEG / Math.max(0.2, Math.cos(h[0] * Math.PI / 180));
+  return [[+(h[0] + AIS_BOX_DEG).toFixed(4), +(h[1] - dLon).toFixed(4)], [+(h[0] - AIS_BOX_DEG).toFixed(4), +(h[1] + dLon).toFixed(4)]];
+}
+
+function aisConnect() {
+  clearTimeout(ais.timer);
+  if (ais.ws) { const old = ais.ws; ais.ws = null; try { old.close(); } catch (e) {} }
+  const key = aisKey(), box = aisBox();
+  ais.sub = key + '|' + JSON.stringify(box);
+  if (!key || !box) { ais.status = key ? 'waiting for home' : 'off'; ais.error = null; return; }
+  if (typeof WebSocket !== 'function') { ais.status = 'off'; ais.error = 'This version of Node.js has no WebSocket support'; return; }
+  ais.status = 'connecting';
+  const ws = new WebSocket('wss://stream.aisstream.io/v0/stream'); // compression is negotiated automatically
+  ws.binaryType = 'arraybuffer';
+  ais.ws = ws;
+  const opened = Date.now();
+  let confirmed = false;
+  // the subscription must arrive within 3 seconds of connecting
+  ws.onopen = () => ws.send(JSON.stringify({ APIKey: key, BoundingBoxes: [box], FilterMessageTypes: ['PositionReport', 'StandardClassBPositionReport', 'ShipStaticData'] }));
+  ws.onmessage = e => {
+    let m;
+    try { m = JSON.parse(typeof e.data === 'string' ? e.data : Buffer.from(e.data).toString('utf8')); } catch (err) { return; }
+    if (m.error) { ais.error = 'AISStream: ' + m.error; return; }
+    if (!confirmed) { confirmed = true; ais.status = 'live'; ais.error = null; ais.tries = 0; }
+    ais.lastMsg = Date.now();
+    if (m.MessageType !== 'SubscriptionConfirmation') onAisMessage(m);
+  };
+  ws.onerror = () => {};
+  ws.onclose = () => {
+    if (ais.ws !== ws) return; // replaced on purpose
+    ais.ws = null;
+    // closed within seconds, before any data: almost always a wrong or disabled key
+    if (!confirmed && Date.now() - opened < 15000) ais.error = ais.error || 'AISStream closed the connection right away. Check that the API key is correct.';
+    ais.status = 'reconnecting';
+    ais.tries++;
+    const wait = Math.min(300000, 2000 * 2 ** Math.min(ais.tries, 8)) * (0.8 + Math.random() * 0.4); // backoff with jitter
+    ais.timer = setTimeout(aisConnect, wait);
+  };
+}
+// reconnect when the key or home changes (the subscription covers the area around home)
+const aisRefresh = () => { if (ais.sub !== aisKey() + '|' + JSON.stringify(aisBox())) { ais.tries = 0; ships.clear(); aisConnect(); } };
+// a connection that has gone silent for 10 minutes is replaced
+setInterval(() => { if (ais.status === 'live' && Date.now() - ais.lastMsg > 600000) aisConnect(); }, 60000);
+// forget ships not heard from for 30 minutes
+setInterval(() => { const cut = Date.now() - 1800000; for (const [k, s] of ships) if ((s.seen || s.static || 0) < cut) ships.delete(k); }, 60000);
+
+const aisText = s => String(s || '').replace(/@+/g, ' ').replace(/\s+/g, ' ').trim();
+function onAisMessage(m) {
+  const meta = m.MetaData || {}, mmsi = String(pick(meta, 'MMSI') ?? '');
+  if (!/^\d{9}$/.test(mmsi)) return;
+  const s = ships.get(mmsi) || { mmsi };
+  ships.set(mmsi, s);
+  const body = m.Message?.[m.MessageType] || {};
+  if (!s.name) s.name = aisText(pick(meta, 'ShipName'));
+  if (m.MessageType === 'ShipStaticData') {
+    s.name = aisText(pick(body, 'Name')) || s.name;
+    s.type = pick(body, 'Type') ?? s.type;
+    s.imo = pick(body, 'ImoNumber') || s.imo;
+    s.callsign = aisText(pick(body, 'CallSign')) || s.callsign;
+    const d = pick(body, 'Dimension') || {};
+    const len = (d.A || 0) + (d.B || 0), beam = (d.C || 0) + (d.D || 0);
+    if (len > 0 && len < 500) s.length = len;
+    if (beam > 0 && beam < 80) s.beam = beam;
+    s.destination = aisText(pick(body, 'Destination'));
+    const eta = pick(body, 'Eta');
+    s.eta = eta && pick(eta, 'Month') && pick(eta, 'Day') ? { month: pick(eta, 'Month'), day: pick(eta, 'Day'), hour: pick(eta, 'Hour'), minute: pick(eta, 'Minute') } : null;
+    s.static = Date.now();
+    return;
+  }
+  const lat = pick(body, 'Latitude') ?? pick(meta, 'Latitude'), lon = pick(body, 'Longitude') ?? pick(meta, 'Longitude');
+  if (!(Math.abs(lat) <= 90 && Math.abs(lon) <= 180)) return; // 91 / 181 mean "not available"
+  s.lat = lat; s.lon = lon;
+  const sog = pick(body, 'Sog'), cog = pick(body, 'Cog'), hdg = pick(body, 'TrueHeading');
+  s.sog = sog != null && sog < 102.3 ? sog : null;   // knots; 102.3 = not available
+  s.cog = cog != null && cog < 360 ? cog : null;
+  s.heading = hdg != null && hdg < 360 ? hdg : null;  // 511 = not available
+  const nav = pick(body, 'NavigationalStatus');
+  if (nav != null) s.nav = nav;
+  s.seen = Date.now();
+}
+
 // ---------- self-update from GitHub Releases (only when running as the .exe) ----------
 // Each release carries Krabbz9999-FlightTracker.exe; the tag ends in the build number (e.g. v1.0.4).
 const REPO = VERSION.repo || 'showtechclove1/krabbz9999-flighttracker';
@@ -712,6 +813,7 @@ server.on('error', e => {
   console.log('Already running - opening it in your browser.'); if (sea) openBrowser(); setTimeout(() => process.exit(0), 1500);
 });
 server.listen(PORT, () => {
+  aisConnect();
   console.log(`Krabbz9999 - FlightTracker v${VERSION.version} build ${VERSION.build} running at http://localhost:${PORT}`);
   if (sea) { console.log('To stop it, close this window or right-click the plane icon in the system tray and choose Quit.'); openBrowser(); startTray(); }
 });

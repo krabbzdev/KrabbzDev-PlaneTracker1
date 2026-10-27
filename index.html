@@ -67,7 +67,7 @@
   /* list | map | panels; each column scrolls on its own */
   main { display: grid; grid-template-columns: 380px minmax(0, 1fr) 380px; grid-template-rows: minmax(560px, calc(calc(100vh / var(--ui)) - 140px)); grid-template-areas: "list map aside"; gap: 12px; padding: 0 20px 20px; min-height: 0; }
   #map { grid-area: map; border-radius: 14px; border: 1px solid var(--line); min-height: 420px; background: #0a0f1c; }
-  aside { grid-area: aside; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "stats" "today" "atc" "detail"; align-content: start; gap: 12px; min-height: 0; overflow-y: auto; }
+  aside { grid-area: aside; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "stats" "today" "atc" "ships" "detail"; align-content: start; gap: 12px; min-height: 0; overflow-y: auto; }
   @media (max-width: 1250px) {
     main { grid-template-columns: 360px minmax(0, 1fr); grid-template-rows: minmax(520px, calc(calc(100vh / var(--ui)) - 140px)) auto; grid-template-areas: "list map" "aside aside"; }
     aside { overflow: visible; }
@@ -75,10 +75,11 @@
   #stats { grid-area: stats; }
   #today { grid-area: today; }
   #atc { grid-area: atc; }
+  #ships { grid-area: ships; }
   #detail { grid-area: detail; }
   #list { grid-area: list; }
-  #stats, #today, #atc { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
-  #stats[open], #today[open], #atc[open] { padding-bottom: 14px; }
+  #stats, #today, #atc, #ships { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+  #stats[open], #today[open], #atc[open], #ships[open] { padding-bottom: 14px; }
   .st-h { display: flex; align-items: center; gap: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); cursor: pointer; list-style: none; user-select: none; }
   .st-h::-webkit-details-marker { display: none; }
   .st-h:hover { color: var(--text); }
@@ -312,6 +313,9 @@
   .results:empty { display: none; }
   .results button small { color: var(--muted); margin-left: 6px; }
   #voiceStatus:empty { display: none; }
+  dialog.set-dlg ol.steps { margin: 0 0 10px; padding-left: 20px; }
+  dialog.set-dlg ol.steps li { margin-bottom: 3px; }
+  dialog.set-dlg .hint a { color: var(--accent); }
   #voiceStatus { color: var(--accent); }
   #voiceStatus.err { color: #ffb547; }
   dialog.set-dlg label.chk { display: flex; align-items: center; gap: 8px; font-size: 13px; }
@@ -353,6 +357,21 @@
   #atc .atc-quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   #atc .atc-quick a { font: 600 12px var(--mono); color: #68d391; border: 1px solid rgba(104,211,145,.4); border-radius: 999px; padding: 2px 10px; text-decoration: none; }
   #atc .atc-quick a:hover { background: rgba(104,211,145,.12); }
+  /* ships */
+  .ship svg { filter: drop-shadow(0 1px 2px rgba(0,0,0,.8)); }
+  .ship .ship-tag { position: absolute; left: 36px; top: 8px; font: 700 11px var(--mono); color: #fff; white-space: nowrap; text-shadow: 0 1px 2px #000, 0 0 4px #000; }
+  .ship-pop .leaflet-popup-content-wrapper { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 0; }
+  .ship-pop .leaflet-popup-content { margin: 0; width: 240px !important; }
+  .ship-pop .leaflet-popup-tip { background: var(--panel); }
+  .ship-pop a { color: var(--accent); }
+  .ship-pop .pt, #ships .pt { padding: 8px 10px 10px; font-size: 12px; line-height: 1.45; }
+  #ships .ship-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+  #ships .ship-row:first-of-type { margin-top: 8px; }
+  #ships .ship-row:hover b { color: var(--accent); }
+  #ships .ship-row b { font-size: 13px; display: block; }
+  #ships .ship-row small { color: var(--muted); font-size: 11px; }
+  #ships .ship-row > span { font: 12px var(--mono); color: var(--muted); white-space: nowrap; }
+  .err-note { color: #ffb547 !important; }
   /* Share to Facebook */
   .fb-share { display: inline-flex; align-items: center; gap: 6px; font: 600 12px Inter, sans-serif; color: #fff; background: #1877f2; border: 1px solid #1877f2; border-radius: 999px; padding: 2px 10px 2px 8px; cursor: pointer; line-height: 1.4; }
   .fb-share b { font: 800 13px Arial, sans-serif; }
@@ -419,6 +438,7 @@
   <label class="chk"><input type="checkbox" id="showAll"> Show outside radius</label>
   <label class="chk"><input type="checkbox" id="showApts" checked> Show Airports</label>
   <label class="chk" title="Live rain radar on the map (US, refreshes every 5 minutes)"><input type="checkbox" id="wxOn" checked> 🌧 Show Weather</label>
+  <label class="chk" title="Cruise ships and other boats, live (needs a free AISStream.io key in Settings)"><input type="checkbox" id="shipsOn" checked> 🚢 Show Ships</label>
   <label class="chk" title="Take over the screen with a close-up when a plane passes within 1 mile"><input type="checkbox" id="takeoverOn" checked> Overhead Plane Alert</label>
   <label class="chk" title="Chime and spoken announcement when a plane is overhead"><input type="checkbox" id="soundOn" checked> 🔔 Sound</label>
   <button id="homeBtn">⚙ Settings</button>
@@ -465,6 +485,10 @@
       <div class="atc-row"><select id="atcSel" aria-label="Airport to listen to"></select><a id="atcGo" class="atc-btn" href="#" target="_blank" rel="noopener">🎧 Listen</a></div>
       <div class="atc-quick" id="atcQuick"></div>
       <div class="fa-note">Opens the airport's live tower, approach and ground feeds on LiveATC.net in a new tab.</div>
+    </details>
+    <details id="ships" open>
+      <summary class="st-h"><span class="chev">▸</span>🚢 Cruise ships<span class="st-sum" id="shipsSum"></span></summary>
+      <div id="shipsBody"></div>
     </details>
     <div id="detail"></div>
   </aside>
@@ -559,6 +583,18 @@
         <div class="where" id="updCur"></div>
         <label class="chk" style="margin:4px 0 8px"><input type="checkbox" id="autoUpd"> Install updates automatically</label>
         <div class="acts left"><button id="updCheck">Check for updates</button><button id="updInstall" class="primary" style="display:none">Install now</button></div>
+      </div>
+      <div class="place" id="aisPlace">
+        <h4>🚢 Ship tracking <small>optional, free</small></h4>
+        <p class="hint">Shows cruise ships and other boats near you, live, using AISStream.io. It's free, but you need your own key:</p>
+        <ol class="hint steps">
+          <li>Go to <a href="https://aisstream.io" target="_blank" rel="noopener">aisstream.io</a> and click <b>Sign in</b> (with your GitHub account).</li>
+          <li>Open <b>API Keys</b> and click <b>Create</b>.</li>
+          <li>Copy the key and paste it below, then click <b>Save</b>.</li>
+        </ol>
+        <div class="where" id="aisCur"></div>
+        <div class="row"><input id="aisIn" placeholder="Paste your AISStream API key" autocomplete="off" spellcheck="false"><button id="aisClear" title="Remove the saved key">Remove</button></div>
+        <p class="hint">Your key stays on this PC (in settings.json). AISStream receives the area around your home so it can send the ships there.</p>
       </div>
       <div class="place">
         <h4>📡 FlightAware feeder <small>optional</small></h4>
@@ -2112,6 +2148,9 @@ async function openHome(focusHome, firstRun) {
   showWhere('home'); showWhere('office');
   $('faIn').value = cfg.faUser || '';
   $('contactIn').value = cfg.contact || '';
+  // ship tracking: the saved key is never sent back, only whether there is one
+  aisClear = false; $('aisIn').value = '';
+  showAis();
   voiceOptions($('voiceSel'));
   refreshUpdatePanel();
   showTab('loc');
@@ -2120,6 +2159,18 @@ async function openHome(focusHome, firstRun) {
 }
 $('homeBtn').onclick = () => openHome(false);
 $('cancelHome').onclick = $('setX').onclick = () => $('homeDlg').close();
+let aisClear = false; // 'Remove' clicked: delete the key on Save
+function showAis() {
+  const el = $('aisCur'), typed = $('aisIn').value.trim();
+  if (aisClear) { el.className = 'where unset'; el.innerHTML = 'The saved key will be removed when you click Save.'; return; }
+  if (typed) { el.className = 'where changed'; el.innerHTML = '🔑 New key entered <b style="color:var(--accent)">· click Save to use it</b>'; return; }
+  if (!cfg.aisKeySet) { el.className = 'where unset'; el.innerHTML = 'No key yet, so ship tracking is off.'; return; }
+  const st = shipData.status, err = shipData.error;
+  el.className = 'where';
+  el.innerHTML = `🔑 Key saved (${esc(cfg.aisKeyHint)})<small>${st === 'live' ? '✓ Connected: ' + shipData.ships.length + ' ships in range' : err ? '⚠ ' + esc(err) : esc(st)}</small>`;
+}
+$('aisIn').addEventListener('input', () => { aisClear = false; showAis(); });
+$('aisClear').onclick = () => { $('aisIn').value = ''; aisClear = !!cfg.aisKeySet; showAis(); };
 $('voiceTest').onclick = async () => {
   const pref = chosenVoice(), btn = $('voiceTest');
   btn.disabled = true;
@@ -2198,6 +2249,7 @@ $('saveHome').onclick = async () => {
     office: isFinite(oLat) && isFinite(oLon) ? { name: $('offName').value.trim() || 'Office', pos: [oLat, oLon], label: placeLabel.office } : null,
     faUser: $('faIn').value.trim(),
     contact: $('contactIn').value.trim(),
+    ...($('aisIn').value.trim() ? { aisKey: $('aisIn').value.trim() } : aisClear ? { aisKey: '' } : {}),
   };
   voicePref = chosenVoice(); save('skyVoice', voicePref);
   await saveCfg(patch);
@@ -2213,6 +2265,117 @@ map.on('click', e => {
   picking = null; $('map').style.cursor = '';
   $('homeDlg').showModal();
 });
+
+// ---------- ships (live AIS via the app's /api/ships; needs a free AISStream.io key in Settings > More) ----------
+// Cruise ships are big and labelled; other ships are small, coloured by kind, and named when you hover them.
+map.createPane('ships').style.zIndex = 440; // above airports' labels area, below planes
+const shipLayer = L.layerGroup().addTo(map);
+const shipMarkers = new Map(); // MMSI -> marker
+let shipData = { keySet: false, status: 'off', ships: [] };
+let shipsOn = load('skyShips', true);
+$('shipsOn').checked = shipsOn;
+$('shipsOn').addEventListener('change', e => { shipsOn = e.target.checked; save('skyShips', shipsOn); drawShips(); });
+
+const CRUISE_LINES = /CARNIVAL|ROYAL CARIBBEAN|^(ALLURE|ANTHEM|ODYSSEY|OASIS|HARMONY|SYMPHONY|WONDER|ICON|UTOPIA|STAR|FREEDOM|LIBERTY|INDEPENDENCE|NAVIGATOR|MARINER|VOYAGER|EXPLORER|ADVENTURE|BRILLIANCE|JEWEL|RADIANCE|SERENADE|VISION|ENCHANTMENT|GRANDEUR|RHAPSODY|SPECTRUM|QUANTUM|OVATION) OF THE|CELEBRITY|NORWEGIAN|^NCL|^MSC |DISNEY|PRINCESS|HOLLAND|^(NIEUW|KONINGSDAM|ROTTERDAM|ZUIDERDAM|OOSTERDAM|WESTERDAM|NOORDAM|EURODAM|VOLENDAM|ZAANDAM)\b|VIKING|SEABOURN|SILVER |REGENT|SEVEN SEAS|OCEANIA|CUNARD|QUEEN (MARY|ANNE|VICTORIA|ELIZABETH)|AZAMARA|MARGARITAVILLE|VALIANT LADY|SCARLET LADY|RESILIENT LADY|BRILLIANT LADY|EXPLORA|COSTA |AIDA/i;
+const isPassenger = s => s.type >= 60 && s.type <= 69;
+const isCruise = s => (isPassenger(s) && (s.length || 0) >= 150) || ((!s.type || isPassenger(s)) && CRUISE_LINES.test(s.name || ''));
+const SHIP_KIND = [ // [from, to, label, colour] by AIS ship type code
+  [60, 69, 'Passenger ship', '#9be15d'], [70, 79, 'Cargo ship', '#8aa1c4'], [80, 89, 'Tanker', '#e08a8a'],
+  [30, 30, 'Fishing boat', '#5fd3c6'], [31, 32, 'Towing', '#ffb547'], [52, 52, 'Tug', '#ffb547'], [50, 50, 'Pilot boat', '#ffb547'],
+  [33, 33, 'Dredger', '#c7a46b'], [35, 35, 'Military ship', '#9be15d'], [36, 36, 'Sailboat', '#c58cff'], [37, 37, 'Pleasure boat', '#c58cff'],
+  [40, 49, 'High-speed craft', '#5fd3c6'], [51, 51, 'Search and rescue', '#ff5d73'], [55, 55, 'Law enforcement', '#4cc9f0'], [58, 58, 'Medical transport', '#ff5d73'],
+];
+const shipKind = s => isCruise(s) ? ['Cruise ship', '#ffffff'] : (SHIP_KIND.find(([a, b]) => s.type >= a && s.type <= b) || [0, 0, 'Ship', '#7d879f']).slice(2);
+const NAV = { 0: 'Under way', 1: 'At anchor', 2: 'Not under command', 3: 'Restricted manoeuvrability', 5: 'Docked', 6: 'Aground', 7: 'Fishing', 8: 'Sailing' };
+const kn = v => `${v.toFixed(v < 10 ? 1 : 0)} kn (${Math.round(v * 1.15078)} mph)`;
+function shipStatus(s) {
+  if (s.nav === 5) return 'Docked';
+  if (s.nav === 1) return 'At anchor';
+  if (s.sog != null && s.sog < 0.5) return 'Stopped';
+  return s.sog != null ? `${NAV[s.nav] || 'Under way'} at ${kn(s.sog)}` : (NAV[s.nav] || 'Position reported');
+}
+// AIS ETAs are month/day/hour/minute in UTC with no year; shown in local time
+function shipEta(s) {
+  const e = s.eta; if (!e || !e.month || !e.day || e.month > 12 || e.day > 31) return '';
+  const now = new Date(); let y = now.getUTCFullYear();
+  if (e.month < now.getUTCMonth() + 1 - 6) y++;
+  const d = new Date(Date.UTC(y, e.month - 1, e.day, e.hour < 24 ? e.hour : 0, e.minute < 60 ? e.minute : 0));
+  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+const shipUrl = s => s.imo ? `https://www.vesselfinder.com/vessels/details/${s.imo}` : `https://www.vesselfinder.com/?mmsi=${s.mmsi}`;
+function shipCard(s, withLinks) {
+  const [kind] = shipKind(s), eta = shipEta(s);
+  const size = s.length ? `${s.length} m long${s.beam ? ` · ${s.beam} m wide` : ''} (${Math.round(s.length * 3.281)} ft)` : '';
+  const dist = home ? `${distMi(home, [s.lat, s.lon]).toFixed(1)} mi ${compass(bearing(home, [s.lat, s.lon]))} of home` : '';
+  const row = (k, v) => v ? `<span>${k}</span><span>${esc(v)}</span>` : '';
+  return `<div class="pt"><div class="pt-h"><div><b>🚢 ${esc(s.name || 'Unnamed ship')}</b><small>${esc(kind)}</small></div></div>
+    <div class="pt-g">${row('Status', shipStatus(s))}${row('Heading to', s.destination)}${row('Arrives', eta)}${row('Size', size)}${row('Distance', dist)}</div>
+    ${withLinks ? `<div class="pt-f"><a href="${shipUrl(s)}" target="_blank" rel="noopener">VesselFinder ↗</a> · <a href="https://www.marinetraffic.com/en/ais/details/ships/mmsi:${s.mmsi}" target="_blank" rel="noopener">MarineTraffic ↗</a></div>` : '<div class="pt-f">Click for links</div>'}</div>`;
+}
+// top-down hull, bow pointing up; cruise ships get white decks
+function shipSvg(s) {
+  const cruise = isCruise(s), [, color] = shipKind(s);
+  const size = cruise ? 34 : (s.length || 0) >= 100 ? 22 : 16;
+  const rot = s.heading ?? s.cog ?? 0;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" style="transform:rotate(${rot}deg)">`
+    + `<path fill="${color}" stroke="#0b1020" stroke-width="1.2" d="M12 1.5c2.6 2.6 4 6 4 9.6V21a1.6 1.6 0 0 1-1.6 1.6H9.6A1.6 1.6 0 0 1 8 21V11.1c0-3.6 1.4-7 4-9.6z"/>`
+    + (cruise ? `<rect x="9.6" y="9" width="4.8" height="11" rx="1" fill="#4cc9f0" stroke="#0b1020" stroke-width=".6"/><rect x="10.9" y="13.5" width="2.2" height="2.6" rx=".5" fill="#ff5d73"/>` : '')
+    + `</svg>`;
+}
+function shipIcon(s) {
+  const cruise = isCruise(s), size = cruise ? 34 : (s.length || 0) >= 100 ? 22 : 16;
+  const label = cruise ? `<span class="ship-tag">${esc(s.name || 'Cruise ship')}</span>` : '';
+  return L.divIcon({ className: 'ship' + (cruise ? ' cruise' : ''), html: shipSvg(s) + label, iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
+}
+function drawShips() {
+  const list = shipsOn ? shipData.ships : [];
+  const keep = new Set();
+  for (const s of list) {
+    keep.add(s.mmsi);
+    let m = shipMarkers.get(s.mmsi);
+    if (!m) {
+      m = L.marker([s.lat, s.lon], { pane: 'ships', icon: shipIcon(s) })
+        .bindTooltip(() => shipCard(shipData.ships.find(x => x.mmsi === s.mmsi) || s, false), { className: 'plane-tip', direction: 'top', offset: [0, -12], opacity: 1 })
+        .bindPopup(() => shipCard(shipData.ships.find(x => x.mmsi === s.mmsi) || s, true), { className: 'ship-pop', maxWidth: 260 })
+        .addTo(shipLayer);
+      shipMarkers.set(s.mmsi, m);
+    } else m.setLatLng([s.lat, s.lon]).setIcon(shipIcon(s));
+    m.setZIndexOffset(isCruise(s) ? 300 : 0);
+  }
+  for (const [k, m] of shipMarkers) if (!keep.has(k)) { shipLayer.removeLayer(m); shipMarkers.delete(k); }
+  renderShipPanel();
+}
+function renderShipPanel() {
+  const body = $('shipsBody');
+  if (!shipData.keySet) {
+    $('shipsSum').textContent = 'not set up';
+    body.innerHTML = `<p class="fa-note" style="margin-top:10px">See cruise ships and other boats near you, live. It's free: you just need an AISStream.io key.</p>
+      <button class="atc-btn" id="shipSetup" style="margin-top:8px">🚢 Set up ship tracking</button>`;
+    $('shipSetup').onclick = () => openHome(false).then(() => { showTab('more'); $('aisIn').focus(); });
+    return;
+  }
+  if (shipData.error && shipData.status !== 'live') { $('shipsSum').textContent = 'problem'; body.innerHTML = `<p class="fa-note err-note">${esc(shipData.error)}</p>`; return; }
+  const near = s => home ? distMi(home, [s.lat, s.lon]) : 0;
+  const cruise = shipData.ships.filter(isCruise).sort((a, b) => near(a) - near(b));
+  $('shipsSum').textContent = cruise.length ? `${cruise.length} cruise ship${cruise.length > 1 ? 's' : ''}` : shipData.status === 'live' ? 'none nearby' : shipData.status;
+  const others = shipData.ships.length - cruise.length;
+  body.innerHTML = (cruise.length ? cruise.map(s => `<div class="ship-row" data-mmsi="${s.mmsi}">
+      <div><b>🚢 ${esc(s.name || 'Cruise ship')}</b><small>${esc(shipStatus(s))}${s.destination ? ` · to ${esc(s.destination)}` : ''}</small></div>
+      <span>${home ? near(s).toFixed(1) + ' mi ' + compass(bearing(home, [s.lat, s.lon])) : ''}</span></div>`).join('')
+    : `<p class="fa-note" style="margin-top:10px">${shipData.status === 'live' ? 'No cruise ships within about 40 miles right now.' : 'Connecting to AISStream…'}</p>`)
+    + `<div class="fa-note">${others > 0 ? `${others} other ship${others > 1 ? 's' : ''} and boats on the map${shipsOn ? '' : ' (tick 🚢 Show Ships)'}. ` : ''}Ship data: AISStream.io</div>`;
+  body.querySelectorAll('.ship-row').forEach(r => r.onclick = () => {
+    const s = shipData.ships.find(x => x.mmsi === r.dataset.mmsi), m = shipMarkers.get(r.dataset.mmsi);
+    if (!s) return;
+    map.setView([s.lat, s.lon], Math.max(map.getZoom(), 13));
+    if (m) m.openPopup();
+  });
+}
+async function pollShips() {
+  try { shipData = await fetch('/api/ships').then(r => r.json()); } catch (e) { return; }
+  drawShips();
+}
+pollShips(); setInterval(pollShips, 10000);
 
 // ---------- demo traffic (?demo in the URL: simulated planes for previewing) ----------
 let demoPlanes = null;
