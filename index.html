@@ -373,6 +373,11 @@
   #ships .ship-row small { color: var(--muted); font-size: 11px; }
   #ships .ship-row > span { font: 12px var(--mono); color: var(--muted); white-space: nowrap; }
   .err-note { color: #ffb547 !important; }
+  .explore-bar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 1000; display: flex; align-items: center; gap: 10px;
+    background: rgba(18,26,48,.92); border: 1px solid var(--accent); border-radius: 999px; padding: 6px 8px 6px 14px; font-size: 13px; white-space: nowrap;
+    box-shadow: 0 4px 16px rgba(0,0,0,.5); max-width: calc(100% - 120px); overflow: hidden; }
+  .explore-bar[hidden] { display: none; }
+  .explore-bar button { background: var(--accent); color: #06121f; border: 0; border-radius: 999px; padding: 4px 10px; font: 700 12px Inter, sans-serif; cursor: pointer; }
   .ship .ship-logo { position: absolute; left: -26px; top: 7px; width: 22px; height: 22px; padding: 1px; border-radius: 5px; background: #fff; object-fit: contain; box-shadow: 0 1px 3px rgba(0,0,0,.7); }
   .ship-logo-lg { width: 30px; height: 30px; padding: 2px; border-radius: 6px; background: #fff; object-fit: contain; flex: none; }
   .ship-logo-sm { width: 24px; height: 24px; padding: 2px; border-radius: 5px; background: #fff; object-fit: contain; flex: none; }
@@ -965,13 +970,13 @@ function notifySpecial(a) {
 }
 
 // ---------- photo / info / route lookups ----------
-async function requestLookup(hex) {
+async function requestLookup(hex, acIn) { // acIn: a plane that isn't in the home feed (exploring)
   if (lookups.has(hex) || DEMO_NO_SERVER) return;
   lookups.set(hex, 'pending');
-  const cs = tracks.get(hex)?.aircraft.flight || '';
-  const reg = tracks.get(hex)?.aircraft.reg || '';
+  const ac = acIn || tracks.get(hex)?.aircraft;
+  const cs = ac?.flight || '';
+  const reg = ac?.reg || '';
   // maker + model let the server reject photos of a different plane and find a stock photo when there's none
-  const ac = tracks.get(hex)?.aircraft;
   const mfr = ac ? brandOf(ac) : '', model = ac && (ac.desc || ac.type) ? modelOf(ac) : '';
   try {
     const r = await fetch('/api/lookup/' + hex + '?cs=' + encodeURIComponent(cs) + '&reg=' + encodeURIComponent(reg)
@@ -2438,14 +2443,16 @@ function renderShipPanel() {
     return;
   }
   if (shipData.error && shipData.status !== 'live') { $('shipsSum').textContent = 'problem'; body.innerHTML = `<p class="fa-note err-note">${esc(shipData.error)}</p>`; return; }
-  const near = s => home ? distMi(home, [s.lat, s.lon]) : 0;
-  const cruise = shipData.ships.filter(isCruise).sort((a, b) => near(a) - near(b));
+  // near home normally; while exploring, the cruise ships in the area being looked at
+  const from = exploring ? [exploring.lat, exploring.lon] : home;
+  const near = s => from ? distMi(from, [s.lat, s.lon]) : 0;
+  const cruise = shipData.ships.filter(s => isCruise(s) && (exploring ? exploring.bounds.contains([s.lat, s.lon]) : near(s) < 45)).sort((a, b) => near(a) - near(b));
   $('shipsSum').textContent = cruise.length ? `${cruise.length} cruise ship${cruise.length > 1 ? 's' : ''}` : shipData.status === 'live' ? 'none nearby' : shipData.status;
   const others = shipData.ships.length - cruise.length;
   body.innerHTML = (cruise.length ? cruise.map(s => `<div class="ship-row" data-mmsi="${s.mmsi}">
       ${shipLogoImg(cruiseLine(s), 'ship-logo-sm')}<div style="flex:1;min-width:0"><b>${esc(s.name || 'Cruise ship')}</b><small>${esc(cruiseLine(s)?.name || 'Cruise ship')} · ${esc(shipStatus(s))}${s.destination ? ` · to ${esc(s.destination)}` : ''}</small></div>
       <span>${home ? near(s).toFixed(1) + ' mi ' + compass(bearing(home, [s.lat, s.lon])) : ''}</span></div>`).join('')
-    : `<p class="fa-note" style="margin-top:10px">${shipData.status === 'live' ? 'No cruise ships within about 40 miles right now.' : 'Connecting to AISStream…'}</p>`)
+    : `<p class="fa-note" style="margin-top:10px">${shipData.status === 'live' ? (exploring ? 'No cruise ships in this area right now.' : 'No cruise ships within about 40 miles right now.') : 'Connecting to AISStream…'}</p>`)
     + `<div class="fa-note">${others > 0 ? `${others} other ship${others > 1 ? 's' : ''} and boats on the map${shipsOn ? '' : ' (tick 🚢 Show Ships)'}. ` : ''}Ship data: AISStream.io</div>`;
   body.querySelectorAll('.ship-row').forEach(r => r.onclick = () => {
     const s = shipData.ships.find(x => x.mmsi === r.dataset.mmsi), m = shipMarkers.get(r.dataset.mmsi);
@@ -2455,9 +2462,98 @@ function renderShipPanel() {
   });
 }
 async function pollShips() {
-  try { shipData = await fetch('/api/ships').then(r => r.json()); } catch (e) { return; }
+  // while exploring, also ask for the ships in the area being looked at
+  const b = exploring && exploring.bounds, q = b ? `?explore=${[b.getSouth(), b.getWest(), b.getNorth(), b.getEast()].map(v => v.toFixed(2)).join(',')}` : '';
+  try { shipData = await fetch('/api/ships' + q).then(r => r.json()); } catch (e) { return; }
   drawShips();
 }
+// ---------- exploring: live planes and ships wherever you scroll the map ----------
+// The home feed only covers ~46 miles around home. Scroll the map more than 30 miles away and the app loads the
+// planes (and, with ship tracking set up, the ships) around what you're looking at. Explored planes are only shown:
+// they don't go in the list, the daily log or the overhead alerts. Scroll back near home (or click Back to home) to stop.
+const EXPLORE_MI = 30;     // explore once the middle of the map is this far from home
+const EXPLORE_MAX_NM = 250; // adsb.fi's biggest search circle; zoomed out further than this, ask to zoom in
+const exploreLayer = L.layerGroup().addTo(map);
+const exploreMarkers = new Map(); // hex -> marker
+let exploring = null, exploreTimer = null, explorePoll = null, explorePlanes = [];
+
+const exploreBar = L.DomUtil.create('div', 'explore-bar', map.getContainer());
+L.DomEvent.disableClickPropagation(exploreBar);
+exploreBar.hidden = true;
+function showExploreBar(mode) {
+  if (!mode) { exploreBar.hidden = true; return; }
+  exploreBar.hidden = false;
+  const planes = explorePlanes.length, shipsHere = exploring ? shipData.ships.filter(s => exploring.bounds.contains([s.lat, s.lon])).length : 0;
+  exploreBar.innerHTML = mode === 'zoom'
+    ? `🔭 Zoom in to see live planes and ships here <button type="button" data-home>🏠 Back to home</button>`
+    : `🔭 Live traffic around here · ✈ ${planes} plane${planes === 1 ? '' : 's'}${shipData.keySet ? ` · 🚢 ${shipsHere} ship${shipsHere === 1 ? '' : 's'}` : ''} <button type="button" data-home>🏠 Back to home</button>`;
+  exploreBar.querySelector('[data-home]').onclick = () => { stopExplore(); fitRadius(); };
+}
+const viewNm = () => { const b = map.getBounds(); return map.distance(b.getCenter(), b.getNorthEast()) / 1852; };
+function checkExplore() {
+  if (!home) return;
+  const c = map.getCenter();
+  if (distMi(home, [c.lat, c.lng]) < EXPLORE_MI) { if (exploring || !exploreBar.hidden) stopExplore(); return; }
+  const nm = viewNm();
+  if (nm > EXPLORE_MAX_NM) { clearExplorePlanes(); exploring = null; clearInterval(explorePoll); showExploreBar('zoom'); return; }
+  exploring = { lat: c.lat, lon: c.lng, nm: Math.max(20, Math.ceil(nm)), bounds: map.getBounds() };
+  showExploreBar('on');
+  clearInterval(explorePoll);
+  pollExplore(); pollShips();
+  explorePoll = setInterval(pollExplore, 5000);
+}
+function stopExplore() {
+  exploring = null; clearInterval(explorePoll); clearExplorePlanes(); showExploreBar(null);
+  fetch('/api/ships?explore=off').catch(() => {});
+}
+function clearExplorePlanes() { exploreLayer.clearLayers(); exploreMarkers.clear(); explorePlanes = []; }
+map.on('moveend', () => { clearTimeout(exploreTimer); exploreTimer = setTimeout(checkExplore, 700); });
+
+async function pollExplore() {
+  const ex = exploring;
+  if (!ex) return;
+  let data;
+  try { data = await fetch(`/api/area?lat=${ex.lat.toFixed(4)}&lon=${ex.lon.toFixed(4)}&nm=${ex.nm}`).then(r => r.json()); } catch (e) { return; }
+  if (exploring !== ex) return; // moved on while this was loading
+  const seen = new Set();
+  explorePlanes = (data.aircraft || []).filter(r => r.lat != null && r.lon != null).map(normalize).filter(a => {
+    const t = tracks.get(a.hex); // already on the map from the home feed
+    return !(t && t.marker && planeLayer.hasLayer(t.marker));
+  });
+  for (const a of explorePlanes) {
+    a.dist = distMi(home, [a.lat, a.lon]); a.brg = bearing(home, [a.lat, a.lon]);
+    seen.add(a.hex);
+    let m = exploreMarkers.get(a.hex);
+    if (!m) {
+      m = L.marker([a.lat, a.lon], { icon: planeIcon(a, true) })
+        .bindTooltip(() => planeTip(explorePlanes.find(x => x.hex === a.hex) || a), { className: 'plane-tip', direction: 'top', offset: [0, -14], opacity: 1 })
+        .bindPopup(() => explorePopup(explorePlanes.find(x => x.hex === a.hex) || a), { className: 'ship-pop', maxWidth: 260 })
+        .addTo(exploreLayer);
+      m.on('tooltipopen popupopen', () => {
+        const cur = explorePlanes.find(x => x.hex === a.hex) || a;
+        requestLookup(a.hex, cur);
+        // refresh the open card once the photo and route arrive
+        const t = setInterval(() => {
+          if (lookups.get(a.hex) === 'pending') return;
+          clearInterval(t);
+          if (m.isTooltipOpen()) m.setTooltipContent(planeTip(cur));
+          if (m.isPopupOpen()) m.setPopupContent(explorePopup(cur));
+        }, 500);
+        setTimeout(() => clearInterval(t), 15000);
+      });
+      exploreMarkers.set(a.hex, m);
+    } else m.setLatLng([a.lat, a.lon]).setIcon(planeIcon(a, true));
+  }
+  for (const [hex, m] of exploreMarkers) if (!seen.has(hex)) { exploreLayer.removeLayer(m); exploreMarkers.delete(hex); }
+  showExploreBar('on');
+}
+// click card for an explored plane: the hover card plus links (its full popup needs the home feed's history)
+function explorePopup(a) {
+  const cs = (a.flight || '').trim();
+  return planeTip(a).replace('<div class="pt-f">Click for full details</div>',
+    `<div class="pt-f">${cs ? `<a href="https://www.flightaware.com/live/flight/${encodeURIComponent(cs)}" target="_blank" rel="noopener">FlightAware ↗</a> · ` : ''}<a href="https://globe.adsbexchange.com/?icao=${a.hex}" target="_blank" rel="noopener">ADS-B Exchange ↗</a></div>`);
+}
+
 pollShips(); setInterval(pollShips, 10000);
 
 // ---------- demo traffic (?demo in the URL: simulated planes for previewing) ----------

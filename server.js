@@ -279,6 +279,30 @@ setInterval(() => {
   refreshAircraft().catch(() => {}).finally(() => { refreshing = false; });
 }, 2000);
 
+// ---------- exploring: live aircraft and ships wherever the map is scrolled to ----------
+// The home feed above only covers ~46 miles around home. When the page is looking somewhere else, it asks
+// /api/area for the planes there (and adds that area to the ship subscription). These never feed the
+// daily log or the overhead alerts.
+let areaCache = null, areaLast = 0;
+async function areaAircraft(lat, lon, nm) {
+  const key = `${lat.toFixed(1)},${lon.toFixed(1)},${nm}`;
+  if (areaCache && areaCache.key === key && Date.now() - areaCache.at < 5000) return areaCache.data;
+  // adsb.fi allows one request a second: the home feed uses one every 5 s, exploring at most one every 3 s
+  const wait = 3000 - (Date.now() - areaLast);
+  if (wait > 0) {
+    if (areaCache && areaCache.key === key) return areaCache.data;
+    await new Promise(r => setTimeout(r, wait));
+  }
+  areaLast = Date.now();
+  const r = await get(`https://opendata.adsb.fi/api/v2/lat/${lat.toFixed(4)}/lon/${lon.toFixed(4)}/dist/${nm}`, 10000);
+  if (r.status === 429) throw new Error('Public data rate limit hit - retrying shortly');
+  if (r.status !== 200) throw new Error(`Public data unavailable (HTTP ${r.status})`);
+  const j = JSON.parse(r.body);
+  const data = { now: j.now, aircraft: j.aircraft || j.ac || [], attribution: { name: PUBLIC_NAME, link: PUBLIC_LINK } };
+  areaCache = { key, at: Date.now(), data };
+  return data;
+}
+
 // ---------- daily log: every aircraft heard today, kept in daily-log.json next to the app ----------
 const LOG_FILE = path.join(APP_DIR, 'daily-log.json');
 const SETTINGS_FILE = path.join(APP_DIR, 'settings.json');
@@ -537,7 +561,25 @@ const server = http.createServer(async (req, res) => {
       const name = (url.searchParams.get('name') || '').trim();
       return send(res, 200, JSON.stringify(/^[A-Za-z0-9 .'&-]{2,60}$/.test(name) ? await shipWiki(name) : null));
     }
+    if (url.pathname === '/api/area') {
+      const n = k => Number(url.searchParams.get(k));
+      const lat = n('lat'), lon = n('lon'), nm = Math.round(Math.min(250, Math.max(10, n('nm') || 40)));
+      if (!(Math.abs(lat) <= 90 && Math.abs(lon) <= 180)) return send(res, 400, '{"error":"bad position"}');
+      return send(res, 200, JSON.stringify(await areaAircraft(lat, lon, nm)));
+    }
     if (url.pathname === '/api/ships') {
+      // ?explore=south,west,north,east adds the area being looked at; ?explore=off stops it
+      const ex = url.searchParams.get('explore');
+      if (ex === 'off') setAisExplore(null);
+      else if (ex) {
+        const [s0, w0, n0, e0] = ex.split(',').map(Number);
+        if ([s0, w0, n0, e0].every(isFinite) && n0 > s0 && e0 > w0) {
+          // at most about 4 x 6 degrees, around the middle of what was asked for
+          const cy = (s0 + n0) / 2, cx = (w0 + e0) / 2, hy = Math.min(2, (n0 - s0) / 2), hx = Math.min(3, (e0 - w0) / 2);
+          const r4 = v => +v.toFixed(2);
+          setAisExplore([[r4(Math.min(90, cy + hy)), r4(cx - hx)], [r4(Math.max(-90, cy - hy)), r4(cx + hx)]]);
+        }
+      }
       return send(res, 200, JSON.stringify({ keySet: !!aisKey(), status: ais.status, error: ais.error,
         ships: [...ships.values()].filter(x => x.lat != null) }));
     }
@@ -657,7 +699,7 @@ function aisConnect() {
   const opened = Date.now();
   let confirmed = false;
   // the subscription must arrive within 3 seconds of connecting
-  ws.onopen = () => ws.send(JSON.stringify({ APIKey: key, BoundingBoxes: [box], FilterMessageTypes: ['PositionReport', 'StandardClassBPositionReport', 'ShipStaticData'] }));
+  ws.onopen = () => { aisSubSent = Date.now(); ws.send(aisSubscription()); };
   ws.onmessage = e => {
     let m;
     try { m = JSON.parse(typeof e.data === 'string' ? e.data : Buffer.from(e.data).toString('utf8')); } catch (err) { return; }
@@ -680,6 +722,28 @@ function aisConnect() {
 }
 // reconnect when the key or home changes (the subscription covers the area around home)
 const aisRefresh = () => { if (ais.sub !== aisKey() + '|' + JSON.stringify(aisBox())) { ais.tries = 0; ships.clear(); aisConnect(); } };
+// While someone is exploring, the area they're looking at is added to the subscription (alongside home).
+// AISStream replaces the subscription when it's sent again, at most once a second.
+let aisExplore = null; // { box, until }
+let aisSubTimer = null, aisSubSent = 0;
+const aisSubscription = () => JSON.stringify({ APIKey: aisKey(), BoundingBoxes: [aisBox(), ...(aisExplore ? [aisExplore.box] : [])],
+  FilterMessageTypes: ['PositionReport', 'StandardClassBPositionReport', 'ShipStaticData'] });
+function aisResubscribe() {
+  clearTimeout(aisSubTimer);
+  const ws = ais.ws;
+  if (!ws || ws.readyState !== 1) return; // not open yet: it sends the current subscription when it opens
+  const wait = 1500 - (Date.now() - aisSubSent);
+  if (wait > 0) { aisSubTimer = setTimeout(aisResubscribe, wait); return; }
+  aisSubSent = Date.now();
+  ws.send(aisSubscription());
+}
+function setAisExplore(box) {
+  const same = JSON.stringify(box) === JSON.stringify(aisExplore?.box);
+  aisExplore = box ? { box, until: Date.now() + 120000 } : null;
+  if (!same) aisResubscribe();
+}
+// stop watching an explored area 2 minutes after the page stops asking for it
+setInterval(() => { if (aisExplore && Date.now() > aisExplore.until) setAisExplore(null); }, 30000);
 // a connection that has gone silent for 10 minutes is replaced
 setInterval(() => { if (ais.status === 'live' && Date.now() - ais.lastMsg > 600000) aisConnect(); }, 60000);
 // forget ships not heard from for 30 minutes
