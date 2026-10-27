@@ -689,7 +689,7 @@ const server = http.createServer(async (req, res) => {
       findShip(mmsi, (url.searchParams.get('name') || '').slice(0, 60));
       const sh = ships.get(mmsi);
       return send(res, 200, JSON.stringify(sh && sh.lat != null ? { status: 'found', ship: sh }
-        : { status: 'searching', seconds: Math.round((Date.now() - finder.started) / 1000), connected: !!finder.ws && finder.ws.readyState === 1 }));
+        : { status: 'searching', seconds: Math.round((Date.now() - finder.started) / 1000), connected: !!finder.ws && finder.ws.readyState === 1, confirmed: finder.confirmed, heard: finder.heard }));
     }
     if (url.pathname === '/api/places') {
       const q = (url.searchParams.get('q') || '').trim().slice(0, 120);
@@ -886,7 +886,7 @@ async function shipIds(name) {
   return out;
 }
 
-const finder = { ws: null, mmsi: null, name: '', started: 0, timer: null };
+const finder = { ws: null, mmsi: null, name: '', started: 0, timer: null, heard: 0, confirmed: false };
 function stopFinder() {
   clearTimeout(finder.timer);
   if (finder.ws) { const w = finder.ws; finder.ws = null; try { w.close(); } catch (e) {} }
@@ -896,7 +896,7 @@ function findShip(mmsi, name) {
   if (finder.mmsi === mmsi && finder.ws) { clearTimeout(finder.timer); finder.timer = setTimeout(stopFinder, 900000); return; }
   stopFinder();
   if (!aisKey() || typeof WebSocket !== 'function') return;
-  Object.assign(finder, { mmsi, name, started: Date.now() });
+  Object.assign(finder, { mmsi, name, started: Date.now(), heard: 0, confirmed: false });
   const ws = finder.ws = new WebSocket('wss://stream.aisstream.io/v0/stream');
   ws.binaryType = 'arraybuffer';
   ws.onopen = () => ws.send(JSON.stringify({ APIKey: aisKey(), BoundingBoxes: [[[-90, -180], [90, 180]]], FiltersShipMMSI: [mmsi],
@@ -904,7 +904,8 @@ function findShip(mmsi, name) {
   ws.onmessage = e => {
     try {
       const m = JSON.parse(typeof e.data === 'string' ? e.data : Buffer.from(e.data).toString('utf8'));
-      if (m.MessageType && m.MessageType !== 'SubscriptionConfirmation') onAisMessage(m); // joins the normal ship list
+      if (m.MessageType === 'SubscriptionConfirmation') finder.confirmed = true;
+      else if (m.MessageType) { finder.heard++; onAisMessage(m); } // joins the normal ship list
     } catch (err) {}
   };
   ws.onerror = () => {};

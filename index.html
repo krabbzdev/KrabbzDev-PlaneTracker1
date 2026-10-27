@@ -2588,6 +2588,10 @@ function openShipCard(mmsi, tries = 0) {
 async function findShipLive(p) {
   const box = $('jumpResults'), me = finding = { mmsi: p.ship, started: Date.now() };
   const vf = `https://www.vesselfinder.com/${p.imo ? 'vessels/details/' + p.imo : '?mmsi=' + p.ship}`;
+  // AISStream only has coastal receivers. These sites also use satellites, so they can see ships out at sea.
+  // (CruiseMapper ship pages have IDs we can't know, so DuckDuckGo's "first result" link lands on the right one.)
+  const cm = `https://duckduckgo.com/?q=${encodeURIComponent('!ducky cruisemapper ' + (p.name || ''))}`;
+  const elsewhere = `Where is it now? <a href="${cm}" target="_blank" rel="noopener">CruiseMapper ↗</a> · <a href="${vf}" target="_blank" rel="noopener">VesselFinder ↗</a>`;
   while (finding === me) {
     let r;
     try { r = await fetch(`/api/findship?mmsi=${p.ship}&name=${encodeURIComponent(p.name || '')}`).then(x => x.json()); } catch (e) { r = null; }
@@ -2605,11 +2609,12 @@ async function findShipLive(p) {
       return;
     }
     const secs = Math.round((Date.now() - me.started) / 1000);
-    if (secs > 240) {
-      box.innerHTML = `<div class="msg">${esc(p.name)} hasn't reported in. It's probably out at sea, beyond the reach of AISStream's coastal receivers. It will show up here when it nears a coast. <a href="${vf}" target="_blank" rel="noopener">Check VesselFinder ↗</a></div>`;
+    if (secs > 180) {
+      box.innerHTML = `<div class="msg"><b>${esc(p.name)}</b> isn't in range of AISStream's coastal receivers right now, so it's probably out at sea. The app keeps listening for 15 minutes and it will appear on the map if it reports in.<br>${elsewhere}</div>`;
       finding = null; return;
     }
-    box.innerHTML = `<div class="msg">🔎 Looking for <b>${esc(p.name)}</b>… ${secs}s<br><small>Ships report every few seconds when moving and every few minutes in port. This finds ships near a coast.</small> <a href="#" id="jumpCancel">Cancel</a></div>`;
+    const waiting = r?.confirmed ? 'Listening worldwide. Waiting for it to report in' : 'Connecting to AISStream';
+    box.innerHTML = `<div class="msg">🔎 Looking for <b>${esc(p.name)}</b>… ${secs}s<br><small>${waiting}. Ships near a coast report within a few minutes; ships at sea can't be seen by AISStream.</small><br>${elsewhere} · <a href="#" id="jumpCancel">Cancel</a></div>`;
     $('jumpCancel').onclick = e => { e.preventDefault(); finding = null; box.innerHTML = ''; };
     await new Promise(res => setTimeout(res, 4000));
   }
