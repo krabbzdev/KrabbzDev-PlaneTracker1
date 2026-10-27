@@ -382,6 +382,8 @@
   .jump-box input:focus { outline: none; border-color: var(--accent); }
   .jump-results { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
   .jump-results:empty { display: none; }
+  .jump-results { max-height: calc(60vh / var(--ui)); overflow-y: auto; }
+  .jump-results button.info { cursor: default; color: var(--muted); }
   .jump-results button { text-align: left; background: rgba(18,26,48,.97); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 7px 9px; font: 12.5px Inter, sans-serif; cursor: pointer; }
   .jump-results button:hover { border-color: var(--accent); }
   .jump-results .msg { background: rgba(18,26,48,.97); border-radius: 8px; padding: 7px 9px; font-size: 12px; color: var(--muted); }
@@ -2487,6 +2489,8 @@ const EXPLORE_MI = 30;     // explore once the middle of the map is this far fro
 const EXPLORE_MAX_NM = 250; // adsb.fi's biggest search circle; zoomed out further than this, ask to zoom in
 const exploreLayer = L.layerGroup().addTo(map);
 const exploreMarkers = new Map(); // hex -> marker
+// trails for explored planes, built up while you watch (the home feed's history only covers home)
+const exploreTrails = new Map(); // hex -> { pts, line }
 let exploring = null, exploreTimer = null, explorePoll = null, explorePlanes = [];
 
 const exploreBar = L.DomUtil.create('div', 'explore-bar', map.getContainer());
@@ -2518,7 +2522,7 @@ function stopExplore() {
   exploring = null; clearInterval(explorePoll); clearExplorePlanes(); showExploreBar(null);
   fetch('/api/ships?explore=off').catch(() => {});
 }
-function clearExplorePlanes() { exploreLayer.clearLayers(); exploreMarkers.clear(); explorePlanes = []; }
+function clearExplorePlanes() { exploreLayer.clearLayers(); exploreMarkers.clear(); exploreTrails.clear(); explorePlanes = []; }
 map.on('moveend', () => { clearTimeout(exploreTimer); exploreTimer = setTimeout(checkExplore, 700); });
 
 async function pollExplore() {
@@ -2555,8 +2559,17 @@ async function pollExplore() {
       });
       exploreMarkers.set(a.hex, m);
     } else m.setLatLng([a.lat, a.lon]).setIcon(planeIcon(a, true));
+    let tr = exploreTrails.get(a.hex);
+    if (!tr) exploreTrails.set(a.hex, tr = { pts: [], line: L.polyline([], { weight: 2, opacity: .55, interactive: false }).addTo(exploreLayer) });
+    const last = tr.pts[tr.pts.length - 1];
+    if (!last || last[0] !== a.lat || last[1] !== a.lon) tr.pts.push([a.lat, a.lon]);
+    if (tr.pts.length > 240) tr.pts.shift();
+    tr.line.setLatLngs(tr.pts).setStyle({ color: altColor(a.alt) });
   }
-  for (const [hex, m] of exploreMarkers) if (!seen.has(hex)) { exploreLayer.removeLayer(m); exploreMarkers.delete(hex); }
+  for (const [hex, m] of exploreMarkers) if (!seen.has(hex)) {
+    exploreLayer.removeLayer(m); exploreMarkers.delete(hex);
+    const tr = exploreTrails.get(hex); if (tr) { exploreLayer.removeLayer(tr.line); exploreTrails.delete(hex); }
+  }
   showExploreBar('on');
 }
 // click card for an explored plane: the hover card plus links (its full popup needs the home feed's history)
@@ -2622,6 +2635,15 @@ async function findShipLive(p) {
 function jumpTo(p) {
   $('jumpResults').innerHTML = '';
   finding = null;
+  if (p.info) return; // just a note in the list
+  if (p.findTitle) { // a ship from a cruise line's fleet list: look it up by its Wikipedia title, then find it
+    $('jumpResults').innerHTML = '<div class="msg">Looking up ' + esc(p.name) + '…</div>';
+    fetch('/api/places?q=' + encodeURIComponent(p.findTitle)).then(r => r.json())
+      .then(g => g[0] && (g[0].ship || g[0].find) ? jumpTo({ ...g[0], name: g[0].name || p.name })
+        : ($('jumpResults').innerHTML = `<div class="msg err">Couldn't find ${esc(p.name)}'s radio ID on Wikipedia.</div>`))
+      .catch(() => ($('jumpResults').innerHTML = '<div class="msg err">Search failed.</div>'));
+    return;
+  }
   if (p.find) return findShipLive(p); // a ship that isn't on the map yet
   if (p.ship) { map.setView([p.lat, p.lon], 12); pollShips().then(() => openShipCard(p.ship)); return; }
   $('jumpIn').blur();
@@ -2643,8 +2665,10 @@ $('jumpIn').closest('form').addEventListener('submit', async e => {
     const g = await r.json();
     if (!r.ok) throw new Error(g.error || 'Search failed');
     if (!g.length) throw new Error('Nothing found. Try a city name, or add the state or country.');
+    if (g.length === 1 && g[0].info) { box.innerHTML = `<div class="msg">${esc(g[0].label)}</div>`; return; }
     if (g.length === 1) return jumpTo(g[0]);
-    box.innerHTML = g.map((p, i) => `<button type="button" data-i="${i}">📍 ${esc(p.label)}</button>`).join('');
+    // ships and airports already start with their own icon
+    box.innerHTML = g.map((p, i) => `<button type="button" data-i="${i}"${p.info ? ' class="info"' : ''}>${/^[🚢✈]/u.test(p.label) ? '' : '📍 '}${esc(p.label)}</button>`).join('');
     box.querySelectorAll('button').forEach(b => b.onclick = () => jumpTo(g[+b.dataset.i]));
   } catch (err) {
     box.innerHTML = `<div class="msg err">${esc(err.message || 'Search failed')}</div>`;

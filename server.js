@@ -511,11 +511,77 @@ async function faStats() {
   return data;
 }
 
+// ---------- cruise brands in Jump to: "MSC", "Carnival", "Royal Caribbean" list that line's ships ----------
+// Ships of the line on the map right now come first; then its fleet from Wikipedia's "Ships of ..." category
+// (only names that fit the line's current naming, and no historic ships with a year in the title).
+const CRUISE_BRANDS = [
+  // [what people type, line, name pattern, Wikipedia category]
+  [/^carnival( cruises?( line)?)?$/i, 'Carnival Cruise Line', /^Carnival /, 'Ships of Carnival Cruise Line'],
+  [/^(royal caribbean( international)?|royal|rccl|rcl|rci)$/i, 'Royal Caribbean', / of the Seas$/, 'Ships of Royal Caribbean International'],
+  [/^(norwegian( cruise( line)?)?|ncl)$/i, 'Norwegian Cruise Line', /^Norwegian /, 'Ships of Norwegian Cruise Line'],
+  [/^msc( cruises?)?$/i, 'MSC Cruises', /^MSC /, 'Ships of MSC Cruises'],
+  [/^celebrity( cruises?)?$/i, 'Celebrity Cruises', /^Celebrity /, 'Ships of Celebrity Cruises'],
+  [/^disney( cruises?( line)?)?$/i, 'Disney Cruise Line', /^Disney /, 'Ships of Disney Cruise Line'],
+  [/^princess( cruises?)?$/i, 'Princess Cruises', / Princess$/, 'Ships of Princess Cruises'],
+  [/^(holland america( line)?|hal)$/i, 'Holland America Line', /^(Nieuw (Amsterdam|Statendam)|Koningsdam|Rotterdam|Zuiderdam|Oosterdam|Westerdam|Noordam|Eurodam|Volendam|Zaandam)$/, 'Ships of the Holland America Line'],
+  [/^virgin( voyages)?$/i, 'Virgin Voyages', /^(Scarlet|Valiant|Resilient|Brilliant) Lady$/, 'Virgin Voyages'],
+  [/^cunard( line)?$/i, 'Cunard', /^Queen (Mary 2|Anne|Victoria|Elizabeth)$/, 'Ships of the Cunard Line'],
+  [/^azamara( cruises)?$/i, 'Azamara', /^Azamara /, 'Ships of Azamara Cruises'],
+  [/^costa( cruises)?$/i, 'Costa Cruises', /^Costa /, 'Ships of Costa Cruises'],
+  [/^aida( cruises)?$/i, 'AIDA Cruises', /^AIDA/, 'Ships of AIDA Cruises'],
+  [/^seabourn( cruise line)?$/i, 'Seabourn', /^Seabourn /, 'Ships of Seabourn Cruise Line'],
+  [/^viking( ocean)?( cruises)?$/i, 'Viking', /^Viking /, null],
+  [/^oceania( cruises)?$/i, 'Oceania Cruises', /^(Marina|Riviera|Insignia|Sirena|Regatta|Nautica|Vista|Allura)$/, null],
+  [/^(regent( seven seas)?( cruises)?|rssc)$/i, 'Regent Seven Seas Cruises', /^Seven Seas /, null],
+  [/^silversea( cruises)?$/i, 'Silversea', /^Silver /, null],
+  [/^margaritaville( at sea)?$/i, 'Margaritaville at Sea', /^Margaritaville/, null],
+  [/^explora( journeys)?$/i, 'Explora Journeys', /^Explora /, null],
+];
+const cleanShipTitle = t => t.replace(/^(MS|MV|SS|RMS|GTS|MSC|MTS)\s+(?=\S)/, m => m.trim() === 'MSC' ? m : '').replace(/\s*\(ship\)$/i, '').trim();
+const fleetCache = new Map();
+async function cruiseFleet(category, pattern) {
+  if (!category) return [];
+  const c = fleetCache.get(category);
+  if (c && Date.now() - c.at < 86400000) return c.list;
+  const r = await get('https://en.wikipedia.org/w/api.php?action=query&list=categorymembers&cmtype=page&cmlimit=200&format=json&cmtitle='
+    + encodeURIComponent('Category:' + category), 10000);
+  if (r.status !== 200) return c ? c.list : [];
+  const seen = new Set(), list = [];
+  for (const { title } of JSON.parse(r.body).query?.categorymembers || []) {
+    if (/\(\d{4}\)/.test(title) || /^(Template|List) /i.test(title)) continue; // historic ships and lists
+    const name = cleanShipTitle(title);
+    if (!pattern.test(name) || seen.has(name.toUpperCase())) continue;
+    seen.add(name.toUpperCase());
+    list.push({ name, title });
+  }
+  list.sort((a, b) => a.name.localeCompare(b.name));
+  fleetCache.set(category, { at: Date.now(), list });
+  return list;
+}
+async function brandSearch(q) {
+  const brand = CRUISE_BRANDS.find(([re]) => re.test(q.trim()));
+  if (!brand) return null;
+  const [, line, pattern, category] = brand, out = [];
+  const titleCase = s => s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase()).replace(/\bMsc\b/, 'MSC').replace(/\bAida/, 'AIDA');
+  const live = [...ships.values()].filter(s => s.lat != null && s.name && (!s.type || (s.type >= 60 && s.type <= 69)) && pattern.test(titleCase(s.name)));
+  for (const s of live) out.push({ ship: s.mmsi, lat: s.lat, lon: s.lon, zoom: 12, label: `🚢 ${titleCase(s.name)} · live now` });
+  try {
+    const liveNames = new Set(live.map(s => s.name.toUpperCase()));
+    for (const f of await cruiseFleet(category, pattern)) {
+      if (!liveNames.has(f.name.toUpperCase())) out.push({ findTitle: f.title, name: f.name, label: `🚢 ${f.name} · find it` });
+    }
+  } catch (e) {}
+  if (!out.length) out.push({ info: true, label: `No ${line} ships on the map right now. Type a ship's full name, like "${line === 'Viking' ? 'Viking Star' : line.split(' ')[0] + ' ...'}"` });
+  return out;
+}
+
 // ---------- Jump to: find any place in the world for the map's search box ----------
 // A 3-4 letter airport code ("MIA", "KJFK", "NAS") goes straight to the airport (OurAirports list); anything else
 // is a worldwide OpenStreetMap search ("Miami", "NYC", "Nassau, Bahamas"). Only runs when someone searches.
 async function placeSearch(q) {
   const out = [], code = q.trim().toUpperCase();
+  const brand = await brandSearch(q); // a cruise line name lists its ships
+  if (brand) return brand;
   // ships: one already on the map whose name matches, else a ship Wikipedia knows by that exact name (Cruise Finder)
   if (code.length >= 4) {
     for (const sh of ships.values()) {
