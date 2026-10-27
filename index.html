@@ -191,14 +191,14 @@
   .leaflet-tooltip.plane-tip { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 0; box-shadow: 0 6px 24px rgba(0,0,0,.6); width: 240px; white-space: normal; overflow: hidden; }
   .leaflet-tooltip.plane-tip::before { display: none; }
   .plane-tip img.ph { display: block; width: 100%; height: 120px; object-fit: cover; }
-  .plane-tip .pt { padding: 8px 10px 10px; font-size: 12px; line-height: 1.45; }
-  .plane-tip .pt-h { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-  .plane-tip .pt-h img { width: 26px; height: 26px; padding: 1px; border-radius: 5px; background: #fff; object-fit: contain; }
-  .plane-tip .pt-h b { font: 700 14px var(--mono); }
-  .plane-tip .pt-h small { display: block; color: var(--muted); font-size: 11px; }
-  .plane-tip .pt-g { display: grid; grid-template-columns: auto 1fr; gap: 1px 10px; }
-  .plane-tip .pt-g span:nth-child(odd) { color: var(--muted); }
-  .plane-tip .pt-f { margin-top: 6px; color: var(--muted); font-size: 11px; }
+  .plane-tip .pt , .ship-pop .pt { padding: 8px 10px 10px; font-size: 12px; line-height: 1.45; }
+  .plane-tip .pt-h , .ship-pop .pt-h { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .plane-tip .pt-h img , .ship-pop .pt-h img { width: 26px; height: 26px; padding: 1px; border-radius: 5px; background: #fff; object-fit: contain; }
+  .plane-tip .pt-h b , .ship-pop .pt-h b { font: 700 14px var(--mono); }
+  .plane-tip .pt-h small , .ship-pop .pt-h small { display: block; color: var(--muted); font-size: 11px; }
+  .plane-tip .pt-g , .ship-pop .pt-g { display: grid; grid-template-columns: auto 1fr; gap: 1px 10px; }
+  .plane-tip .pt-g span:nth-child(odd) , .ship-pop .pt-g span:nth-child(odd) { color: var(--muted); }
+  .plane-tip .pt-f , .ship-pop .pt-f { margin-top: 6px; color: var(--muted); font-size: 11px; }
   .plane .halo { position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--hc); box-shadow: 0 0 10px var(--hc); animation: halo 1.6s ease-in-out infinite; }
   @keyframes halo { 50% { opacity: .35; transform: scale(1.15); } }
   .badges { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
@@ -364,7 +364,8 @@
   .ship-pop .leaflet-popup-content { margin: 0; width: 240px !important; }
   .ship-pop .leaflet-popup-tip { background: var(--panel); }
   .ship-pop a { color: var(--accent); }
-  .ship-pop .pt, #ships .pt { padding: 8px 10px 10px; font-size: 12px; line-height: 1.45; }
+  #ships .pt { padding: 8px 10px 10px; font-size: 12px; line-height: 1.45; }
+  .ship-pop .leaflet-popup-content { max-height: calc(70vh / var(--ui)); overflow-y: auto; }
   #ships .ship-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
   #ships .ship-row:first-of-type { margin-top: 8px; }
   #ships .ship-row:hover b { color: var(--accent); }
@@ -372,6 +373,12 @@
   #ships .ship-row small { color: var(--muted); font-size: 11px; }
   #ships .ship-row > span { font: 12px var(--mono); color: var(--muted); white-space: nowrap; }
   .err-note { color: #ffb547 !important; }
+  .ship .ship-logo { position: absolute; left: -26px; top: 7px; width: 22px; height: 22px; padding: 1px; border-radius: 5px; background: #fff; object-fit: contain; box-shadow: 0 1px 3px rgba(0,0,0,.7); }
+  .ship-logo-lg { width: 30px; height: 30px; padding: 2px; border-radius: 6px; background: #fff; object-fit: contain; flex: none; }
+  .ship-logo-sm { width: 24px; height: 24px; padding: 2px; border-radius: 5px; background: #fff; object-fit: contain; flex: none; }
+  .ship-pop img.ph { display: block; width: 100%; height: 130px; object-fit: cover; border-radius: 10px 10px 0 0; }
+  .ship-about { margin: 8px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+  .ship-about a { color: var(--accent); }
   /* Share to Facebook */
   .fb-share { display: inline-flex; align-items: center; gap: 6px; font: 600 12px Inter, sans-serif; color: #fff; background: #1877f2; border: 1px solid #1877f2; border-radius: 999px; padding: 2px 10px 2px 8px; cursor: pointer; line-height: 1.4; }
   .fb-share b { font: 800 13px Arial, sans-serif; }
@@ -2276,9 +2283,65 @@ let shipsOn = load('skyShips', true);
 $('shipsOn').checked = shipsOn;
 $('shipsOn').addEventListener('change', e => { shipsOn = e.target.checked; save('skyShips', shipsOn); drawShips(); });
 
-const CRUISE_LINES = /CARNIVAL|ROYAL CARIBBEAN|^(ALLURE|ANTHEM|ODYSSEY|OASIS|HARMONY|SYMPHONY|WONDER|ICON|UTOPIA|STAR|FREEDOM|LIBERTY|INDEPENDENCE|NAVIGATOR|MARINER|VOYAGER|EXPLORER|ADVENTURE|BRILLIANCE|JEWEL|RADIANCE|SERENADE|VISION|ENCHANTMENT|GRANDEUR|RHAPSODY|SPECTRUM|QUANTUM|OVATION) OF THE|CELEBRITY|NORWEGIAN|^NCL|^MSC |DISNEY|PRINCESS|HOLLAND|^(NIEUW|KONINGSDAM|ROTTERDAM|ZUIDERDAM|OOSTERDAM|WESTERDAM|NOORDAM|EURODAM|VOLENDAM|ZAANDAM)\b|VIKING|SEABOURN|SILVER |REGENT|SEVEN SEAS|OCEANIA|CUNARD|QUEEN (MARY|ANNE|VICTORIA|ELIZABETH)|AZAMARA|MARGARITAVILLE|VALIANT LADY|SCARLET LADY|RESILIENT LADY|BRILLIANT LADY|EXPLORA|COSTA |AIDA/i;
+// Cruise lines, recognised by ship name. The logo is the line's website icon (via Google's favicon service);
+// logos are trademarks of their cruise lines.
+// [name pattern, line, website for the logo, strict]. Strict = names other ships share too (MSC also runs cargo ships,
+// 'Vista' and 'Marina' are common boat names), so they only count once the ship reports it's a passenger ship.
+const CRUISE_LINE_LIST = [
+  [/^CARNIVAL /, 'Carnival Cruise Line', 'carnival.com'],
+  [/ OF THE SEAS$|^ROYAL CARIBBEAN/, 'Royal Caribbean', 'royalcaribbean.com'],
+  [/^CELEBRITY /, 'Celebrity Cruises', 'celebritycruises.com'],
+  [/^NORWEGIAN |^NCL /, 'Norwegian Cruise Line', 'ncl.com'],
+  [/^MSC /, 'MSC Cruises', 'msccruises.com', true],
+  [/^DISNEY /, 'Disney Cruise Line', 'disneycruise.disney.go.com'],
+  [/ PRINCESS$/, 'Princess Cruises', 'princess.com', true],
+  [/^(NIEUW (AMSTERDAM|STATENDAM)|KONINGSDAM|ROTTERDAM|ZUIDERDAM|OOSTERDAM|WESTERDAM|NOORDAM|EURODAM|VOLENDAM|ZAANDAM)$/, 'Holland America Line', 'hollandamerica.com', true],
+  [/^VIKING /, 'Viking', 'viking.com', true],
+  [/^MARGARITAVILLE/, 'Margaritaville at Sea', 'margaritavilleatsea.com'],
+  [/^(SCARLET|VALIANT|RESILIENT|BRILLIANT) LADY$/, 'Virgin Voyages', 'virginvoyages.com', true],
+  [/^(MARINA|RIVIERA|INSIGNIA|SIRENA|REGATTA|NAUTICA|VISTA|ALLURA)$/, 'Oceania Cruises', 'oceaniacruises.com', true],
+  [/^SEVEN SEAS /, 'Regent Seven Seas Cruises', 'rssc.com', true],
+  [/^SILVER /, 'Silversea', 'silversea.com', true],
+  [/^SEABOURN /, 'Seabourn', 'seabourn.com', true],
+  [/^QUEEN (MARY 2|ANNE|VICTORIA|ELIZABETH)$/, 'Cunard', 'cunard.com', true],
+  [/^AZAMARA /, 'Azamara', 'azamara.com', true],
+  [/^COSTA /, 'Costa Cruises', '', true],
+  [/^AIDA/, 'AIDA Cruises', 'aida.de', true],
+  [/^EXPLORA /, 'Explora Journeys', 'explorajourneys.com', true],
+];
+const cruiseLine = s => {
+  if (s.type && !(s.type >= 60 && s.type <= 69)) return null; // only passenger ships (or ones that haven't said yet)
+  const n = (s.name || '').toUpperCase().trim();
+  const hit = CRUISE_LINE_LIST.find(([re, , , strict]) => re.test(n) && (!strict || (s.type >= 60 && s.type <= 69)));
+  return hit ? { name: hit[1], logo: hit[2] ? `https://www.google.com/s2/favicons?domain=${hit[2]}&sz=64` : '' } : null;
+};
 const isPassenger = s => s.type >= 60 && s.type <= 69;
-const isCruise = s => (isPassenger(s) && (s.length || 0) >= 150) || ((!s.type || isPassenger(s)) && CRUISE_LINES.test(s.name || ''));
+const isCruise = s => !!cruiseLine(s) || (isPassenger(s) && (s.length || 0) >= 150);
+
+// The first 3 digits of a ship's radio ID (MMSI) say which country it's registered in
+const SHIP_FLAGS = {
+  '308': 'Bahamas', '309': 'Bahamas', '311': 'Bahamas', '310': 'Bermuda', '215': 'Malta', '229': 'Malta', '248': 'Malta', '249': 'Malta', '256': 'Malta',
+  '351': 'Panama', '352': 'Panama', '353': 'Panama', '354': 'Panama', '355': 'Panama', '356': 'Panama', '357': 'Panama', '370': 'Panama', '371': 'Panama', '372': 'Panama', '373': 'Panama',
+  '636': 'Liberia', '637': 'Liberia', '538': 'Marshall Islands', '338': 'United States', '366': 'United States', '367': 'United States', '368': 'United States', '369': 'United States',
+  '316': 'Canada', '345': 'Mexico', '232': 'United Kingdom', '233': 'United Kingdom', '234': 'United Kingdom', '235': 'United Kingdom', '247': 'Italy', '244': 'Netherlands', '245': 'Netherlands',
+  '246': 'Netherlands', '257': 'Norway', '258': 'Norway', '259': 'Norway', '211': 'Germany', '218': 'Germany', '226': 'France', '227': 'France', '228': 'France', '224': 'Spain', '225': 'Spain',
+  '219': 'Denmark', '220': 'Denmark', '230': 'Finland', '265': 'Sweden', '266': 'Sweden', '237': 'Greece', '239': 'Greece', '240': 'Greece', '241': 'Greece', '212': 'Cyprus', '209': 'Cyprus',
+  '210': 'Cyprus', '477': 'Hong Kong', '563': 'Singapore', '564': 'Singapore', '565': 'Singapore', '566': 'Singapore', '413': 'China', '414': 'China', '431': 'Japan', '432': 'Japan',
+  '440': 'South Korea', '441': 'South Korea', '503': 'Australia', '376': 'St Vincent and the Grenadines', '377': 'St Vincent and the Grenadines', '325': 'Jamaica', '319': 'Cayman Islands',
+  '339': 'Jamaica', '305': 'Antigua and Barbuda', '304': 'Antigua and Barbuda', '378': 'British Virgin Islands', '306': 'Curaçao', '307': 'Aruba', '255': 'Portugal (Madeira)', '263': 'Portugal',
+};
+const shipFlag = s => SHIP_FLAGS[String(s.mmsi).slice(0, 3)] || '';
+
+// Wikipedia photo + summary for named cruise ships (fetched by the app's server, remembered)
+const shipInfo = new Map(); // name -> 'pending' | {title, extract, thumb, url} | null
+function requestShipInfo(s, then) {
+  const name = s.name;
+  if (!name || shipInfo.has(name)) return;
+  shipInfo.set(name, 'pending');
+  fetch('/api/shipinfo?name=' + encodeURIComponent(name)).then(r => r.json()).catch(() => null)
+    .then(info => { shipInfo.set(name, info); then && then(); });
+}
+const shipLogoImg = (line, cls) => line?.logo ? `<img class="${cls}" src="${line.logo}" alt="" onerror="this.remove()">` : '';
 const SHIP_KIND = [ // [from, to, label, colour] by AIS ship type code
   [60, 69, 'Passenger ship', '#9be15d'], [70, 79, 'Cargo ship', '#8aa1c4'], [80, 89, 'Tanker', '#e08a8a'],
   [30, 30, 'Fishing boat', '#5fd3c6'], [31, 32, 'Towing', '#ffb547'], [52, 52, 'Tug', '#ffb547'], [50, 50, 'Pilot boat', '#ffb547'],
@@ -2303,14 +2366,22 @@ function shipEta(s) {
   return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 const shipUrl = s => s.imo ? `https://www.vesselfinder.com/vessels/details/${s.imo}` : `https://www.vesselfinder.com/?mmsi=${s.mmsi}`;
+// Everything we know about a ship. Cruise ships also get their line's logo and a Wikipedia photo and summary.
 function shipCard(s, withLinks) {
-  const [kind] = shipKind(s), eta = shipEta(s);
+  const [kind] = shipKind(s), eta = shipEta(s), line = isCruise(s) ? cruiseLine(s) : null;
   const size = s.length ? `${s.length} m long${s.beam ? ` · ${s.beam} m wide` : ''} (${Math.round(s.length * 3.281)} ft)` : '';
   const dist = home ? `${distMi(home, [s.lat, s.lon]).toFixed(1)} mi ${compass(bearing(home, [s.lat, s.lon]))} of home` : '';
+  const course = s.cog != null && (s.sog || 0) >= 0.5 ? `${Math.round(s.cog)}° ${compass(s.cog)}` : '';
   const row = (k, v) => v ? `<span>${k}</span><span>${esc(v)}</span>` : '';
-  return `<div class="pt"><div class="pt-h"><div><b>🚢 ${esc(s.name || 'Unnamed ship')}</b><small>${esc(kind)}</small></div></div>
-    <div class="pt-g">${row('Status', shipStatus(s))}${row('Heading to', s.destination)}${row('Arrives', eta)}${row('Size', size)}${row('Distance', dist)}</div>
-    ${withLinks ? `<div class="pt-f"><a href="${shipUrl(s)}" target="_blank" rel="noopener">VesselFinder ↗</a> · <a href="https://www.marinetraffic.com/en/ais/details/ships/mmsi:${s.mmsi}" target="_blank" rel="noopener">MarineTraffic ↗</a></div>` : '<div class="pt-f">Click for links</div>'}</div>`;
+  const info = isCruise(s) ? shipInfo.get(s.name) : null;
+  const wiki = info && info !== 'pending' ? info : null;
+  return `${wiki?.thumb ? `<img class="ph" src="${esc(wiki.thumb)}" alt="">` : ''}<div class="pt">
+    <div class="pt-h">${shipLogoImg(line, 'ship-logo-lg')}<div><b>🚢 ${esc(s.name || 'Unnamed ship')}</b><small>${esc(line ? line.name : kind)}</small></div></div>
+    <div class="pt-g">${row('Status', shipStatus(s))}${row('Course', course)}${row('Heading to', s.destination)}${row('Arrives', eta)}${row('Distance', dist)}
+      ${row('Type', line ? 'Cruise ship' : '')}${row('Size', size)}${row('Draught', s.draught ? `${s.draught} m (${Math.round(s.draught * 3.281)} ft)` : '')}${row('Flag', shipFlag(s))}
+      ${withLinks ? row('IMO', s.imo ? String(s.imo) : '') + row('Call sign', s.callsign) + row('MMSI', s.mmsi) : ''}</div>
+    ${wiki?.extract ? `<p class="ship-about">${esc(wiki.extract)}${withLinks && wiki.url ? ` <a href="${esc(wiki.url)}" target="_blank" rel="noopener">Wikipedia ↗</a>` : ''}</p>` : info === 'pending' ? '<p class="ship-about">Looking up this ship…</p>' : ''}
+    ${withLinks ? `<div class="pt-f"><a href="${shipUrl(s)}" target="_blank" rel="noopener">VesselFinder ↗</a> · <a href="https://www.marinetraffic.com/en/ais/details/ships/mmsi:${s.mmsi}" target="_blank" rel="noopener">MarineTraffic ↗</a></div>` : '<div class="pt-f">Click for more details and links</div>'}</div>`;
 }
 // top-down hull, bow pointing up; cruise ships get white decks
 function shipSvg(s) {
@@ -2325,7 +2396,8 @@ function shipSvg(s) {
 function shipIcon(s) {
   const cruise = isCruise(s), size = cruise ? 34 : (s.length || 0) >= 100 ? 22 : 16;
   const label = cruise ? `<span class="ship-tag">${esc(s.name || 'Cruise ship')}</span>` : '';
-  return L.divIcon({ className: 'ship' + (cruise ? ' cruise' : ''), html: shipSvg(s) + label, iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
+  const logo = cruise ? shipLogoImg(cruiseLine(s), 'ship-logo') : '';
+  return L.divIcon({ className: 'ship' + (cruise ? ' cruise' : ''), html: logo + shipSvg(s) + label, iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
 }
 function drawShips() {
   const list = shipsOn ? shipData.ships : [];
@@ -2338,6 +2410,17 @@ function drawShips() {
         .bindTooltip(() => shipCard(shipData.ships.find(x => x.mmsi === s.mmsi) || s, false), { className: 'plane-tip', direction: 'top', offset: [0, -12], opacity: 1 })
         .bindPopup(() => shipCard(shipData.ships.find(x => x.mmsi === s.mmsi) || s, true), { className: 'ship-pop', maxWidth: 260 })
         .addTo(shipLayer);
+      // cruise ships: look up the Wikipedia photo and summary on first hover or click, then refresh the open card
+      const lookUp = () => {
+        const cur = shipData.ships.find(x => x.mmsi === s.mmsi) || s;
+        if (!isCruise(cur)) return;
+        requestShipInfo(cur, () => {
+          if (m.isPopupOpen()) m.setPopupContent(shipCard(cur, true));
+          if (m.isTooltipOpen()) m.setTooltipContent(shipCard(cur, false));
+          renderShipPanel();
+        });
+      };
+      m.on('tooltipopen popupopen', lookUp);
       shipMarkers.set(s.mmsi, m);
     } else m.setLatLng([s.lat, s.lon]).setIcon(shipIcon(s));
     m.setZIndexOffset(isCruise(s) ? 300 : 0);
@@ -2360,7 +2443,7 @@ function renderShipPanel() {
   $('shipsSum').textContent = cruise.length ? `${cruise.length} cruise ship${cruise.length > 1 ? 's' : ''}` : shipData.status === 'live' ? 'none nearby' : shipData.status;
   const others = shipData.ships.length - cruise.length;
   body.innerHTML = (cruise.length ? cruise.map(s => `<div class="ship-row" data-mmsi="${s.mmsi}">
-      <div><b>🚢 ${esc(s.name || 'Cruise ship')}</b><small>${esc(shipStatus(s))}${s.destination ? ` · to ${esc(s.destination)}` : ''}</small></div>
+      ${shipLogoImg(cruiseLine(s), 'ship-logo-sm')}<div style="flex:1;min-width:0"><b>${esc(s.name || 'Cruise ship')}</b><small>${esc(cruiseLine(s)?.name || 'Cruise ship')} · ${esc(shipStatus(s))}${s.destination ? ` · to ${esc(s.destination)}` : ''}</small></div>
       <span>${home ? near(s).toFixed(1) + ' mi ' + compass(bearing(home, [s.lat, s.lon])) : ''}</span></div>`).join('')
     : `<p class="fa-note" style="margin-top:10px">${shipData.status === 'live' ? 'No cruise ships within about 40 miles right now.' : 'Connecting to AISStream…'}</p>`)
     + `<div class="fa-note">${others > 0 ? `${others} other ship${others > 1 ? 's' : ''} and boats on the map${shipsOn ? '' : ' (tick 🚢 Show Ships)'}. ` : ''}Ship data: AISStream.io</div>`;

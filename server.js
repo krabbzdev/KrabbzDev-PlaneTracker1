@@ -533,6 +533,10 @@ const server = http.createServer(async (req, res) => {
       if (!latest || Date.now() - latest.at > 5000) await refreshAircraft();
       return send(res, 200, latest.body);
     }
+    if (url.pathname === '/api/shipinfo') {
+      const name = (url.searchParams.get('name') || '').trim();
+      return send(res, 200, JSON.stringify(/^[A-Za-z0-9 .'&-]{2,60}$/.test(name) ? await shipWiki(name) : null));
+    }
     if (url.pathname === '/api/ships') {
       return send(res, 200, JSON.stringify({ keySet: !!aisKey(), status: ais.status, error: ais.error,
         ships: [...ships.values()].filter(x => x.lat != null) }));
@@ -681,6 +685,27 @@ setInterval(() => { if (ais.status === 'live' && Date.now() - ais.lastMsg > 6000
 // forget ships not heard from for 30 minutes
 setInterval(() => { const cut = Date.now() - 1800000; for (const [k, s] of ships) if ((s.seen || s.static || 0) < cut) ships.delete(k); }, 60000);
 
+// Wikipedia photo and summary for a named ship (used for cruise ships in the ship card). Only an article whose title
+// is the ship's name counts ("Carnival Paradise", "MS Nieuw Statendam"), so a different ship is never shown.
+const shipInfoCache = new Map();
+async function shipWiki(name) {
+  const key = name.toUpperCase();
+  if (shipInfoCache.has(key)) return shipInfoCache.get(key);
+  const norm = s => s.toLowerCase().replace(/^(ms|mv|ss|rms|mts|mscs)\s+/, '').replace(/\s*\([^)]*\)\s*$/, '').replace(/[^a-z0-9]/g, '');
+  let out = null, failed = false;
+  try {
+    const r = await get('https://en.wikipedia.org/w/api.php?action=query&format=json&redirects=1&generator=search&gsrlimit=5'
+      + '&prop=pageimages|extracts|info&exintro=1&explaintext=1&exsentences=3&inprop=url&piprop=thumbnail&pithumbsize=480&gsrsearch='
+      + encodeURIComponent(`"${name}" ship`));
+    if (r.status !== 200) throw new Error('HTTP ' + r.status);
+    const want = norm(name);
+    const p = Object.values(JSON.parse(r.body).query?.pages || {}).sort((a, b) => a.index - b.index).find(p => norm(p.title) === want);
+    if (p) out = { title: p.title, extract: (p.extract || '').slice(0, 600), thumb: p.thumbnail?.source || null, url: p.fullurl };
+  } catch (e) { failed = true; }
+  if (!failed) shipInfoCache.set(key, out); // a network hiccup is retried next time
+  return out;
+}
+
 const aisText = s => String(s || '').replace(/@+/g, ' ').replace(/\s+/g, ' ').trim();
 function onAisMessage(m) {
   const meta = m.MetaData || {}, mmsi = String(pick(meta, 'MMSI') ?? '');
@@ -698,6 +723,8 @@ function onAisMessage(m) {
     const len = (d.A || 0) + (d.B || 0), beam = (d.C || 0) + (d.D || 0);
     if (len > 0 && len < 500) s.length = len;
     if (beam > 0 && beam < 80) s.beam = beam;
+    const draught = pick(body, 'MaximumStaticDraught');
+    if (draught > 0 && draught < 30) s.draught = draught;
     s.destination = aisText(pick(body, 'Destination'));
     const eta = pick(body, 'Eta');
     s.eta = eta && pick(eta, 'Month') && pick(eta, 'Day') ? { month: pick(eta, 'Month'), day: pick(eta, 'Day'), hour: pick(eta, 'Hour'), minute: pick(eta, 'Minute') } : null;
