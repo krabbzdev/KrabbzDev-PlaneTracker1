@@ -16,4 +16,4 @@ git tag -a %TAG% -m "%~1" || exit /b 1
 git push origin HEAD %TAG% || exit /b 1
 echo.
 echo Pushed %TAG%. GitHub is building and publishing it (about 2-3 minutes):
-echo   https://github.com/showtechclove1/krabbz9999-flighttracker/actions
+echo   https://github.com/krabbzdev/krabbz9999-flighttracker/actions

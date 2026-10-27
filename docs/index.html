@@ -144,8 +144,8 @@
       <a href="#features">Features</a>
       <a href="#updates">Updates</a>
       <a href="#faq">FAQ</a>
-      <a href="https://github.com/showtechclove1/krabbz9999-flighttracker/wiki">Wiki</a>
-      <a href="https://github.com/showtechclove1/krabbz9999-flighttracker">GitHub</a>
+      <a href="https://github.com/krabbzdev/krabbz9999-flighttracker/wiki">Wiki</a>
+      <a href="https://github.com/krabbzdev/krabbz9999-flighttracker">GitHub</a>
     </nav>
   </div>
 </header>
@@ -158,14 +158,14 @@
         <h1>See every plane <em>over your house</em></h1>
         <p class="lede">A live map of the aircraft around your home, with photos, routes and owners. When one flies right overhead, it takes over the screen and tells you what it is.</p>
         <div class="cta">
-          <a class="btn primary" id="dl" href="https://github.com/showtechclove1/krabbz9999-flighttracker/releases/latest/download/Krabbz9999-FlightTracker-Setup.exe">
+          <a class="btn primary" id="dl" href="https://github.com/krabbzdev/krabbz9999-flighttracker/releases/latest/download/Krabbz9999-FlightTracker-Setup.exe">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16"/></svg>
             Download for Windows
           </a>
           <a class="btn ghost" href="#install">How to install</a>
         </div>
         <div class="meta"><span>Latest: <b id="ver">see GitHub</b></span><span>Windows 10 / 11 (64-bit)</span><span id="size">about 90 MB</span></div>
-        <div class="meta"><a href="https://github.com/showtechclove1/krabbz9999-flighttracker/wiki">📖 Read the Wiki: every feature explained</a><a href="https://github.com/showtechclove1/krabbz9999-flighttracker">Source code on GitHub</a></div>
+        <div class="meta"><a href="https://github.com/krabbzdev/krabbz9999-flighttracker/wiki">📖 Read the Wiki: every feature explained</a><a href="https://github.com/krabbzdev/krabbz9999-flighttracker">Source code on GitHub</a></div>
       </div>
       <figure class="shot" style="margin:0">
         <img src="dashboard.png" width="1600" height="1000" alt="The FlightTracker dashboard: a list of nearby aircraft with photos and routes on the left, a dark map of Tampa Bay with planes and airports in the middle, and today's log on the right.">
@@ -275,13 +275,13 @@
 <footer>
   <div class="wrap">
     <span>Krabbz9999 - FlightTracker · <span id="ver2">open source</span></span>
-    <span><a href="https://github.com/showtechclove1/krabbz9999-flighttracker/wiki">Wiki</a> · <a href="https://github.com/showtechclove1/krabbz9999-flighttracker">Source code and releases on GitHub</a> ·<a href="https://github.com/showtechclove1/krabbz9999-flighttracker#privacy">Privacy</a> · <a href="https://github.com/showtechclove1/krabbz9999-flighttracker/blob/main/LICENSE">MIT license</a></span>
+    <span><a href="https://github.com/krabbzdev/krabbz9999-flighttracker/wiki">Wiki</a> · <a href="https://github.com/krabbzdev/krabbz9999-flighttracker">Source code and releases on GitHub</a> ·<a href="https://github.com/krabbzdev/krabbz9999-flighttracker#privacy">Privacy</a> · <a href="https://github.com/krabbzdev/krabbz9999-flighttracker/blob/main/LICENSE">MIT license</a></span>
   </div>
 </footer>
 
 <script>
   // Show the latest release (build number, date, file size) straight from GitHub.
-  fetch('https://api.github.com/repos/showtechclove1/krabbz9999-flighttracker/releases/latest')
+  fetch('https://api.github.com/repos/krabbzdev/krabbz9999-flighttracker/releases/latest')
     .then(r => r.ok ? r.json() : Promise.reject(r.status))
     .then(rel => {
       const build = (rel.tag_name.match(/(\d+)\s*$/) || [])[1];

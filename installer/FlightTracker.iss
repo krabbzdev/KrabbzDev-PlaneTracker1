@@ -19,8 +19,8 @@ AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
 AppPublisher=Krabbz9999
 AppPublisherURL=https://flighttracker.loves3d.com
-AppSupportURL=https://github.com/showtechclove1/krabbz9999-flighttracker/wiki
-AppUpdatesURL=https://github.com/showtechclove1/krabbz9999-flighttracker/releases
+AppSupportURL=https://github.com/krabbzdev/krabbz9999-flighttracker/wiki
+AppUpdatesURL=https://github.com/krabbzdev/krabbz9999-flighttracker/releases
 ; no admin: installs for this user only, into the shared Public folder (writable without admin)
 PrivilegesRequired=lowest
 DefaultDirName={%PUBLIC|C:\Users\Public}\Apps\Krabbz9999-FlightTracker
