@@ -9,6 +9,8 @@ settings.json
 daily-log.json
 airports-cache.json
 aircraft-types-cache.json
+cruise-fleet.json
+cruise-last-seen.json
 faa-index.json
 ReleasableAircraft.zip
 

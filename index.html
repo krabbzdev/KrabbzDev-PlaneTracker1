@@ -377,6 +377,10 @@
     background: rgba(18,26,48,.92); border: 1px solid var(--accent); border-radius: 999px; padding: 6px 8px 6px 14px; font-size: 13px; white-space: nowrap;
     box-shadow: 0 4px 16px rgba(0,0,0,.5); max-width: calc(100% - 120px); overflow: hidden; }
   .explore-bar[hidden] { display: none; }
+  .ship.last-seen svg { opacity: .55; }
+  .ship.last-seen .ship-tag { color: #cfd6e6; font-weight: 600; }
+  dialog.set-dlg .line-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; }
+  dialog.set-dlg .line-grid label.chk { font-size: 12.5px; }
   .jump-box { width: 270px; }
   .jump-box input { width: 100%; font: 13px Inter, sans-serif; color: var(--text); background: rgba(18,26,48,.95); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; box-shadow: 0 2px 10px rgba(0,0,0,.5); }
   .jump-box input:focus { outline: none; border-color: var(--accent); }
@@ -621,6 +625,10 @@
         <div class="where" id="aisCur"></div>
         <div class="row"><input id="aisIn" placeholder="Paste your AISStream API key" autocomplete="off" spellcheck="false"><button id="aisClear" title="Remove the saved key">Remove</button></div>
         <p class="hint">Your key stays on this PC (in settings.json). AISStream receives the area around your home so it can send the ships there.</p>
+        <label class="lbl" style="margin-top:6px">Cruise lines to watch worldwide</label>
+        <div class="line-grid" id="cruiseLines"></div>
+        <div class="acts left" style="margin:6px 0 4px"><button type="button" id="linesAll">Select all</button><button type="button" id="linesNone">Clear all</button></div>
+        <p class="hint">The app remembers where these lines' ships were last seen anywhere in the world, so you can jump to them by name. AISStream can watch up to 190 ships, so choosing fewer lines leaves room for all of their ships.</p>
       </div>
       <div class="place">
         <h4>📡 FlightAware feeder <small>optional</small></h4>
@@ -2177,6 +2185,8 @@ async function openHome(focusHome, firstRun) {
   // ship tracking: the saved key is never sent back, only whether there is one
   aisClear = false; $('aisIn').value = '';
   showAis();
+  // cruise lines to watch (none saved = all)
+  $('cruiseLines').innerHTML = (cfg.cruiseLineOptions || []).map(n => `<label class="chk"><input type="checkbox" value="${esc(n)}"${!Array.isArray(cfg.cruiseLines) || cfg.cruiseLines.includes(n) ? ' checked' : ''}> ${esc(n)}</label>`).join('');
   voiceOptions($('voiceSel'));
   refreshUpdatePanel();
   showTab('loc');
@@ -2196,6 +2206,8 @@ function showAis() {
   el.innerHTML = `🔑 Key saved (${esc(cfg.aisKeyHint)})<small>${st === 'live' ? '✓ Connected: ' + shipData.ships.length + ' ships in range' : err ? '⚠ ' + esc(err) : esc(st)}</small>`;
 }
 $('aisIn').addEventListener('input', () => { aisClear = false; showAis(); });
+$('linesAll').onclick = () => $('cruiseLines').querySelectorAll('input').forEach(c => c.checked = true);
+$('linesNone').onclick = () => $('cruiseLines').querySelectorAll('input').forEach(c => c.checked = false);
 $('aisClear').onclick = () => { $('aisIn').value = ''; aisClear = !!cfg.aisKeySet; showAis(); };
 $('voiceTest').onclick = async () => {
   const pref = chosenVoice(), btn = $('voiceTest');
@@ -2275,6 +2287,8 @@ $('saveHome').onclick = async () => {
     office: isFinite(oLat) && isFinite(oLon) ? { name: $('offName').value.trim() || 'Office', pos: [oLat, oLon], label: placeLabel.office } : null,
     faUser: $('faIn').value.trim(),
     contact: $('contactIn').value.trim(),
+    // all ticked = null, so lines added later are watched too
+    cruiseLines: (() => { const boxes = [...$('cruiseLines').querySelectorAll('input')]; return !boxes.length || boxes.every(c => c.checked) ? null : boxes.filter(c => c.checked).map(c => c.value); })(),
     ...($('aisIn').value.trim() ? { aisKey: $('aisIn').value.trim() } : aisClear ? { aisKey: '' } : {}),
   };
   voicePref = chosenVoice(); save('skyVoice', voicePref);
@@ -2460,13 +2474,15 @@ function renderShipPanel() {
   // near home normally; while exploring, the cruise ships in the area being looked at
   const from = exploring ? [exploring.lat, exploring.lon] : home;
   const near = s => from ? distMi(from, [s.lat, s.lon]) : 0;
-  const cruise = shipData.ships.filter(s => isCruise(s) && (exploring ? exploring.bounds.contains([s.lat, s.lon]) : near(s) < 45)).sort((a, b) => near(a) - near(b));
+  const lineOk = s => { const l = cruiseLine(s); return !l || !Array.isArray(cfg.cruiseLines) || cfg.cruiseLines.includes(l.name); };
+  const cruise = shipData.ships.filter(s => isCruise(s) && lineOk(s) && (exploring ? exploring.bounds.contains([s.lat, s.lon]) : near(s) < 45)).sort((a, b) => near(a) - near(b));
   $('shipsSum').textContent = cruise.length ? `${cruise.length} cruise ship${cruise.length > 1 ? 's' : ''}` : shipData.status === 'live' ? 'none nearby' : shipData.status;
   const others = shipData.ships.length - cruise.length;
   body.innerHTML = (cruise.length ? cruise.map(s => `<div class="ship-row" data-mmsi="${s.mmsi}">
       ${shipLogoImg(cruiseLine(s), 'ship-logo-sm')}<div style="flex:1;min-width:0"><b>${esc(s.name || 'Cruise ship')}</b><small>${esc(cruiseLine(s)?.name || 'Cruise ship')} · ${esc(shipStatus(s))}${s.destination ? ` · to ${esc(s.destination)}` : ''}</small></div>
       <span>${home ? near(s).toFixed(1) + ' mi ' + compass(bearing(home, [s.lat, s.lon])) : ''}</span></div>`).join('')
     : `<p class="fa-note" style="margin-top:10px">${shipData.status === 'live' ? (exploring ? 'No cruise ships in this area right now.' : 'No cruise ships within about 40 miles right now.') : 'Connecting to AISStream…'}</p>`)
+    + (shipData.watch?.ships ? `<div class="fa-note">🌍 Watching ${shipData.watch.ships} cruise ships worldwide · ${shipData.watch.seen} seen so far. Type a ship's name in Jump to.</div>` : '')
     + `<div class="fa-note">${others > 0 ? `${others} other ship${others > 1 ? 's' : ''} and boats on the map${shipsOn ? '' : ' (tick 🚢 Show Ships)'}. ` : ''}Ship data: AISStream.io</div>`;
   body.querySelectorAll('.ship-row').forEach(r => r.onclick = () => {
     const s = shipData.ships.find(x => x.mmsi === r.dataset.mmsi), m = shipMarkers.get(r.dataset.mmsi);
@@ -2590,6 +2606,29 @@ jumpBox.onAdd = () => {
   return el;
 };
 jumpBox.addTo(map);
+// Links to sites that also use satellites, for ships beyond AISStream's coastal receivers.
+// (CruiseMapper ship pages have IDs we can't know, so DuckDuckGo's "first result" link lands on the right one.)
+const elsewhereLinks = (name, imo, mmsi) =>
+  `Where is it now? <a href="https://duckduckgo.com/?q=${encodeURIComponent('!ducky cruisemapper ' + (name || ''))}" target="_blank" rel="noopener">CruiseMapper ↗</a>`
+  + ` · <a href="https://www.vesselfinder.com/${imo ? 'vessels/details/' + imo : '?mmsi=' + mmsi}" target="_blank" rel="noopener">VesselFinder ↗</a>`;
+
+// A ship that's out of range right now: a faded ship where AIS receivers last heard it, with when and where.
+const lastSeenLayer = L.layerGroup().addTo(map);
+function showLastSeen(p) {
+  const l = p.lastSeen || p.last;
+  lastSeenLayer.clearLayers();
+  const s = { ...l, mmsi: p.ship || l.mmsi, type: 60, name: l.name || p.name };
+  const when = new Date(l.seen).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const row = (k, v) => v ? `<span>${k}</span><span>${esc(v)}</span>` : '';
+  const html = `<div class="pt"><div class="pt-h">${shipLogoImg(cruiseLine(s), 'ship-logo-lg')}<div><b>🚢 ${esc(p.name || s.name)}</b><small>Last seen ${esc(l.ago)} · ${l.place ? 'near ' + esc(l.place) : 'out at sea'}</small></div></div>
+    <div class="pt-g">${row('Seen', when)}${row('Was', shipStatus(s))}${row('Heading to', l.destination)}${row('Arrives', shipEta(s))}</div>
+    <p class="ship-about">This is where AIS receivers last heard it. It has probably moved on since, beyond the reach of coastal receivers, and will show up live when it comes back in range.</p>
+    <div class="pt-f">${elsewhereLinks(p.name || s.name, p.imo, s.mmsi)}</div></div>`;
+  const icon = L.divIcon({ className: 'ship cruise last-seen', html: shipSvg(s) + `<span class="ship-tag">${esc(p.name || s.name)} · last seen ${esc(l.ago)}</span>`, iconSize: [34, 34], iconAnchor: [17, 17] });
+  map.setView([l.lat, l.lon], 9);
+  L.marker([l.lat, l.lon], { pane: 'ships', icon }).bindPopup(html, { className: 'ship-pop', maxWidth: 260 }).addTo(lastSeenLayer).openPopup();
+}
+
 // Cruise Finder: a ship from the Jump to box. If it's already on the map, go there; otherwise ask the app to look for it
 // worldwide over AIS and go there as soon as it reports in.
 let finding = null;
@@ -2600,11 +2639,7 @@ function openShipCard(mmsi, tries = 0) {
 }
 async function findShipLive(p) {
   const box = $('jumpResults'), me = finding = { mmsi: p.ship, started: Date.now() };
-  const vf = `https://www.vesselfinder.com/${p.imo ? 'vessels/details/' + p.imo : '?mmsi=' + p.ship}`;
-  // AISStream only has coastal receivers. These sites also use satellites, so they can see ships out at sea.
-  // (CruiseMapper ship pages have IDs we can't know, so DuckDuckGo's "first result" link lands on the right one.)
-  const cm = `https://duckduckgo.com/?q=${encodeURIComponent('!ducky cruisemapper ' + (p.name || ''))}`;
-  const elsewhere = `Where is it now? <a href="${cm}" target="_blank" rel="noopener">CruiseMapper ↗</a> · <a href="${vf}" target="_blank" rel="noopener">VesselFinder ↗</a>`;
+  const elsewhere = elsewhereLinks(p.name, p.imo, p.ship);
   while (finding === me) {
     let r;
     try { r = await fetch(`/api/findship?mmsi=${p.ship}&name=${encodeURIComponent(p.name || '')}`).then(x => x.json()); } catch (e) { r = null; }
@@ -2613,6 +2648,11 @@ async function findShipLive(p) {
       box.innerHTML = `<div class="msg">Finding ships needs ship tracking set up (free). <a href="#" id="jumpSetup">Set it up</a></div>`;
       $('jumpSetup').onclick = e => { e.preventDefault(); box.innerHTML = ''; openHome(false).then(() => { showTab('more'); $('aisIn').focus(); }); };
       finding = null; return;
+    }
+    if (r?.status === 'lastseen') {
+      finding = null; box.innerHTML = '';
+      showLastSeen({ ...p, last: r.last });
+      return;
     }
     if (r?.status === 'found') {
       finding = null; box.innerHTML = '';
@@ -2623,7 +2663,7 @@ async function findShipLive(p) {
     }
     const secs = Math.round((Date.now() - me.started) / 1000);
     if (secs > 180) {
-      box.innerHTML = `<div class="msg"><b>${esc(p.name)}</b> isn't in range of AISStream's coastal receivers right now, so it's probably out at sea. The app keeps listening for 15 minutes and it will appear on the map if it reports in.<br>${elsewhere}</div>`;
+      box.innerHTML = `<div class="msg"><b>${esc(p.name)}</b> hasn't been heard by AISStream's coastal receivers yet, so it's probably out at sea. The app is now watching for it worldwide: next time it nears a coast, search again to go to it (or where it was last seen).<br>${elsewhere}</div>`;
       finding = null; return;
     }
     const waiting = r?.confirmed ? 'Listening worldwide. Waiting for it to report in' : 'Connecting to AISStream';
@@ -2636,6 +2676,8 @@ function jumpTo(p) {
   $('jumpResults').innerHTML = '';
   finding = null;
   if (p.info) return; // just a note in the list
+  lastSeenLayer.clearLayers();
+  if (p.lastSeen) { showLastSeen(p); fetch(`/api/findship?mmsi=${p.ship}`).catch(() => {}); return; } // out of range: where it was last heard
   if (p.findTitle) { // a ship from a cruise line's fleet list: look it up by its Wikipedia title, then find it
     $('jumpResults').innerHTML = '<div class="msg">Looking up ' + esc(p.name) + '…</div>';
     fetch('/api/places?q=' + encodeURIComponent(p.findTitle)).then(r => r.json())

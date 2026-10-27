@@ -568,7 +568,10 @@ async function brandSearch(q) {
   try {
     const liveNames = new Set(live.map(s => s.name.toUpperCase()));
     for (const f of await cruiseFleet(category, pattern)) {
-      if (!liveNames.has(f.name.toUpperCase())) out.push({ findTitle: f.title, name: f.name, label: `🚢 ${f.name} · find it` });
+      if (liveNames.has(f.name.toUpperCase())) continue;
+      const known = fleet.find(x => x.title === f.title), last = known && lastSeenInfo(known.mmsi);
+      out.push(last ? { ship: known.mmsi, lastSeen: last, name: f.name, imo: known.imo, label: `🚢 ${f.name} · last seen ${last.ago}` }
+        : { findTitle: f.title, name: f.name, label: `🚢 ${f.name} · find it` });
     }
   } catch (e) {}
   if (!out.length) out.push({ info: true, label: `No ${line} ships on the map right now. Type a ship's full name, like "${line === 'Viking' ? 'Viking Star' : line.split(' ')[0] + ' ...'}"` });
@@ -591,9 +594,9 @@ async function placeSearch(q) {
     if (!out.length && /[A-Z]{3}/.test(code) && /\s/.test(code)) {
       const id = await shipIds(q.trim());
       if (id) {
-        const sh = ships.get(id.mmsi);
-        out.push(sh && sh.lat != null
-          ? { ship: id.mmsi, lat: sh.lat, lon: sh.lon, label: `🚢 ${sh.name || id.title} (live now)`, zoom: 12 }
+        const sh = isLiveShip(id.mmsi), last = lastSeenInfo(id.mmsi);
+        out.push(sh ? { ship: id.mmsi, lat: sh.lat, lon: sh.lon, label: `🚢 ${sh.name || id.title} (live now)`, zoom: 12 }
+          : last ? { ship: id.mmsi, lastSeen: last, name: id.title, imo: id.imo, label: `🚢 ${id.title} · last seen ${last.ago}` }
           : { ship: id.mmsi, find: true, name: id.title, imo: id.imo, label: `🚢 Find ${id.title} (ship)` });
       }
     }
@@ -691,6 +694,7 @@ const server = http.createServer(async (req, res) => {
         }
       }
       return send(res, 200, JSON.stringify({ keySet: !!aisKey(), status: ais.status, error: ais.error,
+        watch: { ships: watchSet.size, seen: Object.keys(lastSeen).filter(k => watchSet.has(k)).length },
         ships: [...ships.values()].filter(x => x.lat != null) }));
     }
     if (url.pathname === '/api/fastats') return send(res, 200, JSON.stringify(await faStats()));
@@ -699,7 +703,7 @@ const server = http.createServer(async (req, res) => {
       const local = /^(::1|127\.|::ffff:127\.)/.test(req.socket.remoteAddress || '');
       if (!local || req.headers['x-ft-tray'] !== '1') return send(res, 403, '{"error":"forbidden"}');
       send(res, 200, '{"ok":true}');
-      saveLog();
+      saveLog(); saveLastSeen();
       return setTimeout(() => process.exit(0), 300);
     }
     const tk = url.pathname.match(/^\/api\/track\/([0-9a-f~]{6,7})$/i);
@@ -716,7 +720,11 @@ const server = http.createServer(async (req, res) => {
           ? { name: String(b.office.name || 'Office').slice(0, 40), pos: pt(b.office.pos), label: String(b.office.label || '').slice(0, 120) } : null;
         if ('faUser' in b && /^[A-Za-z0-9_.-]{0,40}$/.test(b.faUser || '')) { settings.faUser = b.faUser || ''; faCache = null; }
         if ('contact' in b) settings.contact = String(b.contact || '').slice(0, 100);
-        if ('aisKey' in b) settings.aisKey = String(b.aisKey || '').trim().slice(0, 100);
+        if ('cruiseLines' in b) {
+          settings.cruiseLines = Array.isArray(b.cruiseLines) ? b.cruiseLines.filter(n => CRUISE_BRANDS.some(x => x[1] === n)) : undefined;
+          setTimeout(watchRefresh, 500);
+        }
+        if ('aisKey' in b) { settings.aisKey = String(b.aisKey || '').trim().slice(0, 100); setTimeout(watchConnect, 2000); }
         fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 1));
         aisRefresh();
         latest = null; // next page poll fetches for the new location
@@ -726,6 +734,8 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, JSON.stringify({
         home: settings.home || null, homeLabel: settings.homeLabel || '', homeName: settings.homeName || '', office: settings.office || null,
         faUser: faUser(), contact: contactSetting() || '',
+        cruiseLines: Array.isArray(settings.cruiseLines) ? settings.cruiseLines : null,
+        cruiseLineOptions: CRUISE_BRANDS.filter(x => x[3]).map(x => x[1]), // lines with a fleet list to watch
         aisKeySet: !!aisKey(), aisKeyHint: aisKey() ? '••••' + aisKey().slice(-4) : '',
       }));
     }
@@ -752,9 +762,10 @@ const server = http.createServer(async (req, res) => {
       const mmsi = String(url.searchParams.get('mmsi') || '');
       if (!/^\d{9}$/.test(mmsi)) return send(res, 400, '{"error":"bad MMSI"}');
       if (!aisKey()) return send(res, 200, '{"status":"nokey"}');
-      findShip(mmsi, (url.searchParams.get('name') || '').slice(0, 60));
-      const sh = ships.get(mmsi);
-      return send(res, 200, JSON.stringify(sh && sh.lat != null ? { status: 'found', ship: sh }
+      findShip(mmsi);
+      const sh = isLiveShip(mmsi), last = lastSeenInfo(mmsi);
+      return send(res, 200, JSON.stringify(sh ? { status: 'found', ship: sh }
+        : last ? { status: 'lastseen', last }
         : { status: 'searching', seconds: Math.round((Date.now() - finder.started) / 1000), connected: !!finder.ws && finder.ws.readyState === 1, confirmed: finder.confirmed, heard: finder.heard }));
     }
     if (url.pathname === '/api/places') {
@@ -916,10 +927,11 @@ function onAisMessage(m) {
     const eta = pick(body, 'Eta');
     s.eta = eta && pick(eta, 'Month') && pick(eta, 'Day') ? { month: pick(eta, 'Month'), day: pick(eta, 'Day'), hour: pick(eta, 'Hour'), minute: pick(eta, 'Minute') } : null;
     s.static = Date.now();
+    rememberShip(s);
     return;
   }
   const lat = pick(body, 'Latitude') ?? pick(meta, 'Latitude'), lon = pick(body, 'Longitude') ?? pick(meta, 'Longitude');
-  if (!(Math.abs(lat) <= 90 && Math.abs(lon) <= 180)) return; // 91 / 181 mean "not available"
+  if (!(Math.abs(lat) <= 90 && Math.abs(lon) <= 180)) { if (typeof rememberShip === 'function') rememberShip(s); return; } // 91 / 181 mean "not available"
   s.lat = lat; s.lon = lon;
   const sog = pick(body, 'Sog'), cog = pick(body, 'Cog'), hdg = pick(body, 'TrueHeading');
   s.sog = sog != null && sog < 102.3 ? sog : null;   // knots; 102.3 = not available
@@ -928,9 +940,10 @@ function onAisMessage(m) {
   const nav = pick(body, 'NavigationalStatus');
   if (nav != null) s.nav = nav;
   s.seen = Date.now();
+  rememberShip(s);
 }
 
-// ---------- Cruise Finder: locate one named ship anywhere in the world ----------
+// ---------- Cruise Finder: a ship's radio ID from its name ----------
 // Type a ship's name in the Jump to box: if it isn't already on the map, the ship's radio ID (MMSI) is read from its
 // Wikipedia article and a second AISStream connection asks for just that ship, worldwide. It's found as soon as
 // it reports (every few seconds when moving, every few minutes in port), but only near coasts with receivers.
@@ -952,32 +965,117 @@ async function shipIds(name) {
   return out;
 }
 
-const finder = { ws: null, mmsi: null, name: '', started: 0, timer: null, heard: 0, confirmed: false };
-function stopFinder() {
+// ---------- cruise watch: remember where every cruise ship was last seen, worldwide ----------
+// AISStream only hears ships near a coast and keeps no history, so the app keeps its own: one AISStream connection
+// watches the whole fleet of the big cruise lines (up to AISStream's 200 ships per connection) anywhere in the world,
+// and every time a ship is heard its position is saved to cruise-last-seen.json. Searching a ship's name then goes to
+// it live, or to where it was last seen. Ships searched for that aren't in the fleet list are added to the watch too.
+// The fleet (names + radio IDs from Wikipedia) is built once in the background and saved to cruise-fleet.json.
+const FLEET_FILE = path.join(APP_DIR, 'cruise-fleet.json');
+const LASTSEEN_FILE = path.join(APP_DIR, 'cruise-last-seen.json');
+const WATCH_MAX = 200, WATCH_EXTRA = 10; // AISStream: up to 200 radio IDs per subscription; 10 kept for searched ships
+let fleet = [];      // [{ name, title, mmsi, imo, line }]
+let lastSeen = {};   // mmsi -> { name, lat, lon, sog, cog, heading, nav, destination, eta, seen }
+try { lastSeen = JSON.parse(fs.readFileSync(LASTSEEN_FILE, 'utf8')); } catch (e) {}
+let lastSeenDirty = false;
+const saveLastSeen = () => { if (!lastSeenDirty) return; lastSeenDirty = false; try { fs.writeFileSync(LASTSEEN_FILE, JSON.stringify(lastSeen)); } catch (e) {} };
+setInterval(saveLastSeen, 60000);
+
+async function buildFleet() {
+  let cached = null;
+  try { cached = JSON.parse(fs.readFileSync(FLEET_FILE, 'utf8')); } catch (e) {}
+  if (cached?.ships?.length) { fleet = cached.ships; watchRefresh(); }
+  if (cached && Date.now() - cached.at < 7 * 86400000) return; // rebuilt weekly
+  const out = [], seen = new Set();
+  for (const [, line, pattern, category] of CRUISE_BRANDS) {
+    if (!category) continue;
+    let list = [];
+    try { list = await cruiseFleet(category, pattern); } catch (e) {}
+    for (const f of list) {
+      const id = await shipIds(f.title);
+      await new Promise(r => setTimeout(r, 300)); // go easy on Wikipedia
+      if (id?.mmsi && !seen.has(id.mmsi)) { seen.add(id.mmsi); out.push({ name: f.name, title: f.title, mmsi: id.mmsi, imo: id.imo, line }); }
+    }
+  }
+  if (out.length < 20) return; // something went wrong (offline?): keep what we had
+  fleet = out;
+  try { fs.writeFileSync(FLEET_FILE, JSON.stringify({ at: Date.now(), ships: fleet })); } catch (e) {}
+  watchRefresh();
+}
+
+const finder = { ws: null, extra: [], started: 0, heard: 0, confirmed: false, timer: null, tries: 0, sentAt: 0, subTimer: null };
+let watchSet = new Set();
+// Settings > More > cruise lines to watch (none chosen = all of them)
+const watchedLine = line => !Array.isArray(settings.cruiseLines) || settings.cruiseLines.includes(line);
+const watchList = () => [...new Set([...fleet.filter(f => watchedLine(f.line)).map(f => f.mmsi).slice(0, WATCH_MAX - WATCH_EXTRA), ...finder.extra])].slice(0, WATCH_MAX);
+const watchSub = () => JSON.stringify({ APIKey: aisKey(), BoundingBoxes: [[[-90, -180], [90, 180]]], FiltersShipMMSI: watchList(),
+  FilterMessageTypes: ['PositionReport', 'StandardClassBPositionReport', 'ShipStaticData'] });
+function watchConnect() {
   clearTimeout(finder.timer);
   if (finder.ws) { const w = finder.ws; finder.ws = null; try { w.close(); } catch (e) {} }
-  finder.mmsi = null;
-}
-function findShip(mmsi, name) {
-  if (finder.mmsi === mmsi && finder.ws) { clearTimeout(finder.timer); finder.timer = setTimeout(stopFinder, 900000); return; }
-  stopFinder();
-  if (!aisKey() || typeof WebSocket !== 'function') return;
-  Object.assign(finder, { mmsi, name, started: Date.now(), heard: 0, confirmed: false });
+  watchSet = new Set(watchList());
+  if (!aisKey() || !watchSet.size || typeof WebSocket !== 'function') return;
+  finder.confirmed = false;
   const ws = finder.ws = new WebSocket('wss://stream.aisstream.io/v0/stream');
   ws.binaryType = 'arraybuffer';
-  ws.onopen = () => ws.send(JSON.stringify({ APIKey: aisKey(), BoundingBoxes: [[[-90, -180], [90, 180]]], FiltersShipMMSI: [mmsi],
-    FilterMessageTypes: ['PositionReport', 'StandardClassBPositionReport', 'ShipStaticData'] }));
+  ws.onopen = () => { finder.sentAt = Date.now(); ws.send(watchSub()); };
   ws.onmessage = e => {
     try {
       const m = JSON.parse(typeof e.data === 'string' ? e.data : Buffer.from(e.data).toString('utf8'));
-      if (m.MessageType === 'SubscriptionConfirmation') finder.confirmed = true;
-      else if (m.MessageType) { finder.heard++; onAisMessage(m); } // joins the normal ship list
+      if (m.MessageType === 'SubscriptionConfirmation') { finder.confirmed = true; finder.tries = 0; }
+      else if (m.MessageType) { finder.heard++; finder.tries = 0; onAisMessage(m); } // joins the ship list (and lastSeen)
     } catch (err) {}
   };
   ws.onerror = () => {};
-  ws.onclose = () => { if (finder.ws === ws) finder.ws = null; };
-  finder.timer = setTimeout(stopFinder, 900000); // keep following it for 15 minutes
+  ws.onclose = () => {
+    if (finder.ws !== ws) return;
+    finder.ws = null; finder.tries++;
+    finder.timer = setTimeout(watchConnect, Math.min(300000, 5000 * 2 ** Math.min(finder.tries, 6)) * (0.8 + Math.random() * 0.4));
+  };
 }
+// send the new list on the open connection (at most once a second), or connect
+function watchRefresh() {
+  clearTimeout(finder.subTimer);
+  watchSet = new Set(watchList());
+  const ws = finder.ws;
+  if (!ws || ws.readyState !== 1) { if (!ws) watchConnect(); return; }
+  const wait = 1500 - (Date.now() - finder.sentAt);
+  if (wait > 0) { finder.subTimer = setTimeout(watchRefresh, wait); return; }
+  finder.sentAt = Date.now();
+  ws.send(watchSub());
+}
+// a searched ship that isn't in the fleet list joins the watch (the 10 most recent searches are kept)
+function findShip(mmsi) {
+  finder.started = finder.started && watchSet.has(mmsi) ? finder.started : Date.now();
+  if (watchSet.has(mmsi)) { if (!finder.ws) watchConnect(); return; }
+  finder.extra = [...finder.extra.filter(x => x !== mmsi), mmsi].slice(-WATCH_EXTRA);
+  finder.started = Date.now();
+  watchRefresh();
+}
+// called for every AIS message: remember watched ships' latest position
+function rememberShip(s) {
+  if (!watchSet.has(s.mmsi) || s.lat == null) return;
+  const prev = lastSeen[s.mmsi];
+  lastSeen[s.mmsi] = { name: s.name || prev?.name || '', lat: s.lat, lon: s.lon, sog: s.sog, cog: s.cog, heading: s.heading, nav: s.nav,
+    destination: s.destination || prev?.destination || '', eta: s.eta || prev?.eta || null, length: s.length || prev?.length, seen: s.seen || Date.now() };
+  lastSeenDirty = true;
+}
+// "near Cozumel" from the nearest sizeable airport within 60 miles, else "at sea"
+function nearPlace(lat, lon) {
+  if (!airports) return null;
+  let best = null, bestD = 60;
+  for (const a of airports) {
+    if (a[0] !== 'large_airport' && a[0] !== 'medium_airport') continue;
+    if (Math.abs(a[4] - lat) > 1 || Math.abs(a[5] - lon) > 1.2) continue;
+    const d = distMi([lat, lon], [a[4], a[5]]);
+    if (d < bestD) { bestD = d; best = a[7] || a[3]; }
+  }
+  return best;
+}
+const agoText = t => { const m = Math.round((Date.now() - t) / 60000); return m < 2 ? 'just now' : m < 90 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
+const lastSeenInfo = mmsi => { const l = lastSeen[mmsi]; return l ? { ...l, mmsi, place: nearPlace(l.lat, l.lon), ago: agoText(l.seen) } : null; };
+const isLiveShip = mmsi => { const s = ships.get(mmsi); return s && s.lat != null && Date.now() - (s.seen || 0) < 900000 ? s : null; };
+setTimeout(() => { loadAirports().catch(() => {}); buildFleet().catch(e => console.log('Cruise fleet list not built: ' + e.message)); }, 5000);
 
 // ---------- self-update from GitHub Releases (only when running as the .exe) ----------
 // Each release carries Krabbz9999-FlightTracker.exe; the tag ends in the build number (e.g. v1.0.4).
