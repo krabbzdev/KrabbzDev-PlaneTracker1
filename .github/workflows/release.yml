@@ -55,4 +55,4 @@ jobs:
           $notes = (git tag -l --format='%(contents)' $env:GITHUB_REF_NAME) -join "`n"
           if (-not $notes.Trim()) { $notes = "Build $($v.build)" }
           # the installer is what people download; the plain .exe is what installed copies update themselves from
-          gh release create $env:GITHUB_REF_NAME dist\Krabbz9999-FlightTracker-Setup.exe Krabbz9999-FlightTracker.exe --title "Krabbz9999 - FlightTracker $($v.version) build $($v.build)" --notes "$notes"
+          gh release create $env:GITHUB_REF_NAME dist\Krabbz9999-FlightTracker-Setup.exe Krabbz9999-FlightTracker.exe --title "Krabbz9999 - Look A Plane! $($v.version) build $($v.build)" --notes "$notes"

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Krabbz9999 - FlightTracker</title>
+<title>Krabbz9999 - Look A Plane!</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -251,6 +251,10 @@
   .leaflet-control.zoom-pct:hover { background: #f4f4f4; }
   #version a { color: var(--accent); text-decoration: none; pointer-events: auto; }
   #version a:hover { text-decoration: underline; }
+  #soundLock { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 2500; background: #3a2a10; color: #ffd27a;
+    border: 1px solid #ffb547; border-radius: 999px; padding: 9px 18px; font: 14px Inter, sans-serif; cursor: pointer; box-shadow: 0 6px 24px rgba(0,0,0,.6); }
+  #soundLock b { color: #fff; }
+  #soundLock[hidden] { display: none; }
   #toasts { position: fixed; right: 16px; bottom: 32px; display: flex; flex-direction: column; gap: 8px; z-index: 2000; max-width: min(380px, calc(calc(100vw / var(--ui)) - 32px)); }
   .toast { background: var(--panel); border: 1px solid var(--bc); border-left-width: 4px; border-radius: 10px; padding: 10px 14px; font-size: 13px; box-shadow: 0 6px 24px rgba(0,0,0,.5); cursor: pointer; animation: toastIn .25s ease-out; }
   .toast b { color: var(--bc); }
@@ -301,6 +305,7 @@
   dialog.set-dlg .row { display: flex; gap: 8px; }
   dialog.set-dlg .row input { flex: 1; min-width: 0; }
   dialog.set-dlg .row button { flex: none; height: 37px; }
+  dialog.set-dlg input[type=range] { padding: 0; border: 0; background: none; margin: 0; accent-color: #ff5d73; }
   dialog.set-dlg .lbl { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin: 2px 0 5px; }
   dialog.set-dlg .hint { font-size: 12px; color: var(--muted); margin: 0 0 10px; line-height: 1.5; }
   dialog.set-dlg h4 small, .set-dlg summary small { font-weight: 400; color: var(--muted); font-size: 12px; margin-left: 4px; }
@@ -377,6 +382,23 @@
     background: rgba(18,26,48,.92); border: 1px solid var(--accent); border-radius: 999px; padding: 6px 8px 6px 14px; font-size: 13px; white-space: nowrap;
     box-shadow: 0 4px 16px rgba(0,0,0,.5); max-width: calc(100% - 120px); overflow: hidden; }
   .explore-bar[hidden] { display: none; }
+  .map-legend { font: 12px Inter, sans-serif; color: var(--text); }
+  .map-legend .lg-btn { background: rgba(18,26,48,.95); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 7px 11px; font: 600 12.5px Inter, sans-serif; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,.5); }
+  .map-legend .lg-btn:hover, .map-legend .lg-btn[aria-expanded="true"] { border-color: var(--accent); }
+  .map-legend .lg-panel { margin-top: 6px; width: 250px; max-height: calc(55vh / var(--ui)); overflow-y: auto; background: rgba(18,26,48,.97); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px 10px; box-shadow: 0 6px 24px rgba(0,0,0,.6); }
+  .map-legend .lg-panel[hidden] { display: none; }
+  .map-legend h5 { margin: 8px 0 5px; font-size: 11px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); }
+  .map-legend h5:first-child { margin-top: 2px; }
+  .map-legend .lg-grad { height: 10px; border-radius: 5px; }
+  .map-legend .lg-scale { display: flex; justify-content: space-between; font: 10px var(--mono); color: var(--muted); margin: 2px 0 6px; }
+  .map-legend .lg-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+  .map-legend .lg-ic { position: relative; width: 30px; height: 26px; flex: none; display: flex; align-items: center; justify-content: center; }
+  .map-legend .lg-ic svg { width: 22px; height: 22px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.8)); }
+  .map-legend .lg-halo { position: absolute; inset: 1px 3px; border-radius: 50%; border: 2px solid var(--hc); box-shadow: 0 0 6px var(--hc); }
+  .map-legend .lg-logo { width: 18px; height: 18px; border-radius: 4px; background: #fff; color: #0b1020; display: grid; place-items: center; font-size: 11px; }
+  .map-legend .lg-ring { width: 20px; height: 20px; border-radius: 50%; }
+  .map-legend .lg-apt { width: var(--s); height: var(--s); background: var(--c); border: 2px solid #0b1020; border-radius: 3px; display: block; }
+  .map-legend .lg-apt.h { border-radius: 50%; }
   .ship.last-seen svg { opacity: .55; }
   .ship.last-seen .ship-tag { color: #cfd6e6; font-weight: 600; }
   dialog.set-dlg .line-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; }
@@ -460,7 +482,7 @@
 <header>
   <div class="brand">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg>
-    Krabbz9999 - FlightTracker
+    Krabbz9999 - Look A Plane!
   </div>
   <span class="live" id="live"><i></i><span id="liveTxt">Connecting…</span></span>
   <div class="spacer"></div>
@@ -469,7 +491,7 @@
   <label class="chk"><input type="checkbox" id="showApts" checked> Show Airports</label>
   <label class="chk" title="Live rain radar on the map (US, refreshes every 5 minutes)"><input type="checkbox" id="wxOn" checked> 🌧 Show Weather</label>
   <label class="chk" title="Cruise ships and other boats, live (needs a free AISStream.io key in Settings)"><input type="checkbox" id="shipsOn" checked> 🚢 Show Ships</label>
-  <label class="chk" title="Take over the screen with a close-up when a plane passes within 1 mile"><input type="checkbox" id="takeoverOn" checked> Overhead Plane Alert</label>
+  <label class="chk" title="Take over the screen with a close-up when a plane passes inside the overhead circle (size in Settings, Alerts)"><input type="checkbox" id="takeoverOn" checked> Overhead Plane Alert</label>
   <label class="chk" title="Chime and spoken announcement when a plane is overhead"><input type="checkbox" id="soundOn" checked> 🔔 Sound</label>
   <button id="homeBtn">⚙ Settings</button>
 </header>
@@ -577,8 +599,13 @@
     <!-- Alerts: the spoken announcement -->
     <section data-pane="alerts" hidden>
       <div class="place">
+        <h4>⭕ Overhead distance</h4>
+        <p class="hint">How close a plane has to pass to set off the overhead alerts: the banner, the full-screen close-up and the voice. It's the red dashed circle around home on the map, and changes as you drag.</p>
+        <div class="row" style="align-items:center"><input type="range" id="alertMiIn" min="0.25" max="5" step="0.25" aria-label="Overhead distance in miles"><b id="alertMiVal" style="min-width:64px;text-align:right;font-family:var(--mono)"></b></div>
+      </div>
+      <div class="place">
         <h4>🗣 Announcement voice</h4>
-        <p class="hint">The voice that says "Overhead now!" when a plane passes within a mile.</p>
+        <p class="hint">The voice that says "Overhead now!" when a plane passes inside the overhead circle.</p>
         <label class="lbl" for="voiceEngine">Voice type</label>
         <select id="voiceEngine" style="margin-bottom:10px">
           <option value="browser">Built-in voices: instant, nothing to download</option>
@@ -646,8 +673,9 @@
   <div class="set-foot"><button id="cancelHome">Cancel</button><button id="saveHome" class="primary">Save</button></div>
 </dialog>
 
+<button id="soundLock" type="button" hidden>🔇 Sound is off until you click this page. <b>Click here to turn on the overhead chime and voice</b></button>
 <div id="toasts"></div>
-<div id="version"><span id="verText" title="Version and build number"></span> · <a href="https://flighttracker.loves3d.com" target="_blank" rel="noopener" title="The FlightTracker website">Website ↗</a> · <a id="verWiki" href="https://github.com/krabbzdev/krabbz9999-flighttracker/wiki" target="_blank" rel="noopener" title="How every feature works">Wiki ↗</a> · <a id="verRepo" href="https://github.com/krabbzdev/krabbz9999-flighttracker" target="_blank" rel="noopener" title="Source code and releases on GitHub">GitHub ↗</a></div>
+<div id="version"><span id="verText" title="Version and build number"></span> · <a href="https://flighttracker.loves3d.com" target="_blank" rel="noopener" title="The Look A Plane! website">Website ↗</a> · <a id="verWiki" href="https://github.com/krabbzdev/krabbz9999-flighttracker/wiki" target="_blank" rel="noopener" title="How every feature works">Wiki ↗</a> · <a id="verRepo" href="https://github.com/krabbzdev/krabbz9999-flighttracker" target="_blank" rel="noopener" title="Source code and releases on GitHub">GitHub ↗</a></div>
 
 <dialog id="axDlg" class="ax-dlg">
   <div class="ax-bar">
@@ -768,7 +796,7 @@ function drawHome() {
   // the overhead radius: planes inside it trigger the alert banner, takeover and announcement
   L.circle(home, { radius: ALERT_MI * MI, color: '#ff5d73', weight: 2, opacity: .8, fillColor: '#ff5d73', fillOpacity: .06, dashArray: '6 6', interactive: false }).addTo(ringLayer);
   const south = L.latLng(home[0] - ALERT_MI * MI / 111320, home[1]);
-  L.marker(south, { icon: L.divIcon({ className: 'ring-label ring-overhead', html: `Overhead ${ALERT_MI} mi`, iconSize: [90, 14], iconAnchor: [45, -2] }), interactive: false }).addTo(ringLayer);
+  L.marker(south, { icon: L.divIcon({ className: 'ring-label ring-overhead', html: `Overhead ${+ALERT_MI.toFixed(2)} mi`, iconSize: [90, 14], iconAnchor: [45, -2] }), interactive: false }).addTo(ringLayer);
 }
 
 // ---------- airports ----------
@@ -855,6 +883,8 @@ const radiusBounds = () => L.latLng(home).toBounds(radius * MI * 2.2);
 const DEFAULT_ZOOM_STEPS = 1; // start at 200%: one step closer than the view that fits the whole Tracker Radius
 function fitRadius() {
   if (!home) return;
+  // the map has no size yet (page loading in a hidden window): zooming now would pick the whole-world view
+  if (!map.getSize().x) { map.invalidateSize(); return setTimeout(fitRadius, 500); }
   map.setView(home, map.getBoundsZoom(radiusBounds()) + DEFAULT_ZOOM_STEPS, { animate: true });
 }
 
@@ -1328,6 +1358,7 @@ $('soundOn').checked = soundOn;
 $('soundOn').addEventListener('change', e => {
   soundOn = e.target.checked; save('skySound', soundOn);
   if (soundOn) { unlockAudio(); setTimeout(chime, 50); } else stopSpeech();
+  showSoundLock();
 });
 // browsers only allow sound once the viewer has clicked or typed on the page, so unlock on any interaction
 function unlockAudio() {
@@ -1337,6 +1368,20 @@ function unlockAudio() {
   } catch (e) {}
 }
 ['click', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, unlockAudio, { passive: true }));
+
+// Sound lock: browsers keep a page silent (chime AND voice) until it has been clicked, and that resets every time the
+// page reloads (including after an update). While that's the case, a bar at the top asks for one click.
+const soundLocked = () => !!navigator.userActivation && !navigator.userActivation.hasBeenActive;
+function showSoundLock(force) { $('soundLock').hidden = !(soundOn && (force || soundLocked())); }
+function unlockSound() {
+  unlockAudio();
+  // a silent utterance during the click lets this tab speak later
+  if ('speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); }
+  $('soundLock').hidden = true;
+}
+$('soundLock').onclick = () => { unlockSound(); setTimeout(chime, 150); };
+['click', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, () => { if (!$('soundLock').hidden) unlockSound(); }, { passive: true }));
+setTimeout(() => showSoundLock(), 1500);
 
 function chime(delay = 0) {
   if (!audioCtx || audioCtx.state !== 'running') return false;
@@ -1415,7 +1460,10 @@ function sayBrowser(text, voice) {
     u.voice = en.find(v => TIKTOK_LIKE.test(v.name) && /natural|online/i.test(v.name)) || en.find(v => TIKTOK_LIKE.test(v.name)) || en[0] || null;
     u.pitch = 1.25; u.rate = 1.12;
   } else if (voice) u.voice = voices.find(v => v.name === voice) || null;
-  speechSynthesis.speak(u);
+  u.onerror = e => { if (e.error === 'not-allowed') showSoundLock(true); }; // the browser blocked it: ask for a click
+  // Chrome can silently drop speech queued right after cancel(), or stay stuck paused: nudge it, then speak
+  speechSynthesis.resume();
+  setTimeout(() => speechSynthesis.speak(u), 60);
 }
 
 // --- the add-on engines, each loaded the first time it's used ---
@@ -1482,7 +1530,7 @@ function playBlob(blob) {
   stopSpeech();
   const url = URL.createObjectURL(blob), audio = speechAudio = new Audio(url);
   audio.onended = () => URL.revokeObjectURL(url);
-  return audio.play();
+  return audio.play().catch(e => { if (e && e.name === 'NotAllowedError') showSoundLock(true); throw e; });
 }
 
 // Speak with the chosen voice. If an add-on engine fails (offline, old browser), the built-in voice is used instead.
@@ -1537,15 +1585,7 @@ function alertSound(hex) {
   if (!soundOn) return;
   unlockAudio();
   const played = chime();
-  if (!played && !soundBlockedShown) {
-    soundBlockedShown = true;
-    const el = document.createElement('div');
-    el.className = 'toast'; el.style.setProperty('--bc', '#ffb547');
-    el.innerHTML = '<b>🔇 Sound is blocked</b><br>Your browser needs one click on this page before it can play the overhead alert. Click anywhere to turn it on.';
-    el.onclick = () => el.remove();
-    $('toasts').appendChild(el);
-    setTimeout(() => el.remove(), 15000);
-  }
+  if (!played) showSoundLock(true); // the browser hasn't been clicked yet: ask for one
   // give the route lookup a moment to arrive, then announce (after the chime finishes)
   // (if the lookup is still on its way, wait up to ~6 s more so the destination can be said)
   const started = Date.now();
@@ -1661,7 +1701,7 @@ function shareCaption({ a, reg }) {
   const ids = [a.flight, reg && reg !== a.flight ? reg : ''].filter(Boolean).join(' / ');
   const lead = a.dist != null && a.dist < 1 ? '✈ Overhead now' : '✈ Flying near home';
   const model = a.lat != null ? modelOf(a) : 'an aircraft';
-  return `${lead}: ${model}${ids ? ` (${ids})` : ''}${airlineOf(a) ? ` · ${airlineOf(a)}` : ''}${route}. Tracked with Krabbz9999 - FlightTracker 🛩️ flighttracker.loves3d.com`;
+  return `${lead}: ${model}${ids ? ` (${ids})` : ''}${airlineOf(a) ? ` · ${airlineOf(a)}` : ''}${route}. Tracked with Krabbz9999 - Look A Plane! 🛩️ flighttracker.loves3d.com`;
 }
 // capture phase so a Share click never also selects a card underneath
 document.addEventListener('click', async e => {
@@ -1826,14 +1866,23 @@ async function drawRegTrack(hex, fit) {
 }
 
 // ---------- nearby scrolling alert ----------
-const ALERT_MI = 1;
+// overhead distance: planes inside this circle set off the alerts (Settings > Alerts; each browser keeps its own)
+let ALERT_MI = load('skyAlertMi', 1);
+const miText = v => +v.toFixed(2) + ' mi';
+$('alertMiIn').value = ALERT_MI;
+$('alertMiVal').textContent = miText(ALERT_MI);
+$('alertMiIn').addEventListener('input', e => {
+  ALERT_MI = +e.target.value; save('skyAlertMi', ALERT_MI);
+  $('alertMiVal').textContent = miText(ALERT_MI);
+  drawHome(); renderTicker(); // redraw the red circle and the banner right away
+});
 let tickerKey = '';
 function renderTicker() {
   const close = current.filter(a => a.dist != null && a.dist < ALERT_MI).sort((a, b) => a.dist - b.dist);
   const el = $('ticker'), track = $('tickerTrack');
   if (!close.length) { el.className = ''; tickerKey = ''; return; }
   el.className = 'show';
-  $('tickerLbl').textContent = `${close.length} within ${ALERT_MI} mi`;
+  $('tickerLbl').textContent = `${close.length} within ${+ALERT_MI.toFixed(2)} mi`;
   const items = close.map(a => {
     const Lk = look(a.hex), i = Lk.info || {};
     const reg = a.reg || i.reg || '';
@@ -2717,6 +2766,56 @@ $('jumpIn').closest('form').addEventListener('submit', async e => {
   }
 });
 $('jumpIn').addEventListener('keydown', e => { if (e.key === 'Escape') { $('jumpResults').innerHTML = ''; e.target.blur(); } });
+
+// ---------- map legend: what the colours and icons mean (🗺 Legend button, bottom left of the map) ----------
+const legend = L.control({ position: 'bottomleft' });
+legend.onAdd = () => {
+  const el = L.DomUtil.create('div', 'map-legend');
+  L.DomEvent.disableClickPropagation(el);
+  L.DomEvent.disableScrollPropagation(el);
+  const altStops = [0, 5000, 10000, 20000, 30000, 40000];
+  const grad = altStops.map((a, i) => `${altColor(a)} ${i / (altStops.length - 1) * 100}%`).join(', ');
+  const icon = (svg, label) => `<div class="lg-row"><span class="lg-ic">${svg}</span>${label}</div>`;
+  const halo = (c, tag, label) => `<div class="lg-row"><span class="lg-ic"><span class="lg-halo" style="--hc:${c}"></span>${planeSvg(altColor(15000), 45)}</span><span><b style="color:${c}">${tag}</b> ${label}</span></div>`;
+  const ship = (s, label) => icon(shipSvg({ heading: 45, ...s }), label);
+  const sq = (c, size, label, h) => `<div class="lg-row"><span class="lg-ic"><i class="lg-apt${h ? ' h' : ''}" style="--c:${c};--s:${size}px"></i></span>${label}</div>`;
+  el.innerHTML = `<button type="button" class="lg-btn" aria-expanded="false">🗺 Legend</button>
+    <div class="lg-panel" hidden>
+      <h5>Planes: colour = altitude</h5>
+      <div class="lg-grad" style="background:linear-gradient(90deg, ${grad})"></div>
+      <div class="lg-scale"><span>0</span><span>10k</span><span>20k</span><span>30k</span><span>40k ft</span></div>
+      ${icon(planeSvg(altColor(30000), 45), 'Plane, pointing the way it flies')}
+      ${icon(heliSvg(altColor(1500), 45), 'Helicopter')}
+      ${icon(planeSvg('#9aa4bf', 45), 'On the ground')}
+      ${icon(planeSvg('#5b6684', 45), 'Outside your Tracker Radius')}
+      ${halo('#9be15d', 'MIL', 'Military')}
+      ${halo('#c58cff', '★', 'Interesting (government, unusual)')}
+      ${halo('#ff5d73', 'SOS', 'Emergency squawk')}
+      <div class="lg-row"><span class="lg-ic"><span class="lg-logo">✈</span></span>Airline logo beside airline flights</div>
+      <h5>Circles</h5>
+      <div class="lg-row"><span class="lg-ic"><i class="lg-ring" style="border:2px solid #4cc9f0"></i></span>Tracker Radius</div>
+      <div class="lg-row"><span class="lg-ic"><i class="lg-ring" style="border:2px dashed #ff5d73"></i></span>Overhead circle (alerts)</div>
+      <h5>Airports</h5>
+      ${sq('#ffb547', 14, 'Major airport')}${sq('#ffd27a', 12, 'Regional airport')}${sq('#a9b4d0', 9, 'Small airfield')}${sq('#6fb3ff', 9, 'Seaplane base')}${sq('#c58cff', 12, 'Heliport', true)}
+      <h5>Ships (with ship tracking)</h5>
+      ${ship({ type: 60, length: 290, name: 'CARNIVAL X' }, 'Cruise ship (with its line\'s logo)')}
+      ${icon(`<span style="opacity:.55">${shipSvg({ heading: 45, type: 60, length: 290, name: 'CARNIVAL X' })}</span>`, 'Cruise ship, last seen (out of range)')}
+      ${ship({ type: 60, length: 80 }, 'Ferry or passenger boat')}
+      ${ship({ type: 70, length: 120 }, 'Cargo ship')}
+      ${ship({ type: 80, length: 120 }, 'Tanker')}
+      ${ship({ type: 52 }, 'Tug, towing or pilot boat')}
+      ${ship({ type: 37 }, 'Sailboat or pleasure boat')}
+      ${ship({ type: 30 }, 'Fishing boat')}
+      ${ship({ type: 55 }, 'Law enforcement')}
+      ${ship({}, 'Other or not reported yet')}
+    </div>`;
+  const btn = el.querySelector('.lg-btn'), panel = el.querySelector('.lg-panel');
+  const set = open => { panel.hidden = !open; btn.setAttribute('aria-expanded', open); save('skyLegend', open); };
+  btn.onclick = () => set(panel.hidden);
+  set(load('skyLegend', false));
+  return el;
+};
+legend.addTo(map);
 
 pollShips(); setInterval(pollShips, 10000);
 

@@ -1,4 +1,4 @@
-# Krabbz9999 - FlightTracker
+# Krabbz9999 - Look A Plane!
 
 A live dashboard of the planes flying over your house. Runs on any Windows PC as a single `.exe`,
 shows a map of everything nearby, and takes over the screen with a close-up and a spoken alert

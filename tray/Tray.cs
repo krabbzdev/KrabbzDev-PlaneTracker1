@@ -1,7 +1,7 @@
-// System tray icon for Krabbz9999 - FlightTracker.
+// System tray icon for Krabbz9999 - Look A Plane!.
 // Node.js can't show a tray icon, so the app carries this tiny helper inside its .exe and starts it.
 // Usage: Krabbz9999-FlightTracker-Tray.exe <port> <app process id> <tooltip>
-// Left-click or "Open FlightTracker" opens the dashboard; "Quit" asks the app to save and exit.
+// Left-click or "Open Look A Plane!" opens the dashboard; "Quit" asks the app to save and exit.
 // The helper closes itself as soon as the app's process is gone (including when an update restarts it).
 // Build: csc /target:winexe /out:build\Krabbz9999-FlightTracker-Tray.exe tray\Tray.cs
 using System;
@@ -24,13 +24,13 @@ static class Tray
         if (args.Length < 2 || !int.TryParse(args[0], out port) || !int.TryParse(args[1], out appPid)) return;
         url = "http://localhost:" + port + "/";
         api = "http://127.0.0.1:" + port + "/"; // the app only listens on this PC's IPv4 loopback
-        string tip = args.Length > 2 ? args[2] : "Krabbz9999 - FlightTracker";
+        string tip = args.Length > 2 ? args[2] : "Krabbz9999 - Look A Plane!";
 
         Process app;
         try { app = Process.GetProcessById(appPid); } catch { return; } // app already gone
 
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Open FlightTracker", null, (s, e) => Open()).Font = new Font(menu.Font, FontStyle.Bold);
+        menu.Items.Add("Open Look A Plane!", null, (s, e) => Open()).Font = new Font(menu.Font, FontStyle.Bold);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Quit", null, (s, e) => Quit());
 

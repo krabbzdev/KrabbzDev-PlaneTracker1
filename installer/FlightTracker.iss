@@ -1,11 +1,11 @@
-; Installer for Krabbz9999 - FlightTracker (Inno Setup 6, https://jrsoftware.org/isinfo.php).
+; Installer for Krabbz9999 - Look A Plane! (Inno Setup 6, https://jrsoftware.org/isinfo.php).
 ; Installs for the current user WITHOUT admin rights, into C:\Users\Public\Apps\Krabbz9999-FlightTracker.
 ; Built by GitHub Actions on every release (.github/workflows/release.yml):
 ;   ISCC.exe /DAppVersion=1.0.44 installer\FlightTracker.iss   ->   dist\Krabbz9999-FlightTracker-Setup.exe
 ; The app keeps its settings and data next to the .exe, which is why it goes in a folder the user can write to,
 ; and it updates itself in place from GitHub Releases after that.
 
-#define AppName "Krabbz9999 - FlightTracker"
+#define AppName "Krabbz9999 - Look A Plane!"
 #define AppExe "Krabbz9999-FlightTracker.exe"
 #define TrayExe "Krabbz9999-FlightTracker-Tray.exe"
 #ifndef AppVersion
@@ -42,7 +42,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
-Name: "startup"; Description: "Start FlightTracker when I sign in to Windows (runs in the tray)"; Flags: unchecked
+Name: "startup"; Description: "Start Look A Plane! when I sign in to Windows (runs in the tray)"; Flags: unchecked
 
 [Files]
 Source: "..\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
@@ -52,6 +52,12 @@ Name: "{userprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{ap
 Name: "{userdesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Tasks: desktopicon
 ; --background: start quietly in the tray without opening the browser
 Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExe}"; Parameters: "--background"; WorkingDir: "{app}"; Tasks: startup
+
+[InstallDelete]
+; the app used to be called "Krabbz9999 - FlightTracker": remove shortcuts under the old name when upgrading
+Type: files; Name: "{userprograms}\Krabbz9999 - FlightTracker.lnk"
+Type: files; Name: "{userdesktop}\Krabbz9999 - FlightTracker.lnk"
+Type: files; Name: "{userstartup}\Krabbz9999 - FlightTracker.lnk"
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "Start {#AppName} now"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent

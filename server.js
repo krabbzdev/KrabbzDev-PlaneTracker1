@@ -1,4 +1,4 @@
-// Krabbz9999 - FlightTracker - tiny local server for the dashboard.
+// Krabbz9999 - Look A Plane! - tiny local server for the dashboard.
 // Serves index.html and proxies the public adsb.fi feed plus aircraft photo/info lookups
 // so the browser never hits CORS problems.
 //
@@ -1161,7 +1161,7 @@ function startTray(tries = 0) {
     return console.log('Tray icon unavailable: ' + e.message);
   }
   try {
-    require('child_process').spawn(TRAY_EXE, [String(PORT), String(process.pid), `Krabbz9999 - FlightTracker (build ${VERSION.build})`],
+    require('child_process').spawn(TRAY_EXE, [String(PORT), String(process.pid), `Krabbz9999 - Look A Plane! (build ${VERSION.build})`],
       { detached: true, stdio: 'ignore', cwd: APP_DIR }).unref();
   } catch (e) { console.log('Tray icon unavailable: ' + e.message); }
 }
@@ -1178,6 +1178,6 @@ server.on('error', e => {
 const HOST = '127.0.0.1';
 server.listen(PORT, HOST, () => {
   aisConnect();
-  console.log(`Krabbz9999 - FlightTracker v${VERSION.version} build ${VERSION.build} running at http://localhost:${PORT}`);
+  console.log(`Krabbz9999 - Look A Plane! v${VERSION.version} build ${VERSION.build} running at http://localhost:${PORT}`);
   if (sea) { console.log('To stop it, close this window or right-click the plane icon in the system tray and choose Quit.'); openBrowser(); startTray(); }
 });
