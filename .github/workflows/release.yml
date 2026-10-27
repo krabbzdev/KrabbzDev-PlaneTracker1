@@ -36,6 +36,16 @@ jobs:
           & $signtool.FullName remove /s Krabbz9999-FlightTracker.exe
           npx --yes postject@1.0.0-alpha.6 Krabbz9999-FlightTracker.exe NODE_SEA_BLOB build/sea-prep.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
 
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          # Inno Setup comes with GitHub's Windows build machines; install it if a future image drops it
+          $v = Get-Content version.json -Raw | ConvertFrom-Json
+          $iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { choco install innosetup -y --no-progress | Out-Null; $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc /Q "/DAppVersion=$($v.version).$($v.build)" installer\FlightTracker.iss
+          if ($LASTEXITCODE) { throw 'Installer build failed' }
+
       - name: Publish the release
         shell: pwsh
         env:
@@ -44,4 +54,5 @@ jobs:
           $v = Get-Content version.json -Raw | ConvertFrom-Json
           $notes = (git tag -l --format='%(contents)' $env:GITHUB_REF_NAME) -join "`n"
           if (-not $notes.Trim()) { $notes = "Build $($v.build)" }
-          gh release create $env:GITHUB_REF_NAME Krabbz9999-FlightTracker.exe --title "Krabbz9999 - FlightTracker $($v.version) build $($v.build)" --notes "$notes"
+          # the installer is what people download; the plain .exe is what installed copies update themselves from
+          gh release create $env:GITHUB_REF_NAME dist\Krabbz9999-FlightTracker-Setup.exe Krabbz9999-FlightTracker.exe --title "Krabbz9999 - FlightTracker $($v.version) build $($v.build)" --notes "$notes"

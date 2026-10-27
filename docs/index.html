@@ -158,7 +158,7 @@
         <h1>See every plane <em>over your house</em></h1>
         <p class="lede">A live map of the aircraft around your home, with photos, routes and owners. When one flies right overhead, it takes over the screen and tells you what it is.</p>
         <div class="cta">
-          <a class="btn primary" id="dl" href="https://github.com/showtechclove1/krabbz9999-flighttracker/releases/latest/download/Krabbz9999-FlightTracker.exe">
+          <a class="btn primary" id="dl" href="https://github.com/showtechclove1/krabbz9999-flighttracker/releases/latest/download/Krabbz9999-FlightTracker-Setup.exe">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16"/></svg>
             Download for Windows
           </a>
@@ -177,22 +177,22 @@
   <section id="install">
     <div class="wrap">
       <h2>Install in two minutes</h2>
-      <p class="sub">There's no installer and nothing else to set up. The app is a single file that runs a small dashboard on your PC and opens it in your browser.</p>
+      <p class="sub">A small installer that doesn't need admin rights. The app runs a dashboard on your PC and opens it in your browser.</p>
       <ol class="steps">
         <li>
-          <h3>Download</h3>
-          <p>Get <b>Krabbz9999-FlightTracker.exe</b> with the button above.</p>
-          <p>Make a folder for it, like <code>C:\FlightTracker</code>, and move it there. Its settings and daily log are saved in that folder.</p>
+          <h3>Download and install</h3>
+          <p>Get <b>Krabbz9999-FlightTracker-Setup.exe</b> with the button above and run it.</p>
+          <p>It installs just for you, with <b>no admin password</b>, into <code>C:\Users\Public\Apps\Krabbz9999-FlightTracker</code>, and adds it to your Start menu. You can also tick <b>desktop shortcut</b> and <b>start when I sign in</b>.</p>
+          <p class="note">Windows may say <b>"Windows protected your PC"</b> because the app isn't code-signed. Click <b>More info</b>, then <b>Run anyway</b>.</p>
         </li>
         <li>
           <h3>Run it</h3>
-          <p>Double-click the file. A small black window opens (that's the app; leave it open) and the dashboard opens in your browser.</p>
-          <p class="note">Windows may say <b>"Windows protected your PC"</b> because the app isn't code-signed. Click <b>More info</b>, then <b>Run anyway</b>. If Windows Firewall asks, allow <b>Private networks</b>.</p>
+          <p>It starts when the installer finishes, or from the Start menu any time. A ✈ icon appears by the clock and the dashboard opens in your browser.</p>
         </li>
         <li>
-          <h3>Enter your address</h3>
-          <p>The first time, it asks for your <b>home address</b>. Type it, click <b>Find</b>, then <b>Save</b>. Planes start showing up right away.</p>
-          <p>It only asks once. Change it any time with <kbd>🏠 Home</kbd>.</p>
+          <h3>Enter your ZIP code or address</h3>
+          <p>The first time, it asks where home is. Type your <b>ZIP code</b> or <b>address</b>, pick it from the list, then <b>Save</b>. Planes start showing up right away.</p>
+          <p>It only asks once. Change it any time in <kbd>⚙ Settings</kbd>.</p>
         </li>
       </ol>
       <div class="reqs">
@@ -244,7 +244,7 @@
       <details class="q"><summary>Do I need an antenna or receiver?</summary><p>No. Aircraft come from adsb.fi, a free public network of volunteer receivers, so it works anywhere with an internet connection.</p></details>
       <details class="q"><summary>Is it safe? Why does Windows warn me?</summary><p>Windows warns about any app that isn't signed with a paid certificate. The full source code is public on GitHub, so you can see exactly what it does. It only talks to the public services listed below.</p></details>
       <details class="q"><summary>Where is my information kept?</summary><p>Your settings stay on your PC, in a <code>settings.json</code> file next to the app. When you search for your address, it's sent once to OpenStreetMap to find its map coordinates. After that, only those coordinates are sent, to adsb.fi, to ask which planes are nearby.</p></details>
-      <details class="q"><summary>Does it work on a Mac or phone?</summary><p>The app runs on Windows. Once it's running, any device on your home network can open the dashboard in a browser, including phones, tablets and Macs.</p></details>
+      <details class="q"><summary>Does it work on a Mac or phone?</summary><p>The app runs on Windows, and the dashboard opens in a browser on that PC.</p></details>
       <details class="q"><summary>How do I stop it, or start it with Windows?</summary><p>Close the black console window to stop it. To start it automatically, press <kbd>Win</kbd>+<kbd>R</kbd>, type <code>shell:startup</code>, and put a shortcut to the app in the folder that opens.</p></details>
       <details class="q"><summary>Can I see full FAA owner records?</summary><p>Yes, for US aircraft. Download the FAA's <a href="https://registry.faa.gov/database/ReleasableAircraft.zip">ReleasableAircraft.zip</a> (about 60 MB) yourself, put it next to the app and restart it. Street addresses are never shown.</p></details>
     </div>
@@ -289,7 +289,7 @@
       const label = build ? `build ${build} · ${date}` : `${rel.tag_name} · ${date}`;
       document.getElementById('ver').textContent = label;
       document.getElementById('ver2').textContent = label;
-      const exe = (rel.assets || []).find(a => /\.exe$/i.test(a.name));
+      const exe = (rel.assets || []).find(a => /-Setup\.exe$/i.test(a.name)) || (rel.assets || []).find(a => /\.exe$/i.test(a.name));
       if (exe) document.getElementById('size').textContent = Math.round(exe.size / 1048576) + ' MB';
     })
     .catch(() => {});

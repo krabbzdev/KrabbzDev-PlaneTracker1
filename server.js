@@ -798,8 +798,9 @@ const server = http.createServer(async (req, res) => {
 
 process.on('unhandledRejection', e => console.log('Background task failed: ' + (e && e.message || e)));
 
+// --background (used by the "start with Windows" shortcut): run quietly in the tray without opening the browser
 const openBrowser = () => {
-  if (process.env.NO_BROWSER) return;
+  if (process.env.NO_BROWSER || process.argv.includes('--background')) return;
   require('child_process').exec(`start "" http://localhost:${PORT}`);
 };
 // ---------- ships: live AIS positions from AISStream.io (optional, needs a free API key) ----------
@@ -1169,11 +1170,13 @@ let listenTries = 0;
 server.on('error', e => {
   if (e.code !== 'EADDRINUSE') throw e;
   // just updated: the old copy may still be letting go of the port, so wait for it
-  if (process.env.FT_RESTART && ++listenTries < 20) return setTimeout(() => server.listen(PORT), 1000);
+  if (process.env.FT_RESTART && ++listenTries < 20) return setTimeout(() => server.listen(PORT, HOST), 1000);
   // already running (e.g. double-clicked twice): just open the existing dashboard
   console.log('Already running - opening it in your browser.'); if (sea) openBrowser(); setTimeout(() => process.exit(0), 1500);
 });
-server.listen(PORT, () => {
+// Only this PC can open the dashboard (no other devices on the network, and no Windows Firewall prompt)
+const HOST = '127.0.0.1';
+server.listen(PORT, HOST, () => {
   aisConnect();
   console.log(`Krabbz9999 - FlightTracker v${VERSION.version} build ${VERSION.build} running at http://localhost:${PORT}`);
   if (sea) { console.log('To stop it, close this window or right-click the plane icon in the system tray and choose Quit.'); openBrowser(); startTray(); }

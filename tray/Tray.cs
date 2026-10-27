@@ -15,7 +15,7 @@ using System.Windows.Forms;
 static class Tray
 {
     static NotifyIcon icon;
-    static string url;
+    static string url, api;
 
     [STAThread]
     static void Main(string[] args)
@@ -23,6 +23,7 @@ static class Tray
         int port, appPid;
         if (args.Length < 2 || !int.TryParse(args[0], out port) || !int.TryParse(args[1], out appPid)) return;
         url = "http://localhost:" + port + "/";
+        api = "http://127.0.0.1:" + port + "/"; // the app only listens on this PC's IPv4 loopback
         string tip = args.Length > 2 ? args[2] : "Krabbz9999 - FlightTracker";
 
         Process app;
@@ -66,7 +67,7 @@ static class Tray
             using (var web = new WebClient())
             {
                 web.Headers["X-FT-Tray"] = "1"; // the app only accepts quit requests carrying this
-                web.UploadString(url + "api/quit", "");
+                web.UploadString(api + "api/quit", "");
             }
         }
         catch { }
