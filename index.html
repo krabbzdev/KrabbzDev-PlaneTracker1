@@ -405,9 +405,10 @@
     box-shadow: 0 4px 16px rgba(0,0,0,.5); max-width: calc(100% - 120px); overflow: hidden; }
   .explore-bar[hidden] { display: none; }
   .map-legend { font: 12px Inter, sans-serif; color: var(--text); }
-  .map-legend .lg-btn { background: rgba(18,26,48,.95); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 7px 11px; font: 600 12.5px Inter, sans-serif; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,.5); }
-  .map-legend .lg-btn:hover, .map-legend .lg-btn[aria-expanded="true"] { border-color: var(--accent); }
-  .map-legend .lg-panel { margin-top: 6px; width: 250px; max-height: calc(55vh / var(--ui)); overflow-y: auto; background: rgba(18,26,48,.97); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px 10px; box-shadow: 0 6px 24px rgba(0,0,0,.6); }
+  .map-legend .lg-box { width: 230px; background: rgba(18,26,48,.95); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px 6px; box-shadow: 0 2px 10px rgba(0,0,0,.5); }
+  .map-legend .lg-btn { display: block; width: 100%; text-align: left; background: none; color: var(--accent); border: 0; border-top: 1px solid var(--line); padding: 5px 0 1px; margin-top: 2px; font: 600 11.5px Inter, sans-serif; cursor: pointer; }
+  .map-legend .lg-btn:hover { text-decoration: underline; }
+  .map-legend .lg-panel { max-height: calc(45vh / var(--ui)); overflow-y: auto; margin: 0 -4px 4px 0; padding-right: 4px; }
   .map-legend .lg-panel[hidden] { display: none; }
   .map-legend h5 { margin: 8px 0 5px; font-size: 11px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); }
   .map-legend h5:first-child { margin-top: 2px; }
@@ -1040,7 +1041,7 @@ map.on('zoomend', drawAirports);
 $('showApts').addEventListener('change', e => { showApts = e.target.checked; save('skyShowApts', showApts); drawAirports(); });
 
 const radiusBounds = () => L.latLng(home).toBounds(radius * MI * 2.2);
-const DEFAULT_ZOOM_STEPS = 1; // start at 200%: one step closer than the view that fits the whole Tracker Radius
+const DEFAULT_ZOOM_STEPS = 0; // start at 100%: the view that fits the whole Tracker Radius
 function fitRadius() {
   if (!home) return;
   // the map has no size yet (page loading in a hidden window): zooming now would pick the whole-world view
@@ -1049,11 +1050,11 @@ function fitRadius() {
 }
 
 // Zoom level as a percentage beside +/-: 100% shows the whole Tracker Radius, each zoom step doubles or halves it.
-// Click it to go back to the default (200%).
+// Click it to go back to the default (100%).
 const zoomPct = L.control({ position: 'topleft' });
 zoomPct.onAdd = () => {
   const el = L.DomUtil.create('div', 'leaflet-bar zoom-pct');
-  el.title = 'Zoom level (100% shows your whole Tracker Radius). Click to go back to the default, 200%.';
+  el.title = 'Zoom level (100% shows your whole Tracker Radius). Click to go back to the default, 100%.';
   L.DomEvent.disableClickPropagation(el);
   el.onclick = fitRadius;
   return el;
@@ -1563,17 +1564,47 @@ function chime(delay = 0) {
 
 // ---------- announcement voice ----------
 // One upbeat "TikTok style" voice: the most natural-sounding US English voice on this PC, a little higher and faster.
-const TIKTOK_LIKE = /jenny|aria|ava|emma|michelle|samantha|google us english|zira/i;
-function say(text) {
+const TIKTOK_LIKE = /jenny|aria|ava|emma|michelle|samantha|zira/i;
+// Edge's "Natural" voices sound best. Other online voices (like Chrome's "Google US English") sometimes stay silent
+// without any error, so voices built into Windows come next, and a retry always uses one of those.
+function pickVoice(builtInOnly) {
+  const en = speechSynthesis.getVoices().filter(v => /^en-US/i.test(v.lang) && (v.localService || !builtInOnly));
+  return (!builtInOnly && en.find(v => TIKTOK_LIKE.test(v.name) && /natural/i.test(v.name)))
+    || en.find(v => v.localService && TIKTOK_LIKE.test(v.name)) || en.find(v => v.localService) || en[0] || null;
+}
+// Windows lists its voices a moment after the page opens: ask now, so they're ready for the first announcement
+if ('speechSynthesis' in window) { speechSynthesis.getVoices(); speechSynthesis.addEventListener('voiceschanged', () => speechSynthesis.getVoices()); }
+const voicesReady = () => speechSynthesis.getVoices().length ? Promise.resolve()
+  : new Promise(r => { speechSynthesis.addEventListener('voiceschanged', r, { once: true }); setTimeout(r, 1500); });
+let sayId = 0;
+async function say(text, retry) {
   if (!('speechSynthesis' in window)) return;
+  const id = retry ? sayId : ++sayId;
   stopSpeech();
-  const u = new SpeechSynthesisUtterance(text), en = speechSynthesis.getVoices().filter(v => /^en-US/i.test(v.lang));
-  u.voice = en.find(v => TIKTOK_LIKE.test(v.name) && /natural|online/i.test(v.name)) || en.find(v => TIKTOK_LIKE.test(v.name)) || en[0] || null;
+  await voicesReady();
+  if (id !== sayId) return; // something newer is being said
+  const u = new SpeechSynthesisUtterance(text);
+  u.voice = pickVoice(retry);
+  u.lang = u.voice?.lang || 'en-US';
   u.pitch = 1.25; u.rate = 1.12;
-  u.onerror = e => { if (e.error === 'not-allowed') showSoundLock(true); }; // the browser blocked it: ask for a click
+  let started = false;
+  u.onstart = () => { started = true; };
+  u.onerror = e => {
+    if (e.error === 'not-allowed') return showSoundLock(true); // the browser blocked it: ask for a click
+    if (!retry && !started && id === sayId && !/interrupted|canceled/.test(e.error)) say(text, true);
+  };
   // Chrome can silently drop speech queued right after cancel(), or stay stuck paused: nudge it, then speak
   speechSynthesis.resume();
-  setTimeout(() => speechSynthesis.speak(u), 60);
+  setTimeout(() => {
+    if (id !== sayId) return;
+    speechSynthesis.speak(u);
+    // nothing after 3 s (a voice that failed silently): try again with a voice built into Windows
+    if (!retry) setTimeout(() => {
+      if (started || id !== sayId) return;
+      console.log('Voice "' + (u.voice?.name || 'default') + '" did not start; trying a built-in voice');
+      say(text, true);
+    }, 3000);
+  }, 60);
 }
 function stopSpeech() { if ('speechSynthesis' in window) speechSynthesis.cancel(); }
 
@@ -2939,11 +2970,12 @@ legend.onAdd = () => {
   const halo = (c, tag, label) => `<div class="lg-row"><span class="lg-ic"><span class="lg-halo" style="--hc:${c}"></span>${planeSvg(altColor(15000), 45)}</span><span><b style="color:${c}">${tag}</b> ${label}</span></div>`;
   const ship = (s, label) => icon(shipSvg({ heading: 45, ...s }), label);
   const sq = (c, size, label, h) => `<div class="lg-row"><span class="lg-ic"><i class="lg-apt${h ? ' h' : ''}" style="--c:${c};--s:${size}px"></i></span>${label}</div>`;
-  el.innerHTML = `<button type="button" class="lg-btn" aria-expanded="false">🗺 Legend</button>
+  // the altitude colour bar always shows; the button below it opens everything else
+  el.innerHTML = `<div class="lg-box">
+    <h5>Planes: colour = altitude</h5>
+    <div class="lg-grad" style="background:linear-gradient(90deg, ${grad})"></div>
+    <div class="lg-scale"><span>0</span><span>10k</span><span>20k</span><span>30k</span><span>40k ft</span></div>
     <div class="lg-panel" hidden>
-      <h5>Planes: colour = altitude</h5>
-      <div class="lg-grad" style="background:linear-gradient(90deg, ${grad})"></div>
-      <div class="lg-scale"><span>0</span><span>10k</span><span>20k</span><span>30k</span><span>40k ft</span></div>
       ${icon(planeSvg(altColor(30000), 45), 'Plane, pointing the way it flies')}
       ${icon(heliSvg(altColor(1500), 45), 'Helicopter')}
       ${icon(planeSvg('#9aa4bf', 45), 'On the ground')}
@@ -2968,9 +3000,13 @@ legend.onAdd = () => {
       ${ship({ type: 30 }, 'Fishing boat')}
       ${ship({ type: 55 }, 'Law enforcement')}
       ${ship({}, 'Other or not reported yet')}
-    </div>`;
+    </div>
+    <button type="button" class="lg-btn" aria-expanded="false"></button></div>`;
   const btn = el.querySelector('.lg-btn'), panel = el.querySelector('.lg-panel');
-  const set = open => { panel.hidden = !open; btn.setAttribute('aria-expanded', open); save('skyLegend', open); };
+  const set = open => {
+    panel.hidden = !open; btn.setAttribute('aria-expanded', open); save('skyLegend', open);
+    btn.textContent = open ? '▾ Show less' : '▸ Full legend: icons, circles, airports, ships';
+  };
   btn.onclick = () => set(panel.hidden);
   set(load('skyLegend', false));
   return el;
