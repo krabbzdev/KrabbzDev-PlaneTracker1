@@ -546,6 +546,11 @@
   <label class="chk"><input type="checkbox" id="showAll"> Show outside radius</label>
   <label class="chk"><input type="checkbox" id="showApts" checked> Show Airports</label>
   <label class="chk" title="Live rain radar on the map (US, refreshes every 5 minutes)"><input type="checkbox" id="wxOn" checked> 🌧 Show Weather</label>
+  <label class="chk" title="How the map looks"><span>🌍 Map</span>
+    <select id="mapStyleSel" class="chart-sel" aria-label="Map style">
+      <option value="dark">Dark</option><option value="light">Light</option><option value="streets">Streets</option>
+      <option value="topo">Topographic</option><option value="satellite">Satellite</option>
+    </select></label>
   <label class="chk" title="FAA aeronautical charts under the map (US). Not for navigation."><span>🗺 Chart</span>
     <select id="chartSel" class="chart-sel" aria-label="Aeronautical chart">
       <option value="">None</option><option value="sectional">VFR Sectional</option><option value="terminal">VFR Terminal Area</option>
@@ -827,8 +832,29 @@ const fmtAlt = a => a === 'ground' ? 'Ground' : a == null ? '—' : a.toLocaleSt
 // ---------- map ----------
 const map = L.map('map', { zoomControl: true, attributionControl: true, scrollWheelZoom: false }) // zoom with +/- only, so page scrolling never zooms the map.setView(home || [27.9506, -82.4572], 11);
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
-L.tileLayer(ESRI + 'World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, attribution: 'Tiles &copy; Esri' }).addTo(map);
-const placeNames = L.tileLayer(ESRI + 'World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, pane: 'shadowPane' }).addTo(map);
+// Map style, picked with 🌍 Map in the top bar (each browser keeps its own): Esri's free maps. Each style is a
+// background plus, for most, a layer of place names drawn above the weather radar.
+const ESRI_MAPS = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
+const MAP_STYLES = { // value: [background, place names or null]
+  dark: ['Canvas/World_Dark_Gray_Base', 'Canvas/World_Dark_Gray_Reference'],
+  light: ['Canvas/World_Light_Gray_Base', 'Canvas/World_Light_Gray_Reference'],
+  streets: ['World_Street_Map', null],
+  topo: ['World_Topo_Map', null],
+  satellite: ['World_Imagery', 'Reference/World_Boundaries_and_Places'],
+};
+const esriTiles = (svc, opts) => L.tileLayer(ESRI_MAPS + svc + '/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, ...opts });
+let baseLayer = null, placeNames = null;
+function setMapStyle(name) {
+  if (!MAP_STYLES[name]) name = 'dark';
+  save('skyMapStyle', name); $('mapStyleSel').value = name;
+  if (baseLayer) map.removeLayer(baseLayer);
+  if (placeNames) map.removeLayer(placeNames);
+  const [base, names] = MAP_STYLES[name];
+  baseLayer = esriTiles(base, { attribution: 'Tiles &copy; Esri' }).addTo(map);
+  placeNames = names ? esriTiles(names, { pane: 'shadowPane' }) : null;
+  if (placeNames && !chartLayer) placeNames.addTo(map); // a chart has its own place names
+}
+$('mapStyleSel').addEventListener('change', e => setMapStyle(e.target.value));
 
 // Aeronautical charts: the FAA's own digital charts (Aeronautical Information Services, public domain), picked
 // with 🗺 Chart in the top bar. Each chart is drawn for a range of zoom levels; outside it the nearest one is
@@ -847,10 +873,11 @@ function setChart(name) {
     const [svc, minNativeZoom, maxNativeZoom] = CHARTS[name];
     chartLayer = L.tileLayer(FAA_CHARTS + svc + '/MapServer/tile/{z}/{y}/{x}', { pane: 'charts', opacity: .9, minNativeZoom, maxNativeZoom, maxZoom: 16,
       attribution: 'Charts: FAA Aeronautical Information Services (not for navigation)' }).addTo(map);
-    map.removeLayer(placeNames);
-  } else placeNames.addTo(map);
+    if (placeNames) map.removeLayer(placeNames);
+  } else if (placeNames) placeNames.addTo(map);
 }
 $('chartSel').addEventListener('change', e => setChart(e.target.value));
+setMapStyle(load('skyMapStyle', 'dark'));
 setChart(load('skyChart', ''));
 // Weather overlay: NWS NEXRAD rain radar (US only) via Iowa Environmental Mesonet, refreshed every 5 minutes.
 // Sits under the place names (shadowPane) so streets and towns stay readable.

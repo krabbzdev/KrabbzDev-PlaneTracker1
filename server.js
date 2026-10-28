@@ -822,14 +822,19 @@ async function placeSearch(q) {
     } catch (e) {}
     return out;
   }
-  // ships: one already on the map whose name matches, else a ship Wikipedia knows by that exact name (Cruise Finder)
+  // ships: one already on the map whose name matches, else one from the cruise watch's fleet list (any capitals),
+  // else a ship Wikipedia knows by that name (Cruise Finder)
   if (code.length >= 4) {
     for (const sh of ships.values()) {
       if (sh.lat != null && sh.name && sh.name.toUpperCase().includes(code) && out.length < 3)
         out.push({ ship: sh.mmsi, lat: sh.lat, lon: sh.lon, label: `🚢 ${sh.name} (live now)`, zoom: 12 });
     }
     if (!out.length && /[A-Z]{3}/.test(code) && /\s/.test(code)) {
-      const id = await shipIds(q.trim());
+      const bare = s => s.toUpperCase().replace(/^(MS|MV|SS|RMS)\s+/, '').replace(/\s+/g, ' ').trim();
+      const known = fleet.find(s => bare(s.name) === bare(q) || bare(s.title) === bare(q));
+      // Wikipedia titles are case-sensitive after the first letter: "Carnival pride" -> "Carnival Pride"
+      const titled = q.trim().replace(/\s+/g, ' ').replace(/\b[a-z]/g, c => c.toUpperCase());
+      const id = known ? { title: known.title || known.name, mmsi: known.mmsi, imo: known.imo } : await shipIds(titled);
       if (id) {
         const sh = isLiveShip(id.mmsi), last = lastSeenInfo(id.mmsi);
         out.push(sh ? { ship: id.mmsi, lat: sh.lat, lon: sh.lon, label: `🚢 ${sh.name || id.title} (live now)`, zoom: 12 }
