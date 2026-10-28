@@ -224,6 +224,102 @@ function airportsNear(lat, lon, mi) {
     .map(([type, ident, iata, name, la, lo, elev, city]) => ({ type, ident, iata, name, lat: la, lon: lo, elev, city }));
 }
 
+// Everything known about one airport, heliport or seaplane base, for the panel shown when it's clicked on the map:
+// runways or helipads, radio frequencies, region and links from OurAirports (downloaded once, refreshed monthly),
+// a Wikipedia summary when OurAirports links one, and the latest weather report from aviationweather.gov (NOAA).
+const AIRPORT_DETAILS_CACHE = path.join(APP_DIR, 'airport-details-cache.json');
+let airportDetails = null; // Promise of { ident: {...} }
+function loadAirportDetails() {
+  if (!airportDetails) airportDetails = (async () => {
+    try {
+      const c = JSON.parse(fs.readFileSync(AIRPORT_DETAILS_CACHE, 'utf8'));
+      if (Date.now() - c.at < 30 * 86400e3) return c.byIdent;
+    } catch (e) {}
+    const csv = async name => {
+      const r = await get('https://davidmegginson.github.io/ourairports-data/' + name, 90000);
+      if (r.status !== 200) throw new Error(name + ' download failed');
+      const lines = r.body.toString('utf8').split('\n').filter(Boolean), h = parseCsvLine(lines[0]);
+      return lines.slice(1).map(l => { const f = parseCsvLine(l), o = {}; h.forEach((k, i) => o[k] = f[i]); return o; });
+    };
+    const [apts, rwys, freqs, regions, countries] = await Promise.all(
+      ['airports.csv', 'runways.csv', 'airport-frequencies.csv', 'regions.csv', 'countries.csv'].map(csv));
+    const regionName = Object.fromEntries(regions.map(r => [r.code, r.name]));
+    const countryName = Object.fromEntries(countries.map(c => [c.code, c.name]));
+    const want = new Set(['large_airport', 'medium_airport', 'small_airport', 'heliport', 'seaplane_base']);
+    const byIdent = {};
+    for (const a of apts) {
+      if (!want.has(a.type)) continue;
+      byIdent[a.ident] = { region: regionName[a.iso_region] || '', country: countryName[a.iso_country] || a.iso_country, cc: a.iso_country,
+        scheduled: a.scheduled_service === 'yes', icao: a.icao_code || '', gps: a.gps_code || '', local: a.local_code || '',
+        web: a.home_link || '', wiki: a.wikipedia_link || '', keywords: a.keywords || '', runways: [], freqs: [] };
+    }
+    for (const r of rwys) {
+      const d = byIdent[r.airport_ident];
+      if (d) d.runways.push({ name: [r.le_ident, r.he_ident].filter(Boolean).join('/'), len: +r.length_ft || 0, width: +r.width_ft || 0,
+        surface: r.surface || '', lit: r.lighted === '1', closed: r.closed === '1', heading: r.le_heading_degT ? Math.round(+r.le_heading_degT) : null });
+    }
+    for (const f of freqs) {
+      const d = byIdent[f.airport_ident];
+      if (d) d.freqs.push({ type: f.type || '', desc: f.description || '', mhz: f.frequency_mhz || '' });
+    }
+    fs.writeFileSync(AIRPORT_DETAILS_CACHE, JSON.stringify({ at: Date.now(), byIdent }));
+    return byIdent;
+  })().catch(e => { airportDetails = null; throw e; });
+  return airportDetails;
+}
+
+const metarCache = new Map(); // ident -> { at, data }
+async function metarFor(codes, lat, lon) {
+  const key = codes.join(',') || `${lat},${lon}`, hit = metarCache.get(key);
+  if (hit && Date.now() - hit.at < 10 * 60e3) return hit.data;
+  const fetchJson = async q => {
+    const r = await get('https://aviationweather.gov/api/data/metar?format=json&' + q, 8000);
+    return r.status === 200 && r.body.length ? JSON.parse(r.body) : [];
+  };
+  let list = [];
+  try {
+    if (codes.length) list = await fetchJson('ids=' + codes.map(encodeURIComponent).join(','));
+    // no weather station of its own (most heliports): the closest one within about 25 miles
+    if (!list.length) list = await fetchJson(`bbox=${(lat - .4).toFixed(2)},${(lon - .45).toFixed(2)},${(lat + .4).toFixed(2)},${(lon + .45).toFixed(2)}`);
+  } catch (e) { return null; }
+  const dist = m => Math.hypot(m.lat - lat, (m.lon - lon) * Math.cos(lat * Math.PI / 180)) * 69;
+  const m = list.filter(m => m.lat != null).sort((a, b) => dist(a) - dist(b))[0];
+  const data = m ? { station: m.icaoId, stationName: m.name || '', miAway: +dist(m).toFixed(1), time: m.obsTime ? m.obsTime * 1000 : null,
+    tempC: m.temp, dewC: m.dewp, wdir: m.wdir, wspd: m.wspd, wgst: m.wgst, visib: m.visib, altimHpa: m.altim,
+    clouds: m.clouds || [], cat: m.fltCat || '', raw: m.rawOb || '' } : null;
+  metarCache.set(key, { at: Date.now(), data });
+  return data;
+}
+
+const airportWikiCache = new Map();
+async function airportWiki(link) {
+  const m = String(link).match(/^https?:\/\/([a-z-]+)\.wikipedia\.org\/wiki\/([^?#]+)/);
+  if (!m) return null;
+  if (airportWikiCache.has(link)) return airportWikiCache.get(link);
+  let out = null;
+  try {
+    const r = await get(`https://${m[1]}.wikipedia.org/api/rest_v1/page/summary/${m[2]}`);
+    if (r.status !== 200) return null; // retried next time
+    const p = JSON.parse(r.body);
+    out = { title: p.title, extract: (p.extract || '').slice(0, 700), thumb: p.thumbnail?.source || null, url: p.content_urls?.desktop?.page || link };
+  } catch (e) { return null; }
+  airportWikiCache.set(link, out);
+  return out;
+}
+
+async function airportInfo(ident) {
+  await loadAirports();
+  const row = airports.find(a => a[1] === ident);
+  if (!row) return null;
+  const [type, , iata, name, lat, lon, elev, city] = row;
+  const d = (await loadAirportDetails().catch(() => ({})))[ident] || { runways: [], freqs: [] };
+  const [weather, wiki] = await Promise.all([
+    metarFor([...new Set([d.icao, d.gps, /^[A-Z]{4}$/.test(ident) ? ident : ''].filter(Boolean))], lat, lon),
+    d.wiki ? airportWiki(d.wiki) : null,
+  ]);
+  return { ident, type, iata, name, lat, lon, elev, city, ...d, weather, wikiInfo: wiki };
+}
+
 // ---------- aircraft data: adsb.fi public feed ----------
 // adsb.fi open data: free for personal, non-commercial use, 1 request/sec max, attribution required.
 const PUBLIC_NAME = 'adsb.fi', PUBLIC_LINK = 'https://adsb.fi';
@@ -783,6 +879,10 @@ const server = http.createServer(async (req, res) => {
       const q = k => Number(url.searchParams.get(k));
       return send(res, 200, JSON.stringify(airportsNear(q('lat'), q('lon'), Math.min(q('r') || 40, 150))));
     }
+    if (url.pathname === '/api/airportinfo') {
+      const ident = (url.searchParams.get('ident') || '').trim().toUpperCase();
+      return send(res, 200, JSON.stringify(/^[A-Z0-9-]{2,12}$/.test(ident) ? await airportInfo(ident) : null));
+    }
     const m = url.pathname.match(/^\/api\/lookup\/([0-9a-f]{6})$/i);
     if (m) {
       const q = k => (url.searchParams.get(k) || '').trim().toUpperCase();
@@ -1076,7 +1176,7 @@ function nearPlace(lat, lon) {
 const agoText = t => { const m = Math.round((Date.now() - t) / 60000); return m < 2 ? 'just now' : m < 90 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
 const lastSeenInfo = mmsi => { const l = lastSeen[mmsi]; return l ? { ...l, mmsi, place: nearPlace(l.lat, l.lon), ago: agoText(l.seen) } : null; };
 const isLiveShip = mmsi => { const s = ships.get(mmsi); return s && s.lat != null && Date.now() - (s.seen || 0) < 900000 ? s : null; };
-setTimeout(() => { loadAirports().catch(() => {}); buildFleet().catch(e => console.log('Cruise fleet list not built: ' + e.message)); }, 5000);
+setTimeout(() => { loadAirports().catch(() => {}); loadAirportDetails().catch(e => console.log('Airport details not loaded: ' + e.message)); buildFleet().catch(e => console.log('Cruise fleet list not built: ' + e.message)); }, 5000);
 
 // ---------- self-update from GitHub Releases (only when running as the .exe) ----------
 // Each release carries Krabbz9999-FlightTracker.exe; the tag ends in the build number (e.g. v1.0.4).

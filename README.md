@@ -35,8 +35,11 @@ bottom-right corner.
 - **Weather overlay**: live rain radar on the map (US, NWS NEXRAD via Iowa Environmental Mesonet), switched on with 🌧 Weather
 - **Cruise ships and boats** (optional, free): live ship positions from [AISStream.io](https://aisstream.io), with cruise ships highlighted and listed in a Cruise ships panel. Needs your own free AISStream key (Settings → More)
 - **Tray icon**: a ✈ in the Windows system tray while it runs; click to open the dashboard, right-click → Quit to stop it (a tiny helper, tray/Tray.cs, carried inside the .exe and unpacked next to it)
-- **Overhead Plane Alert**: within 1 mile, a full-screen close-up with the flight path, predicted closest
-  approach, where it's from and going, plus a chime and a spoken "Overhead now!" alert (🔔 Sound toggle)
+- **Overhead Plane Alert**: inside the overhead circle (1 mile to start, adjustable), a full-screen close-up with the flight path,
+  predicted closest approach, where it's from and going, plus a chime and an upbeat spoken alert with the plane type, speed,
+  altitude and destination. You can rewrite what it says in Settings → Alerts (🔔 Sound toggle)
+- **Airport and helipad details**: click any airport, heliport or seaplane base for its runways or helipads, radio
+  frequencies, current weather, planes arriving and leaving right now, a Wikipedia summary and handy links
 - **Aircraft details**: photo, maker and model, airline, owner, route, altitude, speed and time tracked
 - **Tail-number panel**: click any registration for owner and registration details and a flight-path map
 - **ADS-B Exchange viewer** for any plane, without leaving the dashboard
@@ -57,11 +60,11 @@ home address, an optional office, your FlightAware username, and an optional con
 | Photos | [Planespotters.net](https://www.planespotters.net) (photographer credited), else a stock model photo from [Wikipedia](https://www.wikipedia.org) |
 | Aircraft and owner info | [adsbdb](https://www.adsbdb.com), optional FAA registry file |
 | Routes | [adsb.lol](https://adsb.lol) route data, adsbdb |
-| Airports | [OurAirports](https://ourairports.com) (public domain) |
+| Airports, runways, radio frequencies | [OurAirports](https://ourairports.com) (public domain) |
+| Airport weather | [NOAA Aviation Weather Center](https://aviationweather.gov) (US government, public domain) |
 | Airline logos | [sexym0nk3y/airline-logos](https://github.com/sexym0nk3y/airline-logos) via jsDelivr (logos are trademarks of their airlines) |
 | Weather radar | NWS NEXRAD via [Iowa Environmental Mesonet](https://mesonet.agron.iastate.edu) |
 | Ships (optional) | [AISStream.io](https://aisstream.io) live AIS data, with your own free API key |
-| Announcement voices (optional) | [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) via [kokoro-js](https://github.com/hexgrad/kokoro) (Apache 2.0); [Piper](https://github.com/rhasspy/piper) voices (public domain / CC0) via [piper-tts-web](https://github.com/Mintplex-Labs/piper-tts-web) (MIT); [eSpeak NG](https://github.com/espeak-ng/espeak-ng) (GPL-3.0). Downloaded on first use from jsDelivr and Hugging Face; they run in your browser |
 | Map | Esri World Dark Gray, [Leaflet](https://leafletjs.com) |
 | Address lookup | [OpenStreetMap Nominatim](https://nominatim.org) |
 
@@ -99,7 +102,8 @@ contacts these services directly from your computer:
 - **Planespotters.net, adsbdb, adsb.lol, Wikipedia**: aircraft identifiers, callsigns and registrations, to look up photos, owners and routes
 - **FlightAware**: the feeder username in Settings, to show its public stats page
 - **GitHub**: to check for and download updates
-- **Esri** (map tiles), **OurAirports** (airport list), **jsDelivr** (airline logos), **Iowa Environmental Mesonet** (weather radar), **AISStream.io** (only if you add a key: the area around your home, so it can send the ships there), **jsDelivr** and **Hugging Face** (voice files, only if you pick Kokoro, Piper or eSpeak NG; the text spoken never leaves your PC), **ADS-B Exchange** (only when you open its viewer)
+- **aviationweather.gov**: an airport's code or position, when you click it on the map, for its weather report
+- **Esri** (map tiles), **OurAirports** (airport list), **jsDelivr** (airline logos), **Iowa Environmental Mesonet** (weather radar), **AISStream.io** (only if you add a key: the area around your home, so it can send the ships there), **ADS-B Exchange** (only when you open its viewer)
 
 ## License
 
