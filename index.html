@@ -1618,7 +1618,9 @@ function stopSpeech() { if ('speechSynthesis' in window) speechSynthesis.cancel(
 
 // What the voice says, written by the user in Settings > Alerts (each browser keeps its own).
 // {words} are filled in for each plane; any the app doesn't know are dropped along with their comma.
-const SAY_DEFAULT = 'Overhead now! {type}, {speed}, {altitude}, {destination}.';
+const SAY_DEFAULT = 'Overhead now! {airline} - {type}, going {speed}, at {altitude}, {destination} from {from}.';
+// the previous default: browsers that still have it saved move to the new one
+const SAY_OLD_DEFAULTS = ['Overhead now! {type}, {speed}, {altitude}, {destination}.'];
 const city = s => (s || '').replace(/\s*\([^)]*\)\s*$/, ''); // "Orlando (MCO)" -> "Orlando"
 const COMPASS_WORDS = { N: 'north', NE: 'north east', E: 'east', SE: 'south east', S: 'south', SW: 'south west', W: 'west', NW: 'north west' };
 const SAY_TAGS = { // name: [example for the Test button, value for a plane]
@@ -1626,18 +1628,27 @@ const SAY_TAGS = { // name: [example for the Test button, value for a plane]
   speed: ['280 miles per hour', a => a.gs != null ? Math.round(a.gs * 1.15078) + ' miles per hour' : ''],
   altitude: ['3,500 feet', a => typeof a.alt === 'number' ? a.alt.toLocaleString() + ' feet' : ''],
   destination: ['going to Orlando', a => { const to = routeParts(a).to; return to ? 'going to ' + city(to) : ''; }],
-  from: ['from Tampa', a => { const fr = routeParts(a).from; return fr ? 'from ' + city(fr) : ''; }],
+  from: ['Tampa', a => city(routeParts(a).from)],
   airline: ['Southwest Airlines', a => airlineOf(a)],
   distance: ['0.4 miles away', a => a.dist != null ? +a.dist.toFixed(1) + ' miles away' : ''],
   direction: ['to the north east', a => a.brg != null ? 'to the ' + COMPASS_WORDS[compass(a.brg)] : ''],
 };
 let sayTemplate = load('skySay', SAY_DEFAULT);
+if (SAY_OLD_DEFAULTS.includes(sayTemplate)) { sayTemplate = SAY_DEFAULT; save('skySay', sayTemplate); }
+// A missing piece takes its lead-in word with it ("going {speed}", "at {altitude}", "from {from}"), then any
+// commas or dashes left hanging are tidied away.
 function fillSay(template, value) {
-  return template.replace(/\{(\w+)\}/g, (m, k) => SAY_TAGS[k.toLowerCase()] ? value(k.toLowerCase()) : m)
+  return template.replace(/(\b(?:going|at|from|to|near|in|by|with)\s+)?\{(\w+)\}/gi, (m, lead, k) => {
+    if (!SAY_TAGS[k.toLowerCase()]) return m;
+    const v = value(k.toLowerCase());
+    return v ? (lead || '') + v : '';
+  })
     .replace(/\s+/g, ' ')
+    .replace(/(^|[!?.,])\s*[-–]\s*/g, '$1 ') // a dash with nothing before it
+    .replace(/\s*[-–]\s*(?=[,.!?]|$)/g, '')  // or nothing after it
     .replace(/(\s*,)+(\s*[,.!?]|\s*$)/g, '$2') // commas left by missing pieces
     .replace(/([!?.])\s*,/g, '$1')
-    .replace(/\s+([,.!?])/g, '$1').trim();
+    .replace(/\s+([,.!?])/g, '$1').replace(/\s+/g, ' ').trim();
 }
 const announcementText = a => fillSay(sayTemplate, k => SAY_TAGS[k][1](a));
 const announce = a => say(announcementText(a));
