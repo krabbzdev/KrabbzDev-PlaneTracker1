@@ -664,13 +664,16 @@
       </div>
       <div class="place">
         <h4>🗣 Announcement voice</h4>
-        <p class="hint">An upbeat, TikTok-style voice speaks when a plane passes inside the overhead circle.</p>
+        <p class="hint">A voice speaks when a plane passes inside the overhead circle.</p>
+        <label class="lbl" for="voicePick">Voice</label>
+        <select id="voicePick" style="width:100%"></select>
+        <label class="chk" style="margin:6px 0 10px"><input type="checkbox" id="voiceUpbeat"> Upbeat: a little higher and faster, TikTok style</label>
         <label class="lbl" for="sayIn">What it says</label>
         <textarea id="sayIn" rows="2" spellcheck="false" style="width:100%;resize:vertical;font:inherit"></textarea>
         <p class="hint" style="margin:6px 0">Click to add: <span id="sayTags"></span></p>
         <p class="hint">Anything the app doesn't know for a plane (like where it's going) is left out.</p>
         <div class="row"><button id="voiceTest">▶ Test the voice</button><button id="sayReset">Reset to default</button></div>
-        <p class="hint" style="margin-top:8px">It uses the most upbeat voice on this PC. Microsoft Edge has the most natural-sounding ones.</p>
+        <p class="hint" style="margin-top:8px">The voices are the ones your browser has. Microsoft Edge has the most natural-sounding ones (marked "Natural"). Each browser remembers its own choice.</p>
       </div>
       <p class="hint">To turn the alerts on or off, use <b>Overhead Plane Alert</b> and <b>🔔 Sound</b> at the top of the page.</p>
     </section>
@@ -1575,13 +1578,32 @@ function chime(delay = 0) {
 const TIKTOK_LIKE = /jenny|aria|ava|emma|michelle|samantha|zira/i;
 // Edge's "Natural" voices sound best. Other online voices (like Chrome's "Google US English") sometimes stay silent
 // without any error, so voices built into Windows come next, and a retry always uses one of those.
+// The voice chosen in Settings > Alerts ('' = automatic: the upbeat pick below), and whether to make it upbeat.
+let voiceName = load('skyVoiceName', ''), voiceUpbeat = load('skyVoiceUpbeat', true);
 function pickVoice(builtInOnly) {
-  const en = speechSynthesis.getVoices().filter(v => /^en-US/i.test(v.lang) && (v.localService || !builtInOnly));
+  const all = speechSynthesis.getVoices(), chosen = voiceName && all.find(v => v.name === voiceName);
+  if (chosen && (chosen.localService || !builtInOnly)) return chosen;
+  const en = all.filter(v => /^en-US/i.test(v.lang) && (v.localService || !builtInOnly));
   return (!builtInOnly && en.find(v => TIKTOK_LIKE.test(v.name) && /natural/i.test(v.name)))
     || en.find(v => v.localService && TIKTOK_LIKE.test(v.name)) || en.find(v => v.localService) || en[0] || null;
 }
+// Settings: every English voice the browser has, natural ones first
+function fillVoicePick() {
+  if (!('speechSynthesis' in window)) return;
+  const sel = $('voicePick'), en = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang));
+  const rank = v => (/natural/i.test(v.name) ? 0 : 2) + (/^en-US/i.test(v.lang) ? 0 : 1);
+  const label = v => v.name.replace(/^Microsoft\s+/, '').replace(/\s+-\s+English.*$/, '').replace(/\s*\(Natural\)/, ' (Natural)') + (/^en-US/i.test(v.lang) ? '' : ` · ${v.lang}`);
+  sel.innerHTML = `<option value="">TikTok style (automatic: the most upbeat voice here)</option>`
+    + [...en].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name)).map(v => `<option value="${esc(v.name)}">${esc(label(v))}</option>`).join('');
+  sel.value = voiceName;
+  if (sel.value !== voiceName) sel.value = ''; // the saved voice isn't in this browser
+}
 // Windows lists its voices a moment after the page opens: ask now, so they're ready for the first announcement
-if ('speechSynthesis' in window) { speechSynthesis.getVoices(); speechSynthesis.addEventListener('voiceschanged', () => speechSynthesis.getVoices()); }
+if ('speechSynthesis' in window) { speechSynthesis.getVoices(); speechSynthesis.addEventListener('voiceschanged', fillVoicePick); }
+setTimeout(fillVoicePick, 0); // after the rest of the page has loaded (it uses esc, defined further down)
+$('voicePick').addEventListener('change', e => { voiceName = e.target.value; save('skyVoiceName', voiceName); $('voiceTest').click(); });
+$('voiceUpbeat').checked = voiceUpbeat;
+$('voiceUpbeat').addEventListener('change', e => { voiceUpbeat = e.target.checked; save('skyVoiceUpbeat', voiceUpbeat); $('voiceTest').click(); });
 const voicesReady = () => speechSynthesis.getVoices().length ? Promise.resolve()
   : new Promise(r => { speechSynthesis.addEventListener('voiceschanged', r, { once: true }); setTimeout(r, 1500); });
 let sayId = 0;
@@ -1594,7 +1616,7 @@ async function say(text, retry) {
   const u = new SpeechSynthesisUtterance(text);
   u.voice = pickVoice(retry);
   u.lang = u.voice?.lang || 'en-US';
-  u.pitch = 1.25; u.rate = 1.12;
+  if (voiceUpbeat) { u.pitch = 1.25; u.rate = 1.12; }
   let started = false;
   u.onstart = () => { started = true; };
   u.onerror = e => {

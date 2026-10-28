@@ -1,7 +1,8 @@
 // System tray icon for Krabbz9999 - Look A Plane!.
 // Node.js can't show a tray icon, so the app carries this tiny helper inside its .exe and starts it.
 // Usage: Krabbz9999-FlightTracker-Tray.exe <port> <app process id> <tooltip>
-// Left-click or "Open Look A Plane!" opens the dashboard; "Quit" asks the app to save and exit.
+// Left-click or "Open Look A Plane!" opens the dashboard; "Check for updates" asks the app to look for a newer build
+// on GitHub and install it; "Quit" asks the app to save and exit.
 // The helper closes itself as soon as the app's process is gone (including when an update restarts it).
 // Build: csc /target:winexe /out:build\Krabbz9999-FlightTracker-Tray.exe tray\Tray.cs
 using System;
@@ -10,6 +11,8 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using System.Net;
+using System.Text.RegularExpressions;
+using System.Threading;
 using System.Windows.Forms;
 
 static class Tray
@@ -31,6 +34,7 @@ static class Tray
 
         var menu = new ContextMenuStrip();
         menu.Items.Add("Open Look A Plane!", null, (s, e) => Open()).Font = new Font(menu.Font, FontStyle.Bold);
+        menu.Items.Add("Check for updates", null, (s, e) => CheckForUpdates());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Quit", null, (s, e) => Quit());
 
@@ -43,7 +47,7 @@ static class Tray
         };
         icon.MouseClick += (s, e) => { if (e.Button == MouseButtons.Left) Open(); };
 
-        var watch = new Timer { Interval = 2000 };
+        var watch = new System.Windows.Forms.Timer { Interval = 2000 };
         watch.Tick += (s, e) => { if (HasExited(app)) Exit(); };
         watch.Start();
 
@@ -71,6 +75,41 @@ static class Tray
         {
             try { Process.Start(url); } catch { }
         }
+    }
+
+    // Asks the app (/api/update) to check GitHub; if there's a newer build, asks it to install it. The app then
+    // restarts on the new build and this helper closes with it. The answer shows as a Windows notification.
+    static void CheckForUpdates()
+    {
+        var ui = SynchronizationContext.Current;
+        Action<string, ToolTipIcon> tell = (msg, kind) => ui.Post(_ => icon.ShowBalloonTip(5000, "Look A Plane! updates", msg, kind), null);
+        tell("Checking for updates…", ToolTipIcon.Info);
+        ThreadPool.QueueUserWorkItem(_ =>
+        {
+            try
+            {
+                using (var web = new WebClient())
+                {
+                    string r = web.UploadString(api + "api/update", "{\"check\":true}");
+                    int now = Build(r, "current"), latest = Build(r, "latest");
+                    if (latest > now)
+                    {
+                        web.UploadString(api + "api/update", "{\"install\":true}");
+                        tell("Updating to build " + latest + ". It restarts by itself in a few seconds.", ToolTipIcon.Info);
+                    }
+                    else if (latest > 0) tell("You're up to date (build " + now + ").", ToolTipIcon.Info);
+                    else tell("Couldn't reach GitHub to check. Try again later.", ToolTipIcon.Warning);
+                }
+            }
+            catch { tell("Couldn't check for updates right now.", ToolTipIcon.Warning); }
+        });
+    }
+
+    // "build":N inside the app's "current" or "latest" section of its update reply (0 if missing)
+    static int Build(string json, string section)
+    {
+        var m = Regex.Match(json, "\"" + section + "\"\\s*:\\s*\\{[^}]*?\"build\"\\s*:\\s*(\\d+)");
+        return m.Success ? int.Parse(m.Groups[1].Value) : 0;
     }
 
     static void Quit()
