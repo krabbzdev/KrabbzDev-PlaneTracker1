@@ -1365,7 +1365,7 @@ setTimeout(() => { loadAirports().catch(() => {}); loadAirportDetails().catch(e 
 
 // ---------- self-update from GitHub Releases (only when running as the .exe) ----------
 // Each release carries Krabbz9999-FlightTracker.exe; the tag ends in the build number (e.g. v1.0.4).
-const REPO = VERSION.repo || 'krabbzdev/krabbz9999-flighttracker';
+const REPO = VERSION.repo || 'krabbzdev/KrabbzDev-PlaneTracker1';
 const EXE_NAME = 'Krabbz9999-FlightTracker.exe';
 let updateState = { checkedAt: null, latest: null, available: false, status: 'idle', error: null };
 const buildOf = tag => { const m = String(tag || '').match(/(\d+)\s*$/); return m ? +m[1] : 0; };

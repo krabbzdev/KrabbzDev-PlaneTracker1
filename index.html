@@ -740,7 +740,7 @@
 
 <button id="soundLock" type="button" hidden>🔇 Sound is off until you click this page. <b>Click here to turn on the overhead chime and voice</b></button>
 <div id="toasts"></div>
-<div id="version"><span id="verText" title="Version and build number"></span> · <a href="https://flighttracker.loves3d.com" target="_blank" rel="noopener" title="The Look A Plane! website">Website ↗</a> · <a id="verWiki" href="https://github.com/krabbzdev/krabbz9999-flighttracker/wiki" target="_blank" rel="noopener" title="How every feature works">Wiki ↗</a> · <a id="verRepo" href="https://github.com/krabbzdev/krabbz9999-flighttracker" target="_blank" rel="noopener" title="Source code and releases on GitHub">GitHub ↗</a></div>
+<div id="version"><span id="verText" title="Version and build number"></span> · <a href="https://flighttracker.loves3d.com" target="_blank" rel="noopener" title="The Look A Plane! website">Website ↗</a> · <a id="verWiki" href="https://github.com/krabbzdev/KrabbzDev-PlaneTracker1/wiki" target="_blank" rel="noopener" title="How every feature works">Wiki ↗</a> · <a id="verRepo" href="https://github.com/krabbzdev/KrabbzDev-PlaneTracker1" target="_blank" rel="noopener" title="Source code and releases on GitHub">GitHub ↗</a></div>
 
 <dialog id="axDlg" class="ax-dlg">
   <div class="ax-bar">
@@ -2201,7 +2201,7 @@ async function checkVersion() {
   let v;
   try { v = await fetch('/api/version', { cache: 'no-store' }).then(r => r.json()); } catch (e) { return; } // app restarting
   $('verText').textContent = `v${v.version} · build ${v.build}${v.date ? ' · ' + v.date : ''}`;
-  $('verRepo').href = 'https://github.com/' + (v.repo || 'krabbzdev/krabbz9999-flighttracker');
+  $('verRepo').href = 'https://github.com/' + (v.repo || 'krabbzdev/KrabbzDev-PlaneTracker1');
   $('verWiki').href = $('verRepo').href + '/wiki';
   if (loadedBuild === null) { loadedBuild = v.build; return; }
   // the app updated itself: reload so this page runs the new version too (not in the middle of an overhead alert)
