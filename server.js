@@ -325,12 +325,20 @@ async function airportInfo(ident) {
 const PUBLIC_NAME = 'adsb.fi', PUBLIC_LINK = 'https://adsb.fi';
 const PUBLIC_RADIUS_NM = 40;
 let lastPublic = null;
+// adsb.fi allows one request a second. Everything that asks it (home feed, exploring, favourites, the plane
+// finder) queues here, so requests are always at least 1.1 s apart.
+let adsbfiNext = 0;
+function adsbfiGet(apiPath, timeoutMs = 8000) {
+  const at = Math.max(Date.now(), adsbfiNext);
+  adsbfiNext = at + 1100;
+  return new Promise(r => setTimeout(r, at - Date.now())).then(() => get('https://opendata.adsb.fi/api/v2/' + apiPath, timeoutMs));
+}
 async function fetchAircraft() {
   // stay well under the 1/sec limit: at most one request every 5 s, shared by everyone viewing
   if (!lastPublic || Date.now() - lastPublic.at >= 5000) {
     const c = settings.home;
     if (!c) throw new Error('Set your home location (Settings) so we know where to look');
-    const r = await get(`https://opendata.adsb.fi/api/v2/lat/${c[0].toFixed(4)}/lon/${c[1].toFixed(4)}/dist/${PUBLIC_RADIUS_NM}`, 8000);
+    const r = await adsbfiGet(`lat/${c[0].toFixed(4)}/lon/${c[1].toFixed(4)}/dist/${PUBLIC_RADIUS_NM}`);
     if (r.status === 429) throw new Error('Public data rate limit hit - retrying shortly');
     if (r.status !== 200) throw new Error(`Public data unavailable (HTTP ${r.status})`);
     const j = JSON.parse(r.body);
@@ -351,6 +359,7 @@ async function refreshAircraft() {
     else f.last = now;
     // first position we heard, used by the page to work out where a local flight departed from
     if (!f.pos && a.lat != null) f.pos = [a.lat, a.lon, a.alt_baro ?? null];
+    rememberPlane(a, now);
     a.first_seen = f.first;
     a.first_pos = f.pos;
     // flight path for the tail-number panel: a point every ~20 s or ~0.2 mi, whichever comes first
@@ -390,14 +399,136 @@ async function areaAircraft(lat, lon, nm) {
     await new Promise(r => setTimeout(r, wait));
   }
   areaLast = Date.now();
-  const r = await get(`https://opendata.adsb.fi/api/v2/lat/${lat.toFixed(4)}/lon/${lon.toFixed(4)}/dist/${nm}`, 10000);
+  const r = await adsbfiGet(`lat/${lat.toFixed(4)}/lon/${lon.toFixed(4)}/dist/${nm}`, 10000);
   if (r.status === 429) throw new Error('Public data rate limit hit - retrying shortly');
   if (r.status !== 200) throw new Error(`Public data unavailable (HTTP ${r.status})`);
   const j = JSON.parse(r.body);
   const data = { now: j.now, aircraft: j.aircraft || j.ac || [], attribution: { name: PUBLIC_NAME, link: PUBLIC_LINK } };
   areaCache = { key, at: Date.now(), data };
+  const now = Date.now();
+  for (const a of data.aircraft) rememberPlane(a, now);
   return data;
 }
+
+// ---------- planes: where each was last heard, favourites, and the plane finder ----------
+// Every plane the home feed or exploring hears is remembered with where and when it was last heard, in
+// planes-last-seen.json (kept 30 days, up to 20,000 planes). Favourite planes (settings.favorites) are also
+// looked up worldwide on adsb.fi, one every 8 s in turn, so their last position stays current even far from home.
+const PLANES_SEEN_FILE = path.join(APP_DIR, 'planes-last-seen.json');
+let planesSeen = {}; // hex -> { reg, flight, type, desc, lat, lon, alt, gs, track, seen }
+try { planesSeen = JSON.parse(fs.readFileSync(PLANES_SEEN_FILE, 'utf8')); } catch (e) {}
+let planesSeenDirty = false;
+function rememberPlane(a, now) {
+  if (a.lat == null || (a.seen_pos ?? 0) > 60 || !/^[0-9a-f]{6}$/i.test(a.hex || '')) return;
+  const hex = a.hex.toLowerCase(), old = planesSeen[hex] || {};
+  planesSeen[hex] = { reg: a.r || old.reg || '', flight: (a.flight || '').trim() || old.flight || '', type: a.t || old.type || '', desc: a.desc || old.desc || '',
+    owner: a.ownOp || old.owner || '', lat: +a.lat.toFixed(4), lon: +a.lon.toFixed(4), alt: a.alt_baro ?? null, gs: a.gs ?? null, track: a.track ?? null,
+    seen: now - Math.round((a.seen_pos || 0) * 1000) };
+  planesSeenDirty = true;
+}
+function savePlanesSeen() {
+  if (!planesSeenDirty) return;
+  planesSeenDirty = false;
+  const cutoff = Date.now() - 30 * 86400e3, favs = new Set((settings.favorites || []).map(f => f.hex));
+  let list = Object.entries(planesSeen).filter(([hex, p]) => p.seen > cutoff || favs.has(hex)); // favourites are kept however old
+  if (list.length > 20000) list = list.sort((x, y) => y[1].seen - x[1].seen).slice(0, 20000);
+  planesSeen = Object.fromEntries(list);
+  try { fs.writeFileSync(PLANES_SEEN_FILE, JSON.stringify(planesSeen)); } catch (e) {}
+}
+setInterval(savePlanesSeen, 60000);
+
+// Normalise what someone typed: a tail number ("n1932k", "G-EUPT") or a 6-character ICAO hex code ("a175f8")
+function planeQuery(q) {
+  const s = String(q || '').trim().toUpperCase().replace(/\s+/g, '');
+  if (/^[0-9A-F]{6}$/.test(s) && /[0-9]/.test(s) && !/^N[1-9]/.test(s)) return { hex: s.toLowerCase() };
+  if (/^[A-Z0-9][A-Z0-9-]{1,9}$/.test(s) && /[0-9]/.test(s) || /^[A-Z0-9]{1,2}-[A-Z0-9]{2,5}$/.test(s)) return { reg: s };
+  return null;
+}
+const looksLikeTail = q => { const s = String(q || '').trim().toUpperCase(); return /^N[1-9][0-9A-Z]{0,4}$/.test(s) || /^[A-Z0-9]{1,2}-[A-Z0-9]{2,5}$/.test(s) || /^(?=.*[0-9])[0-9A-F]{6}$/.test(s); };
+
+// What adsbdb knows about a plane (by tail number or hex): its hex, type and owner. Remembered for the session.
+const planeDbCache = new Map();
+async function planeDb(id) {
+  if (planeDbCache.has(id)) return planeDbCache.get(id);
+  let out = null;
+  try {
+    const r = await get('https://api.adsbdb.com/v0/aircraft/' + encodeURIComponent(id));
+    if (r.status === 200) {
+      const a = JSON.parse(r.body).response?.aircraft;
+      if (a) out = { hex: (a.mode_s || '').toLowerCase(), reg: a.registration || '', type: [a.manufacturer, a.type].filter(Boolean).join(' '),
+        icaoType: a.icao_type || '', owner: a.registered_owner || '', country: a.registered_owner_country_name || '', photo: a.url_photo_thumbnail || '' };
+    } else if (r.status !== 404) return null; // try again next time
+  } catch (e) { return null; }
+  planeDbCache.set(id, out);
+  return out;
+}
+
+// Live position from adsb.fi, worldwide
+async function planeLive(q) {
+  try {
+    const r = await adsbfiGet(q.hex ? 'hex/' + q.hex : 'registration/' + encodeURIComponent(q.reg));
+    if (r.status !== 200) return null;
+    const now = Date.now(), a = (JSON.parse(r.body).ac || []).find(x => x.lat != null);
+    if (a) rememberPlane(a, now);
+    return a ? planesSeen[a.hex.toLowerCase()] && { hex: a.hex.toLowerCase(), ...planesSeen[a.hex.toLowerCase()] } : null;
+  } catch (e) { return null; }
+}
+
+// Where to describe a position: the nearest sizeable airport's town within 60 miles, else any airfield within 25
+function placeNear(lat, lon) {
+  const big = nearPlace(lat, lon);
+  if (big) return big;
+  if (!airports) return null;
+  let best = null, bestD = 25;
+  for (const a of airports) {
+    if (a[0] === 'heliport' || Math.abs(a[4] - lat) > .5 || Math.abs(a[5] - lon) > .6) continue;
+    const d = distMi([lat, lon], [a[4], a[5]]);
+    if (d < bestD) { bestD = d; best = a[7] || a[3]; }
+  }
+  return best;
+}
+const planeOut = (hex, p) => p && { hex, ...p, ago: agoText(p.seen), place: placeNear(p.lat, p.lon), live: Date.now() - p.seen < 3 * 60000 };
+
+// The plane finder: live now, else where this app last heard it, else what we know about it
+async function findPlane(text) {
+  const q = planeQuery(text);
+  if (!q) return { status: 'bad' };
+  const live = await planeLive(q);
+  if (live) return { status: 'live', reg: live.reg || q.reg || '', plane: planeOut(live.hex, live), info: await planeDb(live.reg || live.hex) };
+  const info = await planeDb(q.reg || q.hex);
+  const hex = q.hex || info?.hex || Object.keys(planesSeen).find(h => planesSeen[h].reg === q.reg);
+  const reg = info?.reg || q.reg || (hex && planesSeen[hex]?.reg) || '';
+  if (hex && planesSeen[hex]) return { status: 'lastseen', reg, hex, plane: planeOut(hex, planesSeen[hex]), info };
+  return { status: info || hex ? 'notseen' : 'unknown', reg, hex: hex || '', info };
+}
+
+// Favourites, saved in settings.json: [{ reg, hex, added }]
+function favoritesOut() {
+  return (settings.favorites || []).map(f => ({ ...f, plane: planeOut(f.hex, planesSeen[f.hex]) }));
+}
+async function addFavorite(text) {
+  const q = planeQuery(text);
+  if (!q) throw new Error("That doesn't look like a tail number");
+  const info = await planeDb(q.reg || q.hex);
+  const hex = q.hex || info?.hex || Object.keys(planesSeen).find(h => planesSeen[h].reg === q.reg);
+  if (!hex) throw new Error(`Couldn't find a plane registered ${q.reg}. Check the tail number.`);
+  const list = settings.favorites || [];
+  if (!list.some(f => f.hex === hex)) list.push({ reg: info?.reg || q.reg || planesSeen[hex]?.reg || hex.toUpperCase(), hex, type: info?.type || planesSeen[hex]?.desc || '', owner: info?.owner || '', added: Date.now() });
+  settings.favorites = list.slice(-50);
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 1));
+  favNext = Math.max(0, settings.favorites.findIndex(f => f.hex === hex)); // check the new one first
+}
+function removeFavorite(hex) {
+  settings.favorites = (settings.favorites || []).filter(f => f.hex !== hex);
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 1));
+}
+let favNext = 0;
+setInterval(() => {
+  const list = settings.favorites || [];
+  if (!list.length) return;
+  const f = list[favNext++ % list.length];
+  if (Date.now() - (planesSeen[f.hex]?.seen || 0) > 60000) planeLive({ hex: f.hex }); // not just heard by the home feed
+}, 8000);
 
 // ---------- daily log: every aircraft heard today, kept in daily-log.json next to the app ----------
 const LOG_FILE = path.join(APP_DIR, 'daily-log.json');
@@ -681,6 +812,16 @@ async function placeSearch(q) {
   const out = [], code = q.trim().toUpperCase();
   const brand = await brandSearch(q); // a cruise line name lists its ships
   if (brand) return brand;
+  // a tail number ("N1932K", "G-EUPT") or hex code: the plane finder, plus an airfield with that code if there is one
+  if (looksLikeTail(q)) {
+    out.push({ plane: code.replace(/\s+/g, ''), label: `✈ Find the plane ${code}` });
+    try {
+      await loadAirports();
+      const a = airports.find(r => r[1] === code || r[2] === code);
+      if (a) out.push({ lat: a[4], lon: a[5], label: `✈ ${a[3]} (${a[2] || a[1]})${a[7] ? ', ' + a[7] : ''}`, zoom: 12 });
+    } catch (e) {}
+    return out;
+  }
   // ships: one already on the map whose name matches, else a ship Wikipedia knows by that exact name (Cruise Finder)
   if (code.length >= 4) {
     for (const sh of ships.values()) {
@@ -799,7 +940,7 @@ const server = http.createServer(async (req, res) => {
       const local = /^(::1|127\.|::ffff:127\.)/.test(req.socket.remoteAddress || '');
       if (!local || req.headers['x-ft-tray'] !== '1') return send(res, 403, '{"error":"forbidden"}');
       send(res, 200, '{"ok":true}');
-      saveLog(); saveLastSeen();
+      saveLog(); saveLastSeen(); savePlanesSeen();
       return setTimeout(() => process.exit(0), 300);
     }
     const tk = url.pathname.match(/^\/api\/track\/([0-9a-f~]{6,7})$/i);
@@ -878,6 +1019,17 @@ const server = http.createServer(async (req, res) => {
       await loadAirports();
       const q = k => Number(url.searchParams.get(k));
       return send(res, 200, JSON.stringify(airportsNear(q('lat'), q('lon'), Math.min(q('r') || 40, 150))));
+    }
+    if (url.pathname === '/api/findplane') return send(res, 200, JSON.stringify(await findPlane(url.searchParams.get('q'))));
+    if (url.pathname === '/api/favorites') {
+      if (req.method === 'POST') {
+        const b = JSON.parse(await readBody(req) || '{}');
+        try {
+          if (b.remove) removeFavorite(String(b.remove).toLowerCase());
+          else await addFavorite(b.add);
+        } catch (e) { return send(res, 400, JSON.stringify({ error: e.message })); }
+      }
+      return send(res, 200, JSON.stringify(favoritesOut()));
     }
     if (url.pathname === '/api/airportinfo') {
       const ident = (url.searchParams.get('ident') || '').trim().toUpperCase();

@@ -41,6 +41,10 @@ bottom-right corner.
 - **Airport and helipad details**: click any airport, heliport or seaplane base for its runways or helipads, radio
   frequencies, current weather, planes arriving and leaving right now, a Wikipedia summary and handy links
 - **Aircraft details**: photo, maker and model, airline, owner, route, altitude, speed and time tracked
+- **Favorite planes**: star any plane (or type its tail number) and the app watches for it worldwide, shows whether
+  it's flying now or where it was last seen, and pops up when it flies into range
+- **Plane finder**: type a tail number (like N1932K) in the Jump to box to go to the plane, live, or to where the app
+  last heard it
 - **Tail-number panel**: click any registration for owner and registration details and a flight-path map
 - **ADS-B Exchange viewer** for any plane, without leaving the dashboard
 - **Military / interesting / emergency** aircraft highlighted, with pop-up alerts
@@ -97,7 +101,7 @@ This program does not collect, store or send personal information to the author,
 analytics or tracking. Your settings stay in `settings.json` next to the program. To do its job it
 contacts these services directly from your computer:
 
-- **adsb.fi**: your home's map coordinates, to ask which aircraft are nearby
+- **adsb.fi**: your home's map coordinates, to ask which aircraft are nearby; tail numbers you search for, and your favorite planes' codes, to find them
 - **OpenStreetMap Nominatim**: an address you type into Settings, to find its coordinates
 - **Planespotters.net, adsbdb, adsb.lol, Wikipedia**: aircraft identifiers, callsigns and registrations, to look up photos, owners and routes
 - **FlightAware**: the feeder username in Settings, to show its public stats page

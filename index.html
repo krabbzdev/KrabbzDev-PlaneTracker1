@@ -445,6 +445,36 @@
   .ship-logo-sm { width: 24px; height: 24px; padding: 2px; border-radius: 5px; background: #fff; object-fit: contain; flex: none; }
   .ship-pop img.ph { display: block; width: 100%; height: 130px; object-fit: cover; border-radius: 10px 10px 0 0; }
   .ship-about { margin: 8px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+  /* favorite planes and the plane finder */
+  .fav-add { display: flex; gap: 6px; margin-top: 8px; }
+  .fav-add input { flex: 1; min-width: 0; font: 13px Inter, sans-serif; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; text-transform: uppercase; }
+  .fav-add input::placeholder { text-transform: none; }
+  .fav-add input:focus { outline: none; border-color: var(--accent); }
+  .fav-add button { font: 600 12px Inter, sans-serif; color: #0b0f19; background: #ffd27a; border: 0; border-radius: 8px; padding: 0 10px; cursor: pointer; }
+  .fav-msg { font-size: 12px; color: #ffb547; margin-top: 4px; }
+  .fav-msg:empty { display: none; }
+  .fav-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 12px; }
+  .fav-row:first-child { margin-top: 6px; }
+  .fav-row:hover b { color: var(--accent); }
+  .fav-row b { font: 700 13px var(--mono); }
+  .fav-row small { display: block; color: var(--muted); font-size: 11px; }
+  .fav-row .live { color: #3ad29f; }
+  .fav-row > div { flex: 1; min-width: 0; }
+  .fav-empty { color: var(--muted); font-size: 12px; margin: 8px 0 2px; line-height: 1.45; }
+  .fav-star { background: none; border: 0; padding: 0 2px; font-size: 15px; line-height: 1; color: #ffd27a; opacity: .35; cursor: pointer; }
+  .fav-star:hover, .fav-star.on { opacity: 1; }
+  .fav-star.text { font: 600 12px Inter, sans-serif; opacity: 1; border: 1px solid rgba(255,210,122,.5); border-radius: 999px; padding: 2px 9px; }
+  .badge.fav { background: rgba(255,210,122,.15); color: #ffd27a; }
+  .card.fav { box-shadow: inset 3px 0 0 #ffd27a; }
+  .found-plane { position: relative; }
+  .found-plane svg { position: relative; z-index: 1; }
+  .found-plane .ring { position: absolute; left: -9px; top: -9px; width: 46px; height: 46px; border-radius: 50%; border: 2px solid #ffd27a; animation: findPulse 1.6s ease-out infinite; }
+  .found-plane.last-seen svg { opacity: .55; }
+  .found-plane.last-seen .ring { animation: none; border-style: dashed; opacity: .7; }
+  .found-plane .ship-tag { position: absolute; left: 36px; top: 8px; font: 700 11px var(--mono); color: #ffd27a; white-space: nowrap; text-shadow: 0 1px 2px #000, 0 0 4px #000; }
+  @keyframes findPulse { from { transform: scale(.6); opacity: 1; } to { transform: scale(1.5); opacity: 0; } }
+  .ship-pop .pt-photo { display: block; width: 100%; height: 110px; object-fit: cover; border-radius: 6px; margin-bottom: 6px; }
+  .ship-pop .pt-f .fav-star, .jump-results .fav-star { margin-right: 6px; }
   .ship-about a { color: var(--accent); }
   /* Share to Facebook */
   .fb-share { display: inline-flex; align-items: center; gap: 6px; font: 600 12px Inter, sans-serif; color: #fff; background: #1877f2; border: 1px solid #1877f2; border-radius: 999px; padding: 2px 10px 2px 8px; cursor: pointer; line-height: 1.4; }
@@ -553,6 +583,12 @@
         <button data-tab="closest" class="on">Closest</button><button data-tab="lowest">Lowest</button><button data-tab="fastest">Fastest</button><button data-tab="highest">Highest</button><button data-tab="airlines">Airlines</button><button data-tab="types">Types</button><button data-tab="special">Special</button>
       </div>
       <div id="tdList"></div>
+    </details>
+    <details id="favs" open>
+      <summary class="st-h"><span class="chev">▸</span>⭐ Favorite planes<span class="st-sum" id="favSum"></span></summary>
+      <form id="favForm" class="fav-add" autocomplete="off"><input id="favIn" placeholder="Add a tail number, e.g. N1932K" aria-label="Tail number to add to favorites"><button>⭐ Add</button></form>
+      <div class="fav-msg" id="favMsg"></div>
+      <div id="favList"></div>
     </details>
     <details id="atc" open>
       <summary class="st-h"><span class="chev">▸</span>🎧 Listen to ATC<span class="st-sum" id="atcSum"></span></summary>
@@ -1300,6 +1336,7 @@ function update(list) {
 
     const visible = a.inside || showAll || !!specialOf(a);
     notifySpecial(a);
+    notifyFavorite(a);
     if (visible) {
       if (!t.marker) {
         t.marker = L.marker([a.lat, a.lon], { icon: planeIcon(a, a.inside) }).addTo(planeLayer);
@@ -1376,9 +1413,10 @@ function render() {
       const sp = specialOf(a);
       const badge = '<span class="badges">'
         + (sp ? `<span class="badge sp" style="--bc:${SPECIAL[sp].color}">${sp === 'emergency' ? emergencyOf(a) : SPECIAL[sp].label}</span>` : '')
+        + (isFav(a.hex, reg) ? '<span class="badge fav">⭐ FAVORITE</span>' : '')
         + (a.dist != null && a.dist < 1 ? '<span class="badge">OVERHEAD</span>' : a.dist != null && a.dist < 2 ? '<span class="badge near">NEAR</span>' : '')
         + '</span>';
-      return `<div class="card ${selected === a.hex ? 'sel' : ''} ${arrivals.has(a.hex) ? 'new' : ''} ${sp ? 'special' : ''}" style="${sp ? `--bc:${SPECIAL[sp].color}` : ''}" data-hex="${a.hex}">
+      return `<div class="card ${selected === a.hex ? 'sel' : ''} ${arrivals.has(a.hex) ? 'new' : ''} ${sp ? 'special' : ''} ${isFav(a.hex, reg) ? 'fav' : ''}" style="${sp ? `--bc:${SPECIAL[sp].color}` : ''}" data-hex="${a.hex}">
         ${photo ? `<div class="thumb" style="background-image:url('${photo}')" title="${L.photo.stock ? 'Stock photo of this model (not this exact aircraft)' : ''}">${L.photo.stock ? '<span class="stock-tag">Model photo</span>' : ''}</div>` : ''}
         <div style="min-width:0">
           <div class="row1"><span class="cs">${a.flight && a.flight !== reg ? a.flight : reg ? tailLink(a.hex, reg) : a.hex.toUpperCase()}</span><span class="reg">${a.flight && reg && reg !== a.flight ? tailLink(a.hex, reg) : ''}</span>${badge}</div>
@@ -1391,6 +1429,7 @@ function render() {
             <span>${a.dist != null ? a.dist.toFixed(1) + ' <em>mi ' + compass(a.brg) + '</em>' : ''}</span>
             ${trackedFor(a) ? `<span title="Time since it was first tracked">⏱ ${trackedFor(a)}</span>` : ''}
             ${adsbxBtn(a.hex, a.flight || reg, '🌐 ADSBx', 'chip')}
+            ${favBtn(a.hex, reg)}
           </div>
         </div>
       </div>`;
@@ -1757,6 +1796,7 @@ async function openReg(hex, reg) {
     `<a href="https://www.flightaware.com/resources/registration/${reg}" target="_blank" rel="noopener">FlightAware ↗</a>`,
     `<a href="https://www.planespotters.net/search?q=${reg}" target="_blank" rel="noopener">Planespotters ↗</a>`,
     hex ? adsbxBtn(hex, reg, '🌐 ADS-B Exchange') : '',
+    hex ? favBtn(hex, reg, true) : '',
     hex ? shareBtn(hex) : '',
     a.lat != null ? atcLinks(a) : '',
   ].filter(Boolean).join('');
@@ -2635,7 +2675,7 @@ function explorePopup(a) {
 const jumpBox = L.control({ position: 'topright' });
 jumpBox.onAdd = () => {
   const el = L.DomUtil.create('div', 'jump-box');
-  el.innerHTML = `<form autocomplete="off"><input id="jumpIn" type="search" placeholder="🔎 Jump to a place, airport or ship" aria-label="Jump to a place on the map"></form><div class="jump-results" id="jumpResults"></div>`;
+  el.innerHTML = `<form autocomplete="off"><input id="jumpIn" type="search" placeholder="🔎 Jump to a place, airport, ship or tail number" aria-label="Jump to a place, airport, ship or plane on the map"></form><div class="jump-results" id="jumpResults"></div>`;
   L.DomEvent.disableClickPropagation(el);
   L.DomEvent.disableScrollPropagation(el);
   return el;
@@ -2709,9 +2749,10 @@ async function findShipLive(p) {
 }
 function jumpTo(p) {
   $('jumpResults').innerHTML = '';
-  finding = null;
+  finding = null; planeFinding = null;
   if (p.info) return; // just a note in the list
-  lastSeenLayer.clearLayers();
+  lastSeenLayer.clearLayers(); planeFindLayer.clearLayers();
+  if (p.plane) return findPlaneOnMap(p.plane);
   if (p.lastSeen) { showLastSeen(p); fetch(`/api/findship?mmsi=${p.ship}`).catch(() => {}); return; } // out of range: where it was last heard
   if (p.findTitle) { // a ship from a cruise line's fleet list: look it up by its Wikipedia title, then find it
     $('jumpResults').innerHTML = '<div class="msg">Looking up ' + esc(p.name) + '…</div>';
@@ -2752,6 +2793,139 @@ $('jumpIn').closest('form').addEventListener('submit', async e => {
   }
 });
 $('jumpIn').addEventListener('keydown', e => { if (e.key === 'Escape') { $('jumpResults').innerHTML = ''; e.target.blur(); } });
+
+// ---------- favorite planes and the plane finder ----------
+// Favorites are saved in the app (settings.json), so every browser on this PC shares them. The app checks each one
+// worldwide every few minutes and remembers where it was last heard; the panel shows that, and a pop-up says
+// when one flies into range.
+// (var and function declarations: the plane list is first drawn before this part of the page has run)
+var favs = [], favHex, favReg;
+function isFav(hex, reg) { return !!favHex && (favHex.has(hex) || (!!reg && favReg.has(reg.toUpperCase()))); }
+function favBtn(hex, reg, text) {
+  const on = isFav(hex, reg);
+  return `<button type="button" class="fav-star${on ? ' on' : ''}${text ? ' text' : ''}" data-fav-hex="${hex}" data-fav-reg="${esc(reg || '')}" title="${on ? 'Remove from favorites' : 'Add to favorites: the app watches for it and remembers where it was last seen'}">${on ? '★' : '☆'}${text ? (on ? ' Favorite' : ' Add to favorites') : ''}</button>`;
+}
+function setFavs(list) {
+  favs = Array.isArray(list) ? list : [];
+  favHex = new Set(); favReg = new Set();
+  for (const f of favs) { favHex.add(f.hex); if (f.reg) favReg.add(f.reg.toUpperCase()); }
+  renderFavs();
+  // every star on the page shows the new state
+  document.querySelectorAll('.fav-star').forEach(b => { const n = document.createElement('div'); n.innerHTML = favBtn(b.dataset.favHex, b.dataset.favReg, b.classList.contains('text')); b.replaceWith(n.firstChild); });
+}
+async function loadFavs() { try { setFavs(await fetch('/api/favorites').then(r => r.json())); } catch (e) {} }
+async function changeFav(body) {
+  $('favMsg').textContent = '';
+  const r = await fetch('/api/favorites', { method: 'POST', body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({ error: 'Something went wrong' }));
+  if (!r.ok) throw new Error(j.error || 'Something went wrong');
+  setFavs(j);
+}
+// a star anywhere: add or remove (capture phase, so it doesn't also select the card under it)
+document.addEventListener('click', e => {
+  const b = e.target.closest('.fav-star');
+  if (!b) return;
+  e.preventDefault(); e.stopPropagation();
+  const hex = b.dataset.favHex, reg = b.dataset.favReg;
+  changeFav(isFav(hex, reg) ? { remove: favs.find(f => f.hex === hex || (reg && f.reg.toUpperCase() === reg.toUpperCase()))?.hex || hex } : { add: reg || hex })
+    .catch(err => { $('favMsg').textContent = err.message; $('favs').open = true; });
+}, true);
+$('favForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const v = $('favIn').value.trim();
+  if (!v) return;
+  $('favIn').disabled = true;
+  changeFav({ add: v }).then(() => { $('favIn').value = ''; }).catch(err => { $('favMsg').textContent = err.message; })
+    .finally(() => { $('favIn').disabled = false; $('favIn').focus(); });
+});
+$('favs').open = load('skyFavsOpen', true);
+$('favs').addEventListener('toggle', () => save('skyFavsOpen', $('favs').open));
+
+const mph = kt => Math.round(kt * 1.15078);
+function planeWhere(p) {
+  if (!p) return 'Not seen yet. Watching for it';
+  if (p.live) return `<span class="live">● Flying now</span>${typeof p.alt === 'number' ? ' · ' + p.alt.toLocaleString() + ' ft' : p.alt === 'ground' ? ' · on the ground' : ''}${p.gs != null ? ' · ' + mph(p.gs) + ' mph' : ''}${p.place ? ' · near ' + esc(p.place) : ''}`;
+  return `Last seen ${esc(p.ago)}${p.place ? ' near ' + esc(p.place) : ''}`;
+}
+function renderFavs() {
+  const live = favs.filter(f => f.plane?.live).length;
+  $('favSum').textContent = favs.length ? `· ${favs.length}${live ? `, ${live} flying` : ''}` : '';
+  if (!favs.length) {
+    $('favList').innerHTML = `<p class="fav-empty">Star a plane (☆ on its card) or add a tail number above. The app watches your favorites anywhere in the world and remembers where each was last seen. Click one to find it on the map.</p>`;
+    return;
+  }
+  const sorted = [...favs].sort((a, b) => (b.plane?.live - a.plane?.live) || ((b.plane?.seen || 0) - (a.plane?.seen || 0)));
+  $('favList').innerHTML = sorted.map(f => `<div class="fav-row" data-q="${esc(f.reg || f.hex)}" title="Find it on the map">${favBtn(f.hex, f.reg)}
+    <div><b>${esc(f.reg || f.hex.toUpperCase())}</b>${f.type ? ` <small style="display:inline">${esc(nice(f.type))}</small>` : ''}<small>${planeWhere(f.plane)}</small></div></div>`).join('');
+  $('favList').querySelectorAll('.fav-row').forEach(r => r.onclick = () => findPlaneOnMap(r.dataset.q));
+}
+loadFavs();
+setInterval(loadFavs, 20000);
+
+// pop-up when a favorite flies into range of home (once per visit)
+var favNotified;
+function notifyFavorite(a) {
+  if (!isFav(a.hex, a.reg)) return;
+  favNotified = favNotified || new Map();
+  if (Date.now() - (favNotified.get(a.hex) || 0) < 30 * 60000) return;
+  favNotified.set(a.hex, Date.now());
+  const el = document.createElement('div');
+  el.className = 'toast'; el.style.setProperty('--bc', '#ffd27a');
+  el.innerHTML = `<b>⭐ Your favorite ${esc(a.reg || a.flight || a.hex.toUpperCase())}</b> is in range<br>${a.desc ? nice(a.desc) : a.type || ''}${a.dist != null ? ` · ${a.dist.toFixed(1)} mi ${compass(a.brg)}` : ''}`;
+  el.onclick = () => { select(a.hex, true); el.remove(); };
+  $('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 15000);
+}
+
+// The plane finder: from the Jump to box ("N1932K") or a favorite. Live: a pulsing ring that follows it for a few
+// minutes. Not flying: a faded plane where this app last heard it. Never heard: what's known, and where to look.
+const planeFindLayer = L.layerGroup().addTo(map);
+let planeFinding = null;
+async function findPlaneOnMap(q) {
+  const box = $('jumpResults'), me = planeFinding = { q, started: Date.now() };
+  finding = null; lastSeenLayer.clearLayers();
+  box.innerHTML = `<div class="msg">🔎 Looking for <b>${esc(q.toUpperCase())}</b>…</div>`;
+  let r = null;
+  try { r = await fetch('/api/findplane?q=' + encodeURIComponent(q)).then(x => x.json()); } catch (e) {}
+  if (planeFinding !== me) return;
+  const i = r?.info || {}, reg = r?.reg || i.reg || q.toUpperCase();
+  if (!r || r.status === 'bad') { box.innerHTML = `<div class="msg err">That doesn't look like a tail number. Try one like N1932K or G-EUPT.</div>`; return; }
+  if (r.status === 'unknown') { box.innerHTML = `<div class="msg err">Couldn't find a plane registered <b>${esc(reg)}</b>. Check the tail number.</div>`; return; }
+  if (r.status === 'notseen') {
+    box.innerHTML = `<div class="msg"><b>${esc(reg)}</b>${i.type ? ' · ' + esc(i.type) : ''}${i.owner ? ' · ' + esc(nice(i.owner)) : ''}<br>`
+      + `It isn't flying right now, and this app hasn't heard it before. ADS-B Exchange keeps every plane's history, so it can show where it last flew.<br>`
+      + `${r.hex ? adsbxBtn(r.hex, reg, '🌐 Last flight on ADS-B Exchange') + ' · ' : ''}<a href="https://www.flightaware.com/live/flight/${encodeURIComponent(reg)}" target="_blank" rel="noopener">FlightAware ↗</a><br>`
+      + `${r.hex ? favBtn(r.hex, reg, true) + '<small>Favorites are watched worldwide, so next time it flies the app will know where.</small>' : ''}</div>`;
+    return;
+  }
+  box.innerHTML = '';
+  showFoundPlane(r, true);
+  // a live plane: follow it for 3 minutes
+  while (r.status === 'live' && planeFinding === me && Date.now() - me.started < 180000) {
+    await new Promise(res => setTimeout(res, 10000));
+    if (planeFinding !== me) return;
+    try { const n = await fetch('/api/findplane?q=' + encodeURIComponent(q)).then(x => x.json()); if (planeFinding === me && n.plane) { r = n; showFoundPlane(r, false); } } catch (e) {}
+  }
+}
+function showFoundPlane(r, move) {
+  const p = r.plane, i = r.info || {}, reg = r.reg || p.reg || p.hex.toUpperCase(), live = r.status === 'live';
+  const wasOpen = planeFindLayer.getLayers()[0]?.isPopupOpen();
+  planeFindLayer.clearLayers();
+  const when = new Date(p.seen).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const row = (k, v) => v ? `<span>${k}</span><span>${esc(v)}</span>` : '';
+  const html = `<div class="pt">${i.photo ? `<img class="pt-photo" src="${esc(i.photo)}" alt="" onerror="this.remove()">` : ''}
+    <div class="pt-h"><div><b>✈ ${esc(reg)}</b><small>${live ? `Flying now${p.place ? ' near ' + esc(p.place) : ''}` : `Last seen ${esc(p.ago)}${p.place ? ' near ' + esc(p.place) : ''}`}</small></div></div>
+    <div class="pt-g">${row('Type', i.type || nice(p.desc) || p.type)}${row('Owner', nice(i.owner || p.owner))}${row('Flight', p.flight !== reg ? p.flight : '')}
+      ${row('Altitude', typeof p.alt === 'number' ? p.alt.toLocaleString() + ' ft' : p.alt === 'ground' ? 'On the ground' : '')}${row('Speed', p.gs != null ? mph(p.gs) + ' mph' : '')}
+      ${row('Heading', p.track != null ? COMPASS_WORDS[compass(p.track)] : '')}${row(live ? 'Updated' : 'Seen', live ? p.ago : when)}</div>
+    ${live ? '' : `<p class="ship-about">This is where this app last heard it. It has probably flown on since; ADS-B Exchange keeps its full history.</p>`}
+    <div class="pt-f">${favBtn(p.hex, reg, true)}${adsbxBtn(p.hex, reg, '🌐 ADS-B Exchange')} · ${tailLink(p.hex, reg, 'Owner & registration')}</div></div>`;
+  const icon = L.divIcon({ className: 'found-plane' + (live ? '' : ' last-seen'), iconSize: [28, 28], iconAnchor: [14, 14],
+    html: `<span class="ring"></span>${planeSvg(p.alt === 'ground' ? '#9aa4bf' : altColor(p.alt), p.track || 0)}<span class="ship-tag">${esc(reg)}${live ? '' : ' · last seen ' + esc(p.ago)}</span>` });
+  if (move) map.setView([p.lat, p.lon], live ? 10 : 9);
+  const m = L.marker([p.lat, p.lon], { icon, zIndexOffset: 2000 }).bindPopup(html, { className: 'ship-pop', maxWidth: 260 }).addTo(planeFindLayer);
+  if (move || wasOpen) m.openPopup();
+}
 
 // ---------- map legend: what the colours and icons mean (🗺 Legend button, bottom left of the map) ----------
 const legend = L.control({ position: 'bottomleft' });

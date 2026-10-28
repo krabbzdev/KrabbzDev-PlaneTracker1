@@ -22,3 +22,4 @@ ReleasableAircraft.zip
 backup-artifact/
 settings.json.bad
 airport-details-cache.json
+planes-last-seen.json
