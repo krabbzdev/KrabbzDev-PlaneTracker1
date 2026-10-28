@@ -51,6 +51,19 @@
   @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(82,211,155,.6); } 70% { box-shadow: 0 0 0 8px rgba(82,211,155,0); } 100% { box-shadow: 0 0 0 0 rgba(82,211,155,0); } }
   .spacer { flex: 1; }
   .ctl { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  /* 🗺 Map layers: the map options in a drop-down from the top bar */
+  .layers-menu { position: relative; }
+  .layers-menu > summary { list-style: none; cursor: pointer; font-size: 13px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 11px; user-select: none; white-space: nowrap; }
+  .layers-menu > summary::-webkit-details-marker { display: none; }
+  .layers-menu > summary::after { content: ' ▾'; color: var(--muted); }
+  .layers-menu[open] > summary { border-color: var(--accent); }
+  .layers-menu[open] > summary::after { content: ' ▴'; }
+  .layers-menu .lm-count { color: var(--muted); font-size: 11px; }
+  .layers-pop { position: absolute; top: calc(100% + 6px); right: 0; z-index: 2000; width: 260px; display: flex; flex-direction: column; gap: 9px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.6); }
+  .layers-pop h5 { margin: 4px 0 0; font-size: 10.5px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+  .layers-pop h5:first-child { margin-top: 0; }
+  .layers-pop label.chk { color: var(--text); }
+  .layers-pop label.chk:has(select) { justify-content: space-between; }
   .ctl input[type=range] { accent-color: var(--accent); width: 120px; }
   .ctl b { color: var(--text); font-family: var(--mono); min-width: 44px; display: inline-block; }
   button { font: inherit; font-size: 13px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
@@ -560,23 +573,30 @@
   <span class="live" id="live"><i></i><span id="liveTxt">Connecting…</span></span>
   <div class="spacer"></div>
   <div class="ctl">Tracker Radius <input type="range" id="radius" min="1" max="25" step="1" value="20"><b id="radiusVal">20 mi</b></div>
-  <label class="chk"><input type="checkbox" id="showAll"> Show outside radius</label>
-  <label class="chk"><input type="checkbox" id="showApts" checked> Show Airports</label>
-  <label class="chk" title="A dot at each airport's weather station, coloured by flying conditions: green good, blue marginal, red poor, purple very poor"><input type="checkbox" id="metarOn" checked> ⛅ Airport Weather</label>
-  <label class="chk" title="The FAA's temporary flight restrictions (VIP visits, stadiums, fires...) as red areas"><input type="checkbox" id="tfrOn" checked> ⛔ TFRs</label>
-  <label class="chk" title="Shade the part of the map where it's night right now"><input type="checkbox" id="nightOn" checked> 🌙 Day/Night</label>
-  <label class="chk" title="Live rain radar on the map (US, refreshes every 5 minutes)"><input type="checkbox" id="wxOn" checked> 🌧 Show Weather</label>
-  <label class="chk" title="How the map looks"><span>🌍 Map</span>
-    <select id="mapStyleSel" class="chart-sel" aria-label="Map style">
-      <option value="dark">Dark</option><option value="light">Light</option><option value="streets">Streets</option>
-      <option value="topo">Topographic</option><option value="satellite">Satellite</option>
-    </select></label>
-  <label class="chk" title="FAA aeronautical charts under the map (US). Not for navigation."><span>🗺 Chart</span>
-    <select id="chartSel" class="chart-sel" aria-label="Aeronautical chart">
-      <option value="">None</option><option value="sectional">VFR Sectional</option><option value="terminal">VFR Terminal Area</option>
-      <option value="ifrlow">IFR Low Enroute</option><option value="ifrhigh">IFR High Enroute</option>
-    </select></label>
-  <label class="chk" title="Cruise ships and other boats, live (needs a free AISStream.io key in Settings)"><input type="checkbox" id="shipsOn" checked> 🚢 Show Ships</label>
+  <details class="layers-menu" id="layersMenu">
+    <summary title="Choose what the map shows">🗺 Map layers <span class="lm-count" id="layersCount"></span></summary>
+    <div class="layers-pop">
+      <h5>Show on the map</h5>
+      <label class="chk"><input type="checkbox" id="showAll"> Show outside radius</label>
+      <label class="chk"><input type="checkbox" id="showApts" checked> Show Airports</label>
+      <label class="chk" title="A dot at each airport's weather station, coloured by flying conditions: green good, blue marginal, red poor, purple very poor"><input type="checkbox" id="metarOn" checked> ⛅ Airport Weather</label>
+      <label class="chk" title="The FAA's temporary flight restrictions (VIP visits, stadiums, fires...) as red areas"><input type="checkbox" id="tfrOn" checked> ⛔ TFRs</label>
+      <label class="chk" title="Shade the part of the map where it's night right now"><input type="checkbox" id="nightOn" checked> 🌙 Day/Night</label>
+      <label class="chk" title="Live rain radar on the map (US, refreshes every 5 minutes)"><input type="checkbox" id="wxOn" checked> 🌧 Show Weather</label>
+      <label class="chk" title="Cruise ships and other boats, live (needs a free AISStream.io key in Settings)"><input type="checkbox" id="shipsOn" checked> 🚢 Show Ships</label>
+      <h5>Look</h5>
+      <label class="chk" title="How the map looks"><span>🌍 Map</span>
+        <select id="mapStyleSel" class="chart-sel" aria-label="Map style">
+          <option value="dark">Dark</option><option value="light">Light</option><option value="streets">Streets</option>
+          <option value="topo">Topographic</option><option value="satellite">Satellite</option>
+        </select></label>
+      <label class="chk" title="FAA aeronautical charts under the map (US). Not for navigation."><span>🗺 Chart</span>
+        <select id="chartSel" class="chart-sel" aria-label="Aeronautical chart">
+          <option value="">None</option><option value="sectional">VFR Sectional</option><option value="terminal">VFR Terminal Area</option>
+          <option value="ifrlow">IFR Low Enroute</option><option value="ifrhigh">IFR High Enroute</option>
+        </select></label>
+    </div>
+  </details>
   <label class="chk" title="Take over the screen with a close-up when a plane passes inside the overhead circle (size in Settings, Alerts)"><input type="checkbox" id="takeoverOn" checked> Overhead Plane Alert</label>
   <label class="chk" title="Chime and spoken announcement when a plane is overhead"><input type="checkbox" id="soundOn" checked> 🔔 Sound</label>
   <label class="chk vol" title="Volume of the chime and the voice"><span aria-hidden="true">🔉</span><input type="range" id="volIn" min="0" max="1" step="0.05" aria-label="Volume"><b id="volVal"></b></label>
@@ -945,6 +965,13 @@ function setChart(name) {
 $('chartSel').addEventListener('change', e => setChart(e.target.value));
 setMapStyle(load('skyMapStyle', 'dark'));
 setChart(load('skyChart', ''));
+
+// 🗺 Map layers menu: shows how many layers are on; closes when you click elsewhere or press Esc
+function countLayers() { $('layersCount').textContent = `· ${$('layersMenu').querySelectorAll('input[type=checkbox]:checked').length} on`; }
+$('layersMenu').addEventListener('change', countLayers);
+setTimeout(countLayers, 0); // once every option has been set from what was saved
+document.addEventListener('click', e => { if ($('layersMenu').open && !$('layersMenu').contains(e.target)) $('layersMenu').open = false; });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('layersMenu').open = false; });
 // Weather overlay: NWS NEXRAD rain radar (US only) via Iowa Environmental Mesonet, refreshed every 5 minutes.
 // Sits under the place names (shadowPane) so streets and towns stay readable.
 map.createPane('weather').style.zIndex = 350;
