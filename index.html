@@ -57,6 +57,7 @@
   button:hover, a.btn:hover { border-color: var(--accent); }
   a.btn { font-size: 13px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; text-decoration: none; white-space: nowrap; }
   label.chk { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
+  .chart-sel { font: 13px Inter, sans-serif; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px; cursor: pointer; }
 
   .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 14px 20px; }
   .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
@@ -545,6 +546,11 @@
   <label class="chk"><input type="checkbox" id="showAll"> Show outside radius</label>
   <label class="chk"><input type="checkbox" id="showApts" checked> Show Airports</label>
   <label class="chk" title="Live rain radar on the map (US, refreshes every 5 minutes)"><input type="checkbox" id="wxOn" checked> 🌧 Show Weather</label>
+  <label class="chk" title="FAA aeronautical charts under the map (US). Not for navigation."><span>🗺 Chart</span>
+    <select id="chartSel" class="chart-sel" aria-label="Aeronautical chart">
+      <option value="">None</option><option value="sectional">VFR Sectional</option><option value="terminal">VFR Terminal Area</option>
+      <option value="ifrlow">IFR Low Enroute</option><option value="ifrhigh">IFR High Enroute</option>
+    </select></label>
   <label class="chk" title="Cruise ships and other boats, live (needs a free AISStream.io key in Settings)"><input type="checkbox" id="shipsOn" checked> 🚢 Show Ships</label>
   <label class="chk" title="Take over the screen with a close-up when a plane passes inside the overhead circle (size in Settings, Alerts)"><input type="checkbox" id="takeoverOn" checked> Overhead Plane Alert</label>
   <label class="chk" title="Chime and spoken announcement when a plane is overhead"><input type="checkbox" id="soundOn" checked> 🔔 Sound</label>
@@ -822,7 +828,30 @@ const fmtAlt = a => a === 'ground' ? 'Ground' : a == null ? '—' : a.toLocaleSt
 const map = L.map('map', { zoomControl: true, attributionControl: true, scrollWheelZoom: false }) // zoom with +/- only, so page scrolling never zooms the map.setView(home || [27.9506, -82.4572], 11);
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
 L.tileLayer(ESRI + 'World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, attribution: 'Tiles &copy; Esri' }).addTo(map);
-L.tileLayer(ESRI + 'World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, pane: 'shadowPane' }).addTo(map);
+const placeNames = L.tileLayer(ESRI + 'World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, pane: 'shadowPane' }).addTo(map);
+
+// Aeronautical charts: the FAA's own digital charts (Aeronautical Information Services, public domain), picked
+// with 🗺 Chart in the top bar. Each chart is drawn for a range of zoom levels; outside it the nearest one is
+// stretched or shrunk to fit. The map's place names are hidden while a chart shows (the chart has its own).
+map.createPane('charts').style.zIndex = 300; // over the base map, under the weather radar
+const FAA_CHARTS = 'https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/';
+const CHARTS = { // value: [FAA service, first zoom drawn, last zoom drawn]
+  sectional: ['VFR_Sectional', 8, 12], terminal: ['VFR_Terminal', 10, 12], ifrlow: ['IFR_AreaLow', 7, 12], ifrhigh: ['IFR_High', 5, 9],
+};
+let chartLayer = null;
+function setChart(name) {
+  if (!CHARTS[name]) name = '';
+  save('skyChart', name); $('chartSel').value = name;
+  if (chartLayer) { map.removeLayer(chartLayer); chartLayer = null; }
+  if (name) {
+    const [svc, minNativeZoom, maxNativeZoom] = CHARTS[name];
+    chartLayer = L.tileLayer(FAA_CHARTS + svc + '/MapServer/tile/{z}/{y}/{x}', { pane: 'charts', opacity: .9, minNativeZoom, maxNativeZoom, maxZoom: 16,
+      attribution: 'Charts: FAA Aeronautical Information Services (not for navigation)' }).addTo(map);
+    map.removeLayer(placeNames);
+  } else placeNames.addTo(map);
+}
+$('chartSel').addEventListener('change', e => setChart(e.target.value));
+setChart(load('skyChart', ''));
 // Weather overlay: NWS NEXRAD rain radar (US only) via Iowa Environmental Mesonet, refreshed every 5 minutes.
 // Sits under the place names (shadowPane) so streets and towns stay readable.
 map.createPane('weather').style.zIndex = 350;
@@ -1006,6 +1035,7 @@ function aptPanel(a) {
   const icao = d?.icao || (/^[A-Z]{4}$/.test(a.ident) ? a.ident : '');
   const links = [
     !heli && `<a class="atc-btn" href="${atcUrl(icao || a.ident)}" target="_blank" rel="noopener">🎧 Listen to ATC</a>`,
+    d?.cc === 'US' && `<a href="https://www.aopa.org/destinations/airports/${encodeURIComponent(icao || d.local || a.ident)}/details" target="_blank" rel="noopener">✈ AOPA airport details</a>`,
     d?.cc === 'US' && `<a href="https://www.airnav.com/airport/${encodeURIComponent(d.local || a.ident)}" target="_blank" rel="noopener">AirNav</a>`,
     `<a href="https://skyvector.com/airport/${encodeURIComponent(icao || d?.local || a.ident)}" target="_blank" rel="noopener">SkyVector chart</a>`,
     icao && !heli && `<a href="https://www.flightaware.com/live/airport/${encodeURIComponent(icao)}" target="_blank" rel="noopener">FlightAware</a>`,

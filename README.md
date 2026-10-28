@@ -33,6 +33,7 @@ bottom-right corner.
 
 - **Live map** of aircraft around home (default 20 mile radius), with airports, your home and an optional office
 - **Weather overlay**: live rain radar on the map (US, NWS NEXRAD via Iowa Environmental Mesonet), switched on with 🌧 Weather
+- **Aeronautical charts**: the FAA's VFR Sectional, VFR Terminal Area, IFR Low and IFR High Enroute charts under the map, picked with 🗺 Chart (US, not for navigation)
 - **Cruise ships and boats** (optional, free): live ship positions from [AISStream.io](https://aisstream.io), with cruise ships highlighted and listed in a Cruise ships panel. Needs your own free AISStream key (Settings → More)
 - **Tray icon**: a ✈ in the Windows system tray while it runs; click to open the dashboard, right-click → Quit to stop it (a tiny helper, tray/Tray.cs, carried inside the .exe and unpacked next to it)
 - **Overhead Plane Alert**: inside the overhead circle (1 mile to start, adjustable), a full-screen close-up with the flight path,
@@ -67,6 +68,7 @@ home address, an optional office, your FlightAware username, and an optional con
 | Airports, runways, radio frequencies | [OurAirports](https://ourairports.com) (public domain) |
 | Airport weather | [NOAA Aviation Weather Center](https://aviationweather.gov) (US government, public domain) |
 | Airline logos | [sexym0nk3y/airline-logos](https://github.com/sexym0nk3y/airline-logos) via jsDelivr (logos are trademarks of their airlines) |
+| Aeronautical charts | [FAA Aeronautical Information Services](https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/) (US government, public domain) |
 | Weather radar | NWS NEXRAD via [Iowa Environmental Mesonet](https://mesonet.agron.iastate.edu) |
 | Ships (optional) | [AISStream.io](https://aisstream.io) live AIS data, with your own free API key |
 | Kokoro voices (optional) | [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) via [kokoro-js](https://github.com/hexgrad/kokoro) (Apache 2.0), downloaded on first use from jsDelivr and Hugging Face; runs in your browser |
