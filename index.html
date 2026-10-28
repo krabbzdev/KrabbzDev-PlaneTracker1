@@ -676,7 +676,7 @@
         <p class="hint">Anything the app doesn't know for a plane (like where it's going) is left out.</p>
         <div class="row"><button id="voiceTest">▶ Test the voice</button><button id="sayReset">Reset to default</button></div>
         <p class="hint" id="voiceStatus" style="margin-top:6px"></p>
-        <p class="hint" style="margin-top:8px">The voices are the ones your browser has. Microsoft Edge has the most natural-sounding ones (marked "Natural"). Each browser remembers its own choice.</p>
+        <p class="hint" style="margin-top:8px"><b>Kokoro</b> voices sound the most natural and are made right on this PC: the first one you pick downloads once (about 90 to 300 MB) and the browser keeps it. The browser's own voices are instant; Edge's "Natural" ones only work when Microsoft's speech service can be reached. Each browser remembers its own choice.</p>
       </div>
       <p class="hint">To turn the alerts on or off, use <b>Overhead Plane Alert</b> and <b>🔔 Sound</b> at the top of the page.</p>
     </section>
@@ -1494,7 +1494,7 @@ function updateTakeover() {
   for (const a of current) {
     if (!a.inside || announced.has(a.hex) || a.alt === 'ground' || a.dist == null || a.dist > 6) continue;
     const c = cpa(a);
-    if (a.dist < ALERT_MI * 1.5 || (c && !c.passed && c.dist < ALERT_MI && c.secs < 150)) requestLookup(a.hex);
+    if (a.dist < ALERT_MI * 1.5 || (c && !c.passed && c.dist < ALERT_MI && c.secs < 150)) { requestLookup(a.hex); prepareAnnouncement(a); }
   }
   if (toHex) {
     const a = current.find(x => x.hex === toHex);
@@ -1598,7 +1598,10 @@ function fillVoicePick() {
   const rank = v => (/natural/i.test(v.name) ? 0 : 2) + (/^en-US/i.test(v.lang) ? 0 : 1);
   const label = v => v.name.replace(/^Microsoft\s+/, '').replace(/\s+-\s+English.*$/, '').replace(/\s*\(Natural\)/, ' (Natural)') + (/^en-US/i.test(v.lang) ? '' : ` · ${v.lang}`) + (failedVoices.has(v.name) ? ' ⚠ not working here' : '');
   sel.innerHTML = `<option value="">TikTok style (automatic: the most upbeat voice here)</option>`
-    + [...en].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name)).map(v => `<option value="${esc(v.name)}">${esc(label(v))}</option>`).join('');
+    + `<optgroup label="Kokoro: natural, made on this PC (one-time download)">`
+    + KOKORO_VOICES.map(([id, name]) => `<option value="kokoro:${id}">Kokoro ${esc(name)}${failedVoices.has('kokoro:' + id) ? ' ⚠ not working here' : ''}</option>`).join('') + `</optgroup>`
+    + `<optgroup label="This browser's voices">`
+    + [...en].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name)).map(v => `<option value="${esc(v.name)}">${esc(label(v))}</option>`).join('') + `</optgroup>`;
   sel.value = voiceName;
   if (sel.value !== voiceName) sel.value = ''; // the saved voice isn't in this browser
 }
@@ -1650,7 +1653,95 @@ async function say(text, retry) {
     if (!retry) setTimeout(() => failed('it stayed silent'), 5000);
   }, 60);
 }
-function stopSpeech() { if ('speechSynthesis' in window) speechSynthesis.cancel(); }
+function stopSpeech() {
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  if (speechAudio) { speechAudio.pause(); speechAudio = null; }
+}
+
+// ---------- Kokoro: natural voices made on this PC ----------
+// Kokoro-82M (Apache 2.0) runs inside this page: no speech server needed, unlike Edge's natural voices, which
+// are made on Microsoft's servers and don't work everywhere. Its files download once from jsDelivr and Hugging Face
+// and the browser keeps them; the words being spoken never leave the PC. With a graphics card (WebGPU) a sentence
+// takes about half a second after a ~300 MB download; on the processor 10-15 s after ~90 MB, which is why
+// announcements are made ahead of time for planes about to pass overhead (prepareAnnouncement).
+// The choice is saved as "kokoro:<voice>" (Settings > Alerts > Voice).
+var KOKORO_VOICES = [['af_heart', 'Heart (female)'], ['af_bella', 'Bella (female)'], ['af_nova', 'Nova (female)'], ['af_sky', 'Sky (female)'],
+  ['af_nicole', 'Nicole (female, soft)'], ['af_sarah', 'Sarah (female)'], ['af_aoede', 'Aoede (female)'], ['af_kore', 'Kore (female)'],
+  ['am_michael', 'Michael (male)'], ['am_adam', 'Adam (male)'], ['am_puck', 'Puck (male)'], ['am_eric', 'Eric (male)'],
+  ['am_liam', 'Liam (male)'], ['am_onyx', 'Onyx (male, deep)'], ['am_echo', 'Echo (male)']];
+const KOKORO_JS = 'https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/+esm';
+const KOKORO_MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX';
+const kokoroVoice = () => (/^kokoro:(\w+)$/.exec(voiceName) || [])[1] || null;
+const pct = (done, total) => total ? ` ${Math.round(done / total * 100)}%` : '';
+let kokoro = null; // Promise of the loaded model
+function loadKokoro() {
+  if (!kokoro) kokoro = (async () => {
+    const { KokoroTTS } = await import(KOKORO_JS);
+    const progress_callback = p => { if (p.status === 'progress' && /onnx/.test(p.file || '')) voiceStatus('⬇ Downloading the Kokoro voice (one time only)…' + pct(p.loaded, p.total)); };
+    if (navigator.gpu) {
+      // graphics card: full-precision model (the smaller ones make silent or slow audio on WebGPU)
+      try { return await KokoroTTS.from_pretrained(KOKORO_MODEL, { dtype: 'fp32', device: 'webgpu', progress_callback }); }
+      catch (e) { console.log('Kokoro on the graphics card failed, using the processor: ' + e.message); }
+    }
+    return KokoroTTS.from_pretrained(KOKORO_MODEL, { dtype: 'q8', device: 'wasm', progress_callback });
+  })().catch(e => { kokoro = null; throw e; });
+  return kokoro;
+}
+// one sentence at a time: Kokoro uses the whole processor or graphics card
+let kokoroChain = Promise.resolve();
+function kokoroMake(voice, text) {
+  const run = kokoroChain.then(async () => (await (await loadKokoro()).generate(text, { voice, speed: voiceUpbeat ? 1.12 : 1 })).toBlob());
+  kokoroChain = run.catch(() => {});
+  return run;
+}
+var speechAudio = null; // var: stopSpeech, above, uses it
+function playBlob(blob) {
+  stopSpeech();
+  const url = URL.createObjectURL(blob), audio = speechAudio = new Audio(url);
+  audio.onended = () => URL.revokeObjectURL(url);
+  return audio.play().catch(e => { if (e && e.name === 'NotAllowedError') { voiceStatus('🔇 The browser blocked sound: click the page once, then try again.', true); showSoundLock(true); } throw e; });
+}
+// Kokoro says it; if it can't load (offline, old browser), the browser's own voice says it instead
+async function sayKokoro(text, voice, ready) {
+  const id = ++sayId;
+  stopSpeech();
+  if (!kokoro) voiceStatus('Getting the Kokoro voice ready… (the first time can take a minute while it downloads)');
+  try {
+    const blob = await (ready || kokoroMake(voice, text));
+    if (id !== sayId) return; // something newer is being said
+    await playBlob(blob);
+    voiceStatus(`🔊 Speaking: Kokoro ${(KOKORO_VOICES.find(v => v[0] === voice) || [, voice])[1]}${voiceUpbeat ? ', upbeat' : ''}`);
+  } catch (e) {
+    if (id !== sayId || e?.name === 'NotAllowedError') return;
+    failedVoices.add('kokoro:' + voice); fillVoicePick();
+    console.log('Kokoro failed: ' + (e && e.message));
+    say(text, { from: 'Kokoro', why: (e && e.message) || 'it could not load' });
+  }
+}
+
+// Kokoro on the processor is slow, so for a plane that's about to pass overhead the announcement is made ahead of
+// time and played the moment it arrives.
+const prepared = new Map(); // hex -> { voice, text, at, blob: Promise<Blob|null> }
+const sameWords = (x, y) => x.replace(/\d[\d,]*/g, '#') === y.replace(/\d[\d,]*/g, '#'); // speed and altitude drift a little
+function prepareAnnouncement(a) {
+  const voice = kokoroVoice();
+  if (!soundOn || !voice || failedVoices.has('kokoro:' + voice)) return;
+  const text = announcementText(a), p = prepared.get(a.hex);
+  if (p && p.voice === voice && (sameWords(p.text, text) || Date.now() - p.at < 20000)) return;
+  prepared.set(a.hex, { voice, text, at: Date.now(), blob: kokoroMake(voice, text).catch(() => null) });
+  if (prepared.size > 8) prepared.delete(prepared.keys().next().value);
+}
+async function announce(a) {
+  const text = announcementText(a), p = prepared.get(a.hex), voice = kokoroVoice();
+  prepared.delete(a.hex);
+  if (voice && !failedVoices.has('kokoro:' + voice)) {
+    const ready = p && p.voice === voice && sameWords(p.text, text) ? p.blob.then(b => b || kokoroMake(voice, text)) : null;
+    return sayKokoro(text, voice, ready);
+  }
+  say(text);
+}
+// get Kokoro ready shortly after the page opens, so the first real announcement isn't slow
+setTimeout(() => { if (kokoroVoice() && soundOn) kokoroMake(kokoroVoice(), 'Ready.').catch(() => {}); }, 8000);
 
 // What the voice says, written by the user in Settings > Alerts (each browser keeps its own).
 // {words} are filled in for each plane; any the app doesn't know are dropped along with their comma.
@@ -1687,7 +1778,6 @@ function fillSay(template, value) {
     .replace(/\s+([,.!?])/g, '$1').replace(/\s+/g, ' ').trim();
 }
 const announcementText = a => fillSay(sayTemplate, k => SAY_TAGS[k][1](a));
-const announce = a => say(announcementText(a));
 
 function alertSound(hex) {
   if (!soundOn) return;
@@ -2369,7 +2459,11 @@ $('aisIn').addEventListener('input', () => { aisClear = false; showAis(); });
 $('linesAll').onclick = () => $('cruiseLines').querySelectorAll('input').forEach(c => c.checked = true);
 $('linesNone').onclick = () => $('cruiseLines').querySelectorAll('input').forEach(c => c.checked = false);
 $('aisClear').onclick = () => { $('aisIn').value = ''; aisClear = !!cfg.aisKeySet; showAis(); };
-$('voiceTest').onclick = () => { unlockSound(); say(fillSay($('sayIn').value || SAY_DEFAULT, k => SAY_TAGS[k][0])); };
+$('voiceTest').onclick = () => {
+  unlockSound();
+  const text = fillSay($('sayIn').value || SAY_DEFAULT, k => SAY_TAGS[k][0]);
+  if (kokoroVoice() && !failedVoices.has(voiceName)) sayKokoro(text, kokoroVoice()); else say(text);
+};
 $('sayIn').value = sayTemplate;
 $('sayIn').addEventListener('input', e => { sayTemplate = e.target.value.trim() || SAY_DEFAULT; save('skySay', sayTemplate); });
 $('sayReset').onclick = () => { $('sayIn').value = SAY_DEFAULT; $('sayIn').dispatchEvent(new Event('input')); };
