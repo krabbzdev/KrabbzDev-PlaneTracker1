@@ -457,6 +457,12 @@
   .ship-logo-lg { width: 30px; height: 30px; padding: 2px; border-radius: 6px; background: #fff; object-fit: contain; flex: none; }
   .ship-logo-sm { width: 24px; height: 24px; padding: 2px; border-radius: 5px; background: #fff; object-fit: contain; flex: none; }
   .ship-pop img.ph { display: block; width: 100%; height: 130px; object-fit: cover; border-radius: 10px 10px 0 0; }
+  .info-i { display: inline-grid; place-items: center; width: 15px; height: 15px; margin-left: 6px; padding: 0; border-radius: 50%; border: 1px solid var(--accent); background: transparent; color: var(--accent); font: italic 700 10px Georgia, serif; text-transform: none; letter-spacing: 0; cursor: pointer; vertical-align: 1px; }
+  .info-i:hover { background: var(--accent); color: #0b1020; }
+  #rgLive > div:has(> .info-txt:not([hidden])), .to-grid > div:has(> .info-txt:not([hidden])) { grid-column: 1 / -1; } /* an open explanation gets the full width */
+  .info-txt { margin: 6px 0 0; font: 12px/1.45 Inter, sans-serif; color: var(--text); text-transform: none; letter-spacing: 0; white-space: normal; }
+  .ship-specs { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 6px; font-size: 11.5px; }
+  .ship-specs summary { cursor: pointer; font-weight: 600; color: var(--accent); margin-bottom: 4px; }
   .ship-about { margin: 8px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
   /* favorite planes and the plane finder */
   #voiceStatus:empty { display: none; }
@@ -839,6 +845,32 @@ const SQUAWK_MEANS = { '7500': 'hijack', '7600': 'radio failure', '7700': 'emerg
 const squawkTxt = sq => sq ? sq + (SQUAWK_MEANS[sq] ? ` (${SQUAWK_MEANS[sq]})` : '') : '';
 const gpsAltTxt = a => typeof a.altGps === 'number' && a.alt !== 'ground' ? a.altGps.toLocaleString() + ' ft' : '';
 
+// ---------- ⓘ explanations: a small "i" beside each number on a plane's cards; click it for a simple explanation ----------
+const INFO = {
+  'Altitude': 'How high the plane is above the sea, in feet. A big jet cruises around 35,000 feet: that\'s about 6 miles up, higher than the tallest mountain!',
+  'Altitude (pressure)': 'How high the plane is, worked out from the air around it. The higher you go, the thinner the air gets, so the plane can tell its height by how much the air is pushing. All pilots and air traffic controllers use this number, so everyone agrees how high everyone is.',
+  'Altitude (GPS)': 'How high the plane is according to satellites in space, the same kind that tell a phone where it is on a map. It\'s usually a little different from the pressure altitude, because weather changes the air.',
+  'Speed': 'How fast the plane is moving over the ground. A wind blowing from behind makes it go faster, like walking on a moving walkway at the airport. A wind blowing in its face slows it down.',
+  'Distance': 'How far away the plane is from your home, and which way to look for it. N means north, S south, E east and W west.',
+  'Heading': 'Which way the plane\'s nose is pointing, like a compass. 0° (or 360°) is north, 90° is east, 180° is south and 270° is west.',
+  'Vertical speed': 'How fast the plane is going up or down. A plus number means it\'s climbing, like going up stairs. A minus number means it\'s coming down, like going down a slide, usually because it\'s getting ready to land.',
+  'Squawk': 'A 4-number code the plane\'s radio box sends out, like a name tag. Air traffic controllers give each plane its own code so they can tell which dot on their screen is which plane. A few codes are special: 1200 means the pilot is flying on their own without talking to controllers, 7700 means an emergency, 7600 means the radio is broken, and 7500 means the plane is being hijacked.',
+  'Tracked': 'How long this app has been watching the plane, since it first came close enough to hear.',
+  'Status': 'Whether the app can still hear this plane. Planes go out of range when they fly far away or land.',
+};
+var openInfo = new Set(); // explanations left open stay open when the numbers update
+const infoBtn = k => INFO[k] ? `<button type="button" class="info-i" data-info="${esc(k)}" title="${esc(INFO[k])}" aria-label="What does ${esc(k)} mean?">i</button>` : '';
+const infoText = k => INFO[k] ? `<p class="info-txt"${openInfo.has(k) ? '' : ' hidden'}>${esc(INFO[k])}</p>` : '';
+document.addEventListener('click', e => {
+  const b = e.target.closest('.info-i');
+  if (!b) return;
+  e.preventDefault(); e.stopPropagation();
+  const k = b.dataset.info, p = b.closest('.k')?.parentElement?.querySelector('.info-txt');
+  if (!p) return;
+  p.hidden = !p.hidden;
+  if (p.hidden) openInfo.delete(k); else openInfo.add(k);
+}, true);
+
 // ---------- geo math ----------
 const toRad = d => d * Math.PI / 180, toDeg = r => r * 180 / Math.PI;
 function distMi(a, b) {
@@ -1165,6 +1197,17 @@ measureCtl.onAdd = () => {
   return el;
 };
 measureCtl.addTo(map);
+
+// 🏠 button under the zoom buttons: back to home at 100% (also stops exploring somewhere else)
+const homeCtl = L.control({ position: 'topleft' });
+homeCtl.onAdd = () => {
+  const el = L.DomUtil.create('div', 'leaflet-bar measure-ctl');
+  el.innerHTML = '<a href="#" role="button" title="Back to home">🏠</a>';
+  L.DomEvent.disableClickPropagation(el);
+  el.firstChild.onclick = e => { e.preventDefault(); if (typeof stopExplore === 'function') stopExplore(); fitRadius(); };
+  return el;
+};
+homeCtl.addTo(map);
 function setMeasuring(on) {
   measuring = on; measureFrom = null; measureLayer.clearLayers();
   measureCtl.getContainer().classList.toggle('on', on);
@@ -2153,13 +2196,13 @@ function drawTakeover(a) {
       ${cpaHtml}
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">${adsbxBtn(a.hex, a.flight || reg, '🌐 View on ADS-B Exchange', 'big')}${shareBtn(a.hex, 'big')}</div>
       <div class="to-grid">
-        <div><div class="k">Altitude</div><div class="v" style="color:${color}">${fmtAlt(a.alt)}${a.vr > 300 ? ' ↑' : a.vr < -300 ? ' ↓' : ''}</div></div>
-        <div><div class="k">Speed</div><div class="v">${speedTxt(a.gs) || '—'}</div></div>
-        <div><div class="k">Distance</div><div class="v">${distTxt(a.dist, 2)} ${compass(a.brg)}</div></div>
-        <div><div class="k">Heading</div><div class="v">${a.track != null ? Math.round(a.track) + '° ' + compass(a.track) : '—'}</div></div>
-        <div><div class="k">Vertical speed</div><div class="v">${fpmTxt(a.vr) || '—'}</div></div>
-        <div><div class="k">Squawk</div><div class="v">${squawkTxt(a.squawk) || '—'}</div></div>
-        <div><div class="k">Tracked</div><div class="v">${trackedFor(a) || '—'}</div></div>
+        <div><div class="k">Altitude${infoBtn('Altitude')}</div><div class="v" style="color:${color}">${fmtAlt(a.alt)}${a.vr > 300 ? ' ↑' : a.vr < -300 ? ' ↓' : ''}</div>${infoText('Altitude')}</div>
+        <div><div class="k">Speed${infoBtn('Speed')}</div><div class="v">${speedTxt(a.gs) || '—'}</div>${infoText('Speed')}</div>
+        <div><div class="k">Distance${infoBtn('Distance')}</div><div class="v">${distTxt(a.dist, 2)} ${compass(a.brg)}</div>${infoText('Distance')}</div>
+        <div><div class="k">Heading${infoBtn('Heading')}</div><div class="v">${a.track != null ? Math.round(a.track) + '° ' + compass(a.track) : '—'}</div>${infoText('Heading')}</div>
+        <div><div class="k">Vertical speed${infoBtn('Vertical speed')}</div><div class="v">${fpmTxt(a.vr) || '—'}</div>${infoText('Vertical speed')}</div>
+        <div><div class="k">Squawk${infoBtn('Squawk')}</div><div class="v">${squawkTxt(a.squawk) || '—'}</div>${infoText('Squawk')}</div>
+        <div><div class="k">Tracked${infoBtn('Tracked')}</div><div class="v">${trackedFor(a) || '—'}</div>${infoText('Tracked')}</div>
       </div>
     </div>`;
 }
@@ -2316,7 +2359,7 @@ function renderRegLive(hex) {
   const el = $('rgLive'), a = tracks.get(hex)?.aircraft;
   if (!el) return;
   if (!a) { el.innerHTML = '<div><div class="k">Status</div><div class="v">No longer in range</div></div>'; return; }
-  const cell = (k, v, style = '') => `<div><div class="k">${k}</div><div class="v" style="${style}">${v ?? '—'}</div></div>`;
+  const cell = (k, v, style = '') => `<div><div class="k">${k}${infoBtn(k)}</div><div class="v" style="${style}">${v ?? '—'}</div>${infoText(k)}</div>`;
   el.innerHTML = cell('Altitude (pressure)', fmtAlt(a.alt) + (a.vr > 300 ? ' ↑' : a.vr < -300 ? ' ↓' : ''), 'color:' + altColor(a.alt))
     + cell('Altitude (GPS)', gpsAltTxt(a) || null)
     + cell('Speed', speedTxt(a.gs) || null)
@@ -2966,7 +3009,8 @@ function shipCard(s, withLinks) {
       ${row('Type', line ? 'Cruise ship' : '')}${row('Size', size)}${row('Draught', s.draught ? `${s.draught} m (${Math.round(s.draught * 3.281)} ft)` : '')}${row('Flag', shipFlag(s))}
       ${withLinks ? row('IMO', s.imo ? String(s.imo) : '') + row('Call sign', s.callsign) + row('MMSI', s.mmsi) : ''}</div>
     ${wiki?.extract ? `<p class="ship-about">${esc(wiki.extract)}${withLinks && wiki.url ? ` <a href="${esc(wiki.url)}" target="_blank" rel="noopener">Wikipedia ↗</a>` : ''}</p>` : info === 'pending' ? '<p class="ship-about">Looking up this ship…</p>' : ''}
-    ${withLinks ? `<div class="pt-f"><a href="${shipUrl(s)}" target="_blank" rel="noopener">VesselFinder ↗</a> · <a href="https://www.marinetraffic.com/en/ais/details/ships/mmsi:${s.mmsi}" target="_blank" rel="noopener">MarineTraffic ↗</a></div>` : '<div class="pt-f">Click for more details and links</div>'}</div>`;
+    ${withLinks && wiki?.specs?.length ? `<details class="ship-specs" open><summary>Specifications</summary><div class="pt-g">${wiki.specs.map(([k, v]) => row(k, v)).join('')}</div><div class="pt-f">From Wikipedia</div></details>` : ''}
+    ${withLinks ? `<div class="pt-f">${line && s.imo ? `<a href="https://www.cruisemapper.com/?imo=${encodeURIComponent(s.imo)}" target="_blank" rel="noopener">CruiseMapper ↗</a> · ` : ''}<a href="${shipUrl(s)}" target="_blank" rel="noopener">VesselFinder ↗</a> · <a href="https://www.marinetraffic.com/en/ais/details/ships/mmsi:${s.mmsi}" target="_blank" rel="noopener">MarineTraffic ↗</a></div>` : '<div class="pt-f">Click for more details and links</div>'}</div>`;
 }
 // top-down hull, bow pointing up; cruise ships get white decks
 function shipSvg(s) {
@@ -3160,8 +3204,9 @@ jumpBox.onAdd = () => {
 jumpBox.addTo(map);
 // Links to sites that also use satellites, for ships beyond AISStream's coastal receivers.
 // (CruiseMapper ship pages have IDs we can't know, so DuckDuckGo's "first result" link lands on the right one.)
+// CruiseMapper (satellite tracking, so ships out at sea too) finds a ship by its IMO number; without one, a search.
 const elsewhereLinks = (name, imo, mmsi) =>
-  `Where is it now? <a href="https://duckduckgo.com/?q=${encodeURIComponent('!ducky cruisemapper ' + (name || ''))}" target="_blank" rel="noopener">CruiseMapper ↗</a>`
+  `Where is it now? <a href="${imo ? 'https://www.cruisemapper.com/?imo=' + encodeURIComponent(imo) : 'https://duckduckgo.com/?q=' + encodeURIComponent('!ducky cruisemapper ' + (name || ''))}" target="_blank" rel="noopener">CruiseMapper ↗</a>`
   + ` · <a href="https://www.vesselfinder.com/${imo ? 'vessels/details/' + imo : '?mmsi=' + mmsi}" target="_blank" rel="noopener">VesselFinder ↗</a>`;
 
 // A ship that's out of range right now: a faded ship where AIS receivers last heard it, with when and where.

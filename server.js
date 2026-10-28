@@ -1233,10 +1233,62 @@ async function shipWiki(name) {
     if (r.status !== 200) throw new Error('HTTP ' + r.status);
     const want = norm(name);
     const p = Object.values(JSON.parse(r.body).query?.pages || {}).sort((a, b) => a.index - b.index).find(p => norm(p.title) === want);
-    if (p) out = { title: p.title, extract: (p.extract || '').slice(0, 600), thumb: p.thumbnail?.source || null, url: p.fullurl };
+    if (p) out = { title: p.title, extract: (p.extract || '').slice(0, 600), thumb: p.thumbnail?.source || null, url: p.fullurl, specs: await shipSpecs(p.title) };
   } catch (e) { failed = true; }
   if (!failed) shipInfoCache.set(key, out); // a network hiccup is retried next time
   return out;
+}
+
+// The specifications from the ship's Wikipedia infobox (year built, builder, class, size, passengers, crew...),
+// as [label, value] pairs for the ship card. Wikipedia's markup is turned into plain text.
+function wikiPlain(v) {
+  const conv = (n, u) => {
+    const x = parseFloat(String(n).replace(/,/g, ''));
+    const other = { m: [3.28084, 'ft'], ft: [0.3048, 'm'], kn: [1.15078, 'mph'], km: [0.621371, 'mi'] }[u];
+    return other && isFinite(x) ? `${n} ${u} (${Math.round(x * other[0]).toLocaleString('en-US')} ${other[1]})` : `${n} ${u}`;
+  };
+  return String(v)
+    .replace(/<ref[^>]*\/>/gi, '').replace(/<ref[\s\S]*?<\/ref>/gi, '').replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\[\[(?:File|Image):[^\]]*\]\]/gi, '')
+    .replace(/\{\{(?:shipboxflag|flag|flagcountry|flagicon|flagu)\|([^|}]+)[^}]*\}\}/gi, '$1')
+    .replace(/\{\{GT\|([^|}]+)[^}]*\}\}/gi, '$1 GT')
+    .replace(/\{\{convert\|([\d.,]+)\|([a-z]+)[^}]*\}\}/gi, (m, n, u) => conv(n, u))
+    .replace(/\{\{(?:sclass|sclass2)[^|]*\|([^|}]+)[^}]*\}\}/gi, '$1 class')
+    .replace(/\{\{(?:nbsp|snd|spaced ndash)\}\}/gi, ' ').replace(/&nbsp;/g, ' ').replace(/&ndash;|–/g, '–')
+    .replace(/\{\{(?:ubl|unbulleted list|plainlist|flatlist|hlist)\|([^{}]*)\}\}/gi, (m, l) => l.split('|').join(', '))
+    .replace(/\{\{[^{}]*\}\}/g, '').replace(/\{\{[^{}]*\}\}/g, '') // anything else (nested ones too)
+    .replace(/\[\[(?:[^\]|]*\|)?([^\]]+)\]\]/g, '$1').replace(/\[https?:\S+\s([^\]]+)\]/g, '$1')
+    .replace(/'{2,}/g, '').replace(/<br\s*\/?>/gi, ', ').replace(/<[^>]+>/g, '')
+    .replace(/\n\s*\*\s*/g, ', ').replace(/^\s*\*\s*/, '').replace(/\s+/g, ' ').replace(/,\s*(,\s*)+/g, ', ').replace(/^[,\s]+|[,\s]+$/g, '').trim(); // ",," left by removed bits (not "88,500")
+}
+const SHIP_SPECS = [ // [infobox field(s), label]
+  [['completed', 'launched'], 'Year built'], [['flag', 'country', 'registry'], 'Flag'], [['builder'], 'Builder'], [['class'], 'Class'],
+  [['original_cost', 'cost'], 'Building cost'], [['speed'], 'Speed'], [['length'], 'Length'], [['beam'], 'Beam (width)'],
+  [['tonnage'], 'Gross tonnage'], [['capacity'], 'Passengers'], [['crew'], 'Crew'], [['decks'], 'Decks'],
+  [['refit'], 'Last refurbishment'], [['sponsor', 'christened'], 'Christened by'], [['owner'], 'Owner'], [['operator'], 'Operator'],
+];
+async function shipSpecs(title) {
+  try {
+    const r = await get('https://en.wikipedia.org/w/api.php?action=query&prop=revisions&rvprop=content&rvslots=main&format=json&redirects=1&titles='
+      + encodeURIComponent(title), 10000);
+    if (r.status !== 200) return [];
+    const text = Object.values(JSON.parse(r.body).query?.pages || {})[0]?.revisions?.[0]?.slots?.main?.['*'] || '';
+    const fields = {};
+    for (const m of text.matchAll(/^\s*\|\s*(?:Ship\s+)?([A-Za-z_ ]+?)\s*=([\s\S]*?)(?=^\s*\||^\s*\}\})/gm)) {
+      const k = m[1].toLowerCase().replace(/\s+/g, '_'), v = wikiPlain(m[2]);
+      if (v && !fields[k]) fields[k] = v;
+    }
+    const out = [];
+    for (const [keys, label] of SHIP_SPECS) {
+      let v = keys.map(k => fields[k]).find(Boolean);
+      if (!v) continue;
+      if (label === 'Year built') { const y = (v.match(/\b(19|20)\d{2}\b/) || [])[0]; if (!y) continue; v = `${y} (${new Date().getFullYear() - y} years old)`; }
+      if (label === 'Christened by' && fields.christened && fields.sponsor && keys[0] === 'sponsor') v = fields.sponsor;
+      if (label === 'Flag') v = v.split(',').pop().trim(); // "Valletta, Malta" -> "Malta"
+      out.push([label, v.slice(0, 160)]);
+    }
+    return out;
+  } catch (e) { return []; }
 }
 
 const aisText = s => String(s || '').replace(/@+/g, ' ').replace(/\s+/g, ' ').trim();
