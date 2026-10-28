@@ -59,6 +59,14 @@
   label.chk { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
   label.chk.vol input { width: 80px; accent-color: var(--accent); }
   label.chk.vol b { font: 600 11px var(--mono); min-width: 32px; }
+  .measure-ctl a { font-size: 15px; text-decoration: none; }
+  .measure-ctl.on a { background: #ffd27a; }
+  .measure-label, .measure-hint { width: auto !important; height: auto !important; }
+  .measure-label { transform: translate(-50%, -50%); }
+  .measure-label > *, .measure-label { white-space: nowrap; }
+  .leaflet-marker-icon.measure-label { background: rgba(18,26,48,.95); color: var(--text); border: 1px solid #ffd27a; border-radius: 8px; padding: 5px 9px; font: 12px Inter, sans-serif; line-height: 1.35; box-shadow: 0 2px 10px rgba(0,0,0,.6); }
+  .leaflet-marker-icon.measure-hint { background: rgba(18,26,48,.9); color: #ffd27a; border-radius: 8px; padding: 4px 9px; font: 600 12px Inter, sans-serif; white-space: nowrap; }
+  .measure-label small { color: var(--muted); }
   .chart-sel { font: 13px Inter, sans-serif; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px; cursor: pointer; }
 
   .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 14px 20px; }
@@ -548,6 +556,9 @@
   <div class="ctl">Tracker Radius <input type="range" id="radius" min="1" max="25" step="1" value="20"><b id="radiusVal">20 mi</b></div>
   <label class="chk"><input type="checkbox" id="showAll"> Show outside radius</label>
   <label class="chk"><input type="checkbox" id="showApts" checked> Show Airports</label>
+  <label class="chk" title="A dot at each airport's weather station, coloured by flying conditions: green good, blue marginal, red poor, purple very poor"><input type="checkbox" id="metarOn" checked> ⛅ Airport Weather</label>
+  <label class="chk" title="The FAA's temporary flight restrictions (VIP visits, stadiums, fires...) as red areas"><input type="checkbox" id="tfrOn" checked> ⛔ TFRs</label>
+  <label class="chk" title="Shade the part of the map where it's night right now"><input type="checkbox" id="nightOn" checked> 🌙 Day/Night</label>
   <label class="chk" title="Live rain radar on the map (US, refreshes every 5 minutes)"><input type="checkbox" id="wxOn" checked> 🌧 Show Weather</label>
   <label class="chk" title="How the map looks"><span>🌍 Map</span>
     <select id="mapStyleSel" class="chart-sel" aria-label="Map style">
@@ -707,6 +718,11 @@
         </select>
       </div>
       <div class="place">
+        <h4>📏 Units</h4>
+        <label class="chk"><input type="checkbox" id="nauticalIn"> Pilot units: speeds in knots, distances in nautical miles</label>
+        <p class="hint">Off: miles per hour and miles. Altitudes are always in feet. The voice uses the same units.</p>
+      </div>
+      <div class="place">
         <h4>🪟 Dashboard window</h4>
         <label class="chk"><input type="checkbox" id="appWinIn"> Open in its own window, with sound on from the start</label>
         <p class="hint" id="appWinHint">Off: the dashboard opens in a normal browser tab, with Edge's natural, upbeat voice. Sound needs one click on the page after it opens. On: it opens in its own window (Microsoft Edge or Google Chrome, without the address bar) where the chime and voice work straight away, but only with Windows' plainer built-in voice (Zira). Used when the app starts and when you click the tray icon.</p>
@@ -810,6 +826,18 @@ $('uiScale').addEventListener('change', e => {
   map.invalidateSize(); // the map measures its own size, so tell it the page changed
 });
 $('radius').value = radius; $('showAll').checked = showAll;
+
+// ---------- units: miles and mph, or nautical miles and knots like pilots use (Settings > Display > Units) ----------
+// Everything is worked out in statute miles and knots (what the feed gives); these only change what's shown.
+var nautical = load('skyNautical', false);
+function speedTxt(kt, html) { if (kt == null) return ''; const [v, u] = nautical ? [Math.round(kt), 'kt'] : [Math.round(kt * 1.15078), 'mph']; return html ? `${v} <em>${u}</em>` : `${v} ${u}`; }
+function distTxt(mi, dp = 1) { if (mi == null) return ''; return nautical ? `${+(mi / 1.15078).toFixed(dp)} nm` : `${+mi.toFixed(dp)} mi`; }
+
+// ---------- pilots' numbers ----------
+const fpmTxt = vr => vr == null ? '' : vr === 0 ? 'Level' : `${vr > 0 ? '+' : '−'}${Math.abs(vr).toLocaleString()} ft/min ${vr > 0 ? 'climbing' : 'descending'}`;
+const SQUAWK_MEANS = { '7500': 'hijack', '7600': 'radio failure', '7700': 'emergency', '1200': 'VFR, not talking to ATC', '1202': 'glider', '7000': 'VFR (Europe)', '2000': 'not yet assigned' };
+const squawkTxt = sq => sq ? sq + (SQUAWK_MEANS[sq] ? ` (${SQUAWK_MEANS[sq]})` : '') : '';
+const gpsAltTxt = a => typeof a.altGps === 'number' && a.alt !== 'ground' ? a.altGps.toLocaleString() + ' ft' : '';
 
 // ---------- geo math ----------
 const toRad = d => d * Math.PI / 180, toDeg = r => r * 180 / Math.PI;
@@ -919,11 +947,11 @@ function drawHome() {
   }
   L.circle(home, { radius: radius * MI, color: '#4cc9f0', weight: 2, opacity: .8, fillColor: '#4cc9f0', fillOpacity: .05, interactive: false }).addTo(ringLayer);
   const north = L.latLng(home[0] + radius * MI / 111320, home[1]);
-  L.marker(north, { icon: L.divIcon({ className: 'ring-label', html: radius + ' mi', iconSize: [40, 14], iconAnchor: [20, 16] }), interactive: false }).addTo(ringLayer);
+  L.marker(north, { icon: L.divIcon({ className: 'ring-label', html: distTxt(radius, 0), iconSize: [40, 14], iconAnchor: [20, 16] }), interactive: false }).addTo(ringLayer);
   // the overhead radius: planes inside it trigger the alert banner, takeover and announcement
   L.circle(home, { radius: ALERT_MI * MI, color: '#ff5d73', weight: 2, opacity: .8, fillColor: '#ff5d73', fillOpacity: .06, dashArray: '6 6', interactive: false }).addTo(ringLayer);
   const south = L.latLng(home[0] - ALERT_MI * MI / 111320, home[1]);
-  L.marker(south, { icon: L.divIcon({ className: 'ring-label ring-overhead', html: `Overhead ${+ALERT_MI.toFixed(2)} mi`, iconSize: [90, 14], iconAnchor: [45, -2] }), interactive: false }).addTo(ringLayer);
+  L.marker(south, { icon: L.divIcon({ className: 'ring-label ring-overhead', html: `Overhead ${distTxt(ALERT_MI, 2)}`, iconSize: [90, 14], iconAnchor: [45, -2] }), interactive: false }).addTo(ringLayer);
 }
 
 // ---------- airports ----------
@@ -980,6 +1008,181 @@ const FREQ_NAME = { TWR: 'Tower', GND: 'Ground', ATIS: 'ATIS (recorded info)', A
 const FLIGHT_CAT = { VFR: ['Good flying weather', '#3ad29f'], MVFR: ['Marginal: low clouds or haze', '#4cc9f0'], IFR: ['Poor: low clouds or fog', '#ff5d73'], LIFR: ['Very poor visibility', '#c58cff'] };
 const CLOUD = { FEW: 'A few clouds', SCT: 'Scattered clouds', BKN: 'Mostly cloudy', OVC: 'Overcast', CLR: 'Clear', SKC: 'Clear', CAVOK: 'Clear' };
 const aptInfo = new Map(); // ident -> 'pending' | info | null
+// A weather report (METAR) as the flying-conditions badge, a small table and the raw report pilots read.
+// Used by the airport card and the weather dots on the map.
+function wxHtml(w) {
+  const cat = FLIGHT_CAT[w.cat], f = c => c != null ? Math.round(c * 9 / 5 + 32) + '°F' : '';
+  const row = (k, v) => v ? `<tr><th>${k}</th><td>${v}</td></tr>` : '';
+  const wind = w.wspd === 0 ? 'Calm' : w.wspd != null ? `${speedTxt(w.wspd)}${w.wdir === 'VRB' ? ', changing direction' : typeof w.wdir === 'number' ? ` from the ${COMPASS_WORDS[compass(w.wdir)]} (${String(w.wdir).padStart(3, '0')}°)` : ''}${w.wgst ? `, gusting ${speedTxt(w.wgst)}` : ''}` : '';
+  const sky = w.clouds.length ? w.clouds.map(c => `${CLOUD[c.cover] || c.cover}${c.base ? ' at ' + c.base.toLocaleString() + ' ft' : ''}`).join(', ') : '';
+  return (cat ? `<div class="apt-cat" style="--c:${cat[1]}"><b>${esc(w.cat)}</b> ${cat[0]}</div>` : '')
+    + `<table class="apt-tbl">${row('Temperature', [f(w.tempC), w.dewC != null ? `<small>dew point ${f(w.dewC)}</small>` : ''].join(' '))}${row('Wind', wind)}`
+    + `${row('Visibility', w.visib != null ? `${w.visib} mile${w.visib === 1 ? '' : 's'}` : '')}${row('Sky', sky)}`
+    + `${row('Pressure', w.altimHpa ? `${(w.altimHpa * 0.02953).toFixed(2)} inHg` : '')}</table>`
+    + (w.raw ? `<code class="apt-raw" title="The raw weather report (METAR) pilots read">${esc(w.raw)}</code>` : '');
+}
+
+// ---------- airport weather on the map: a dot coloured by flying conditions at every weather station ----------
+// From the Aviation Weather Center (NOAA), for the area in view, refreshed every 5 minutes. ⛅ Airport Weather in the top bar.
+map.createPane('metars').style.zIndex = 452; // just above the airport squares
+const metarLayer = L.layerGroup().addTo(map);
+let metarOn = load('skyMetars', true), metarLast = '';
+$('metarOn').checked = metarOn;
+async function loadMetars(force) {
+  if (!metarOn || map.getZoom() < 6) { metarLayer.clearLayers(); metarLast = ''; return; }
+  const b = map.getBounds(), key = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()].map(v => v.toFixed(1)).join(',');
+  if (key === metarLast && !force) return;
+  metarLast = key;
+  let list = [];
+  try { list = await fetch('/api/metars?bbox=' + key).then(r => r.ok ? r.json() : []); } catch (e) { return; }
+  if (!metarOn || key !== metarLast) return; // turned off or moved on while loading
+  metarLayer.clearLayers();
+  for (const m of list) {
+    const cat = FLIGHT_CAT[m.cat];
+    L.circleMarker([m.lat, m.lon], { pane: 'metars', radius: 6, weight: 2, color: '#0b1020', fillColor: cat ? cat[1] : '#7d879f', fillOpacity: .95 })
+      .bindTooltip(`<b>${esc(m.id)} ${cat ? '· ' + esc(m.cat) : ''}</b><small>${esc(m.name)}${m.time ? ' · ' + ago(m.time) : ''}</small>`, { className: 'apt-tip', direction: 'top', offset: [0, -6] })
+      .bindPopup(() => `<div class="apt-card"><div class="apt-head"><span class="apt-kind" style="--c:${cat ? cat[1] : '#7d879f'}">⛅ Weather report</span><b>${esc(m.name || m.id)}</b><small>${esc(m.id)}${m.time ? ' · ' + ago(m.time) : ''}</small></div>${wxHtml(m)}</div>`,
+        { className: 'apt-pop', maxWidth: 340, minWidth: 280 })
+      .addTo(metarLayer);
+  }
+}
+let metarMoveTimer = null;
+map.on('moveend', () => { clearTimeout(metarMoveTimer); metarMoveTimer = setTimeout(loadMetars, 600); });
+setInterval(() => loadMetars(true), 5 * 60e3);
+$('metarOn').addEventListener('change', e => { metarOn = e.target.checked; save('skyMetars', metarOn); loadMetars(true); });
+
+// ---------- TFRs: the FAA's temporary flight restrictions as red areas (⛔ TFRs in the top bar) ----------
+map.createPane('tfrs').style.zIndex = 380; // over charts and radar, under airports and planes
+const tfrLayer = L.layerGroup().addTo(map);
+let tfrOn = load('skyTfrs', true);
+$('tfrOn').checked = tfrOn;
+const TFR_TYPE = { SECURITY: 'Security (VIP visit, stadium, military)', HAZARDS: 'Hazard (fire, disaster, rescue)', SPACE: 'Space launch or recovery',
+  'SPECIAL': 'Special event', 'AIR SHOWS/SPORTS': 'Air show or sporting event', 'VIP': 'VIP movement', '91.141': 'VIP movement (President)', '99.7': 'Special security instructions' };
+async function loadTfrs() {
+  tfrLayer.clearLayers();
+  if (!tfrOn) return;
+  let list = [];
+  try { list = await fetch('/api/tfrs').then(r => r.ok ? r.json() : []); } catch (e) { return; }
+  if (!tfrOn) return;
+  tfrLayer.clearLayers();
+  for (const t of list) {
+    const type = TFR_TYPE[String(t.type).toUpperCase()] || t.type;
+    L.geoJSON({ type: 'Feature', geometry: t.geometry }, { pane: 'tfrs', style: { color: '#ff3b5c', weight: 2, fillColor: '#ff3b5c', fillOpacity: .15, dashArray: '6 4' } })
+      .bindTooltip(`<b>⛔ TFR ${esc(t.id)}</b><small>${esc(t.title)}</small>`, { className: 'apt-tip', sticky: true })
+      .bindPopup(`<div class="apt-card"><div class="apt-head"><span class="apt-kind" style="--c:#ff3b5c">⛔ Temporary flight restriction</span><b>${esc(t.title || t.id)}</b><small>NOTAM ${esc(t.id)}</small></div>
+        <table class="apt-tbl"><tr><th>Type</th><td>${esc(type || '—')}</td></tr><tr><th>State</th><td>${esc(t.state || '—')}</td></tr></table>
+        <p class="apt-about" style="margin-top:8px">Aircraft may not fly in this area without permission while it's active. Altitudes and times are on the FAA's page.</p>
+        <div class="apt-links"><a href="${esc(t.link)}" target="_blank" rel="noopener">Full details on tfr.faa.gov ↗</a></div></div>`, { className: 'apt-pop', maxWidth: 340, minWidth: 280 })
+      .addTo(tfrLayer);
+  }
+}
+$('tfrOn').addEventListener('change', e => { tfrOn = e.target.checked; save('skyTfrs', tfrOn); loadTfrs(); });
+setTimeout(loadTfrs, 2000);
+setInterval(loadTfrs, 10 * 60e3);
+
+// ---------- the sun: sunrise and sunset times, and where it's night right now ----------
+// The standard astronomical formulas (as used by NOAA's calculator), accurate to a minute or two.
+const SUN_RAD = Math.PI / 180, J1970 = 2440588, J2000 = 2451545, DAY_MS = 864e5;
+function sunPosition(date) { // declination, and the longitude where the sun is straight overhead
+  const d = date.getTime() / DAY_MS - 0.5 + J1970 - J2000;
+  const M = SUN_RAD * (357.5291 + 0.98560028 * d);
+  const C = SUN_RAD * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M));
+  const L = M + C + SUN_RAD * 102.9372 + Math.PI;
+  const dec = Math.asin(Math.sin(SUN_RAD * 23.4397) * Math.sin(L));
+  const ra = Math.atan2(Math.sin(L) * Math.cos(SUN_RAD * 23.4397), Math.cos(L));
+  const gst = SUN_RAD * (280.16 + 360.9856235 * d); // Greenwich sidereal time
+  let lon = (ra - gst) / SUN_RAD;
+  lon = ((lon + 540) % 360) - 180;
+  return { dec, lon, M, L };
+}
+function sunTimes(lat, lon, date = new Date()) {
+  const lw = SUN_RAD * -lon, phi = SUN_RAD * lat;
+  const days = date.getTime() / DAY_MS - 0.5 + J1970 - J2000;
+  const n = Math.round(days - 0.0009 - lw / (2 * Math.PI));
+  const ds = 0.0009 + lw / (2 * Math.PI) + n;
+  const M = SUN_RAD * (357.5291 + 0.98560028 * ds);
+  const C = SUN_RAD * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M));
+  const L = M + C + SUN_RAD * 102.9372 + Math.PI;
+  const dec = Math.asin(Math.sin(SUN_RAD * 23.4397) * Math.sin(L));
+  const noon = J2000 + ds + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L);
+  const cosW = (Math.sin(SUN_RAD * -0.833) - Math.sin(phi) * Math.sin(dec)) / (Math.cos(phi) * Math.cos(dec));
+  const toDate = j => new Date((j + 0.5 - J1970) * DAY_MS);
+  if (cosW < -1 || cosW > 1) return { noon: toDate(noon), allDay: cosW < -1, allNight: cosW > 1 };
+  const w = Math.acos(cosW), set = J2000 + 0.0009 + (w + lw) / (2 * Math.PI) + n + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L);
+  return { rise: toDate(noon - (set - noon)), set: toDate(set), noon: toDate(noon) };
+}
+const clockTxt = d => d ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+
+// Day/night line: the night side of the earth shaded, redrawn every 5 minutes (🌙 Day/Night in the top bar)
+map.createPane('night').style.zIndex = 340; // under the weather radar and everything else
+let nightOn = load('skyNight', true), nightShape = null;
+$('nightOn').checked = nightOn;
+function drawNight() {
+  if (nightShape) { map.removeLayer(nightShape); nightShape = null; }
+  if (!nightOn) return;
+  const { dec, lon: sunLon } = sunPosition(new Date()), edge = [];
+  for (let lon = -180; lon <= 180; lon += 2) {
+    const lat = Math.atan(-Math.cos((lon - sunLon) * SUN_RAD) / Math.tan(dec)) / SUN_RAD;
+    edge.push([lat, lon]);
+  }
+  const pole = dec > 0 ? -90 : 90; // the pole that's in darkness
+  nightShape = L.polygon([...edge, [pole, 180], [pole, -180]], { pane: 'night', stroke: true, color: '#ffd27a', weight: 1, opacity: .5, dashArray: '4 6',
+    fillColor: '#000814', fillOpacity: .32, interactive: false }).addTo(map);
+}
+$('nightOn').addEventListener('change', e => { nightOn = e.target.checked; save('skyNight', nightOn); drawNight(); });
+drawNight();
+setInterval(drawNight, 5 * 60e3);
+
+// ---------- runway in use: the runway end most into the wind (planes take off and land into the wind) ----------
+function runwayInUse(runways, w) {
+  if (!w || typeof w.wdir !== 'number' || w.wspd == null) return null;
+  if (w.wspd < 3) return { calm: true };
+  let best = null;
+  for (const r of runways) {
+    if (r.closed || !r.name.includes('/')) continue;
+    const ends = r.name.split('/');
+    // true heading of the first end when known, else from the runway number (x10, magnetic: close enough to pick)
+    const h1 = typeof r.heading === 'number' ? r.heading : (parseInt(ends[0], 10) || 0) * 10;
+    for (const [end, hdg] of [[ends[0], h1], [ends[1], (h1 + 180) % 360]]) {
+      const diff = ((w.wdir - hdg + 540) % 360) - 180, head = w.wspd * Math.cos(diff * SUN_RAD), cross = Math.abs(w.wspd * Math.sin(diff * SUN_RAD));
+      if (best && Math.abs(head - best.rawHead) < 1 && !best.end.split(' or ').includes(end)) best.end += ' or ' + end; // parallel runways, like 01L and 01R
+      else if (!best || head > best.rawHead) best = { end, rawHead: head, head: Math.round(head), cross: Math.round(cross), len: r.len };
+    }
+  }
+  return best;
+}
+
+// ---------- measuring tool: click two points for the distance and heading between them (📏 on the map) ----------
+map.createPane('measure').style.zIndex = 640; // above the planes, under tooltips
+const measureLayer = L.layerGroup().addTo(map);
+let measuring = false, measureFrom = null;
+const measureCtl = L.control({ position: 'topleft' });
+measureCtl.onAdd = () => {
+  const el = L.DomUtil.create('div', 'leaflet-bar measure-ctl');
+  el.innerHTML = '<a href="#" role="button" title="Measure distance and heading: click two points on the map">📏</a>';
+  L.DomEvent.disableClickPropagation(el);
+  el.firstChild.onclick = e => { e.preventDefault(); setMeasuring(!measuring); };
+  return el;
+};
+measureCtl.addTo(map);
+function setMeasuring(on) {
+  measuring = on; measureFrom = null; measureLayer.clearLayers();
+  measureCtl.getContainer().classList.toggle('on', on);
+  map.getContainer().style.cursor = on ? 'crosshair' : '';
+  if (on) L.marker(map.getCenter(), { pane: 'measure', icon: L.divIcon({ className: 'measure-hint', html: 'Click the first point', iconSize: [0, 0] }), interactive: false }).addTo(measureLayer);
+}
+map.on('click', e => {
+  if (!measuring) return;
+  const p = [e.latlng.lat, e.latlng.lng];
+  if (!measureFrom || measureLayer.getLayers().some(l => l.options.measureDone)) { measureLayer.clearLayers(); measureFrom = p; L.circleMarker(p, { pane: 'measure', radius: 5, color: '#ffd27a', fillOpacity: 1 }).addTo(measureLayer); return; }
+  const mi = distMi(measureFrom, p), brg = Math.round(bearing(measureFrom, p)), back = (brg + 180) % 360;
+  const label = `<b>${(mi / 1.15078).toFixed(1)} nm</b> · ${mi.toFixed(1)} mi<br>Heading ${String(brg).padStart(3, '0')}° ${compass(brg)} <small>(back ${String(back).padStart(3, '0')}°, true)</small>`;
+  L.polyline([measureFrom, p], { pane: 'measure', color: '#ffd27a', weight: 3, dashArray: '8 6', measureDone: true }).addTo(measureLayer);
+  L.circleMarker(p, { pane: 'measure', radius: 5, color: '#ffd27a', fillOpacity: 1 }).addTo(measureLayer);
+  L.marker([(measureFrom[0] + p[0]) / 2, (measureFrom[1] + p[1]) / 2], { pane: 'measure', icon: L.divIcon({ className: 'measure-label', html: label, iconSize: [0, 0] }), interactive: false }).addTo(measureLayer);
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && measuring) setMeasuring(false); });
+setTimeout(() => loadMetars(true), 1500);
 
 function loadAptInfo(a, popup) {
   if (aptInfo.has(a.ident) && aptInfo.get(a.ident) !== null) return popup.setContent(aptPanel(a));
@@ -1015,29 +1218,28 @@ function aptPanel(a) {
   h += `<table class="apt-tbl">`
     + row('Codes', [a.iata && `IATA <b>${a.iata}</b>`, d?.icao && `ICAO <b>${esc(d.icao)}</b>`, d?.local && d.local !== a.iata && d.local !== d.icao && `FAA <b>${esc(d.local)}</b>`].filter(Boolean).join(' · ') || `<b>${esc(a.ident)}</b>`)
     + row('Elevation', a.elev != null ? `${a.elev.toLocaleString()} ft above sea level` : '')
-    + row('From home', dh != null ? `${dh.toFixed(1)} mi ${compass(bearing(home, [a.lat, a.lon]))}` : '')
+    + row('From home', dh != null ? `${distTxt(dh)} ${compass(bearing(home, [a.lat, a.lon]))}` : '')
     + row('Airline flights', d && !heli ? (d.scheduled ? 'Yes, scheduled passenger service' : 'No scheduled airline service') : '')
     + row('Position', `${a.lat.toFixed(4)}, ${a.lon.toFixed(4)}`)
+    + (() => { // today's sunrise and sunset there, in this PC's time
+      const s = sunTimes(a.lat, a.lon);
+      return row('Sun today', s.allDay ? 'Up all day' : s.allNight ? 'Down all day' : `🌅 ${clockTxt(s.rise)} · 🌇 ${clockTxt(s.set)}`);
+    })()
     + `</table>`;
   if (info === 'pending') h += `<p class="apt-loading">Loading runways, radio and weather…</p>`;
 
   // weather
   const w = d?.weather;
-  if (w) {
-    const cat = FLIGHT_CAT[w.cat], f = c => c != null ? Math.round(c * 9 / 5 + 32) + '°F' : '';
-    const wind = w.wspd === 0 ? 'Calm' : w.wspd != null ? `${Math.round(w.wspd * 1.15078)} mph${w.wdir === 'VRB' ? ', changing direction' : typeof w.wdir === 'number' ? ' from the ' + COMPASS_WORDS[compass(w.wdir)] : ''}${w.wgst ? `, gusting ${Math.round(w.wgst * 1.15078)}` : ''}` : '';
-    const sky = w.clouds.length ? w.clouds.map(c => `${CLOUD[c.cover] || c.cover}${c.base ? ' at ' + c.base.toLocaleString() + ' ft' : ''}`).join(', ') : '';
-    h += `<h6>🌤 Weather${w.station !== a.ident && w.station !== d.icao ? ` <small>from ${esc(w.station)}, ${w.miAway} mi away</small>` : ''}${w.time ? ` <small>· ${ago(w.time)}</small>` : ''}</h6>`
-      + (cat ? `<div class="apt-cat" style="--c:${cat[1]}"><b>${esc(w.cat)}</b> ${cat[0]}</div>` : '')
-      + `<table class="apt-tbl">${row('Temperature', [f(w.tempC), w.dewC != null ? `<small>dew point ${f(w.dewC)}</small>` : ''].join(' '))}${row('Wind', wind)}`
-      + `${row('Visibility', w.visib != null ? `${w.visib} mile${w.visib === 1 ? '' : 's'}` : '')}${row('Sky', sky)}`
-      + `${row('Pressure', w.altimHpa ? `${(w.altimHpa * 0.02953).toFixed(2)} inHg` : '')}</table>`
-      + (w.raw ? `<code class="apt-raw" title="The raw weather report (METAR) pilots read">${esc(w.raw)}</code>` : '');
-  }
+  if (w) h += `<h6>🌤 Weather${w.station !== a.ident && w.station !== d.icao ? ` <small>from ${esc(w.station)}, ${distTxt(w.miAway)} away</small>` : ''}${w.time ? ` <small>· ${ago(w.time)}</small>` : ''}</h6>` + wxHtml(w);
 
-  // runways / helipads
+  // runways / helipads, and the runway most likely in use (worked out from the wind at this airport)
   if (d?.runways.length) {
-    h += `<h6>${heli ? '🅷 Helipads' : '🛬 Runways'} <small>${d.runways.length}</small></h6><table class="apt-tbl">`
+    const ownWx = w && (w.station === a.ident || w.station === d.icao || w.miAway < 5);
+    const inUse = !heli && ownWx ? runwayInUse(d.runways, w) : null;
+    h += `<h6>${heli ? '🅷 Helipads' : '🛬 Runways'} <small>${d.runways.length}</small></h6>`
+      + (inUse?.calm ? `<div class="apt-cat" style="--c:#3ad29f"><b>CALM</b> Wind under 3 knots: any runway can be used</div>`
+        : inUse ? `<div class="apt-cat" style="--c:#3ad29f" title="Planes take off and land into the wind, so this is a good guess, not what the tower has said"><b>RWY ${esc(inUse.end)}</b> likely in use: ${inUse.head} kt headwind, ${inUse.cross} kt crosswind</div>` : '')
+      + `<table class="apt-tbl">`
       + d.runways.map(r => row(esc(r.name || (heli ? 'Pad' : 'Runway')),
         [r.len ? (heli || r.len < 300 ? `${r.len} × ${r.width || '?'} ft` : `${r.len.toLocaleString()} ft long${r.width ? ', ' + r.width + ' ft wide' : ''}`) : '',
           surfaceName(r.surface), r.lit ? '💡 lit' : '', r.closed ? '<b style="color:#ff5d73">closed</b>' : ''].filter(Boolean).join(' · '))).join('')
@@ -1088,7 +1290,7 @@ function renderAtcPicker() {
   const fields = airportList.filter(p => /airport/.test(p.type) && /^[A-Z0-9]{3,4}$/.test(p.ident))
     .map(p => ({ ...p, d: distMi(home, [p.lat, p.lon]) })).sort((a, b) => a.d - b.d);
   const list = fields.slice(0, 25), saved = load('skyAtcPick', '');
-  $('atcSel').innerHTML = list.map(p => `<option value="${p.ident}"${p.ident === saved ? ' selected' : ''}>${p.iata || p.ident} · ${esc(nice(p.name))} · ${p.d.toFixed(1)} mi</option>`).join('');
+  $('atcSel').innerHTML = list.map(p => `<option value="${p.ident}"${p.ident === saved ? ' selected' : ''}>${p.iata || p.ident} · ${esc(nice(p.name))} · ${distTxt(p.d)}</option>`).join('');
   const majors = fields.filter(p => p.type !== 'small_airport').slice(0, 4);
   $('atcQuick').innerHTML = majors.map(p => `<a href="${atcUrl(p.ident)}" target="_blank" rel="noopener" title="${esc(nice(p.name))}">🎧 ${p.iata || p.ident}</a>`).join('');
   const update = () => { $('atcGo').href = atcUrl($('atcSel').value); save('skyAtcPick', $('atcSel').value); $('atcSum').textContent = '· ' + $('atcSel').selectedOptions[0]?.textContent.split(' · ')[0]; };
@@ -1212,8 +1414,10 @@ function planeTip(a) {
       ${row('Aircraft', modelOf(a) || a.type)}
       ${row('Route', rp.from || rp.to ? `${rp.from || '?'} → ${rp.to || '?'}${rp.guessed ? ' (likely)' : ''}` : '')}
       ${row('Altitude', fmtAlt(a.alt) + vr)}
-      ${row('Speed', a.gs != null ? Math.round(a.gs * 1.15078) + ' mph' : '')}
-      ${row('Distance', a.dist != null ? `${a.dist.toFixed(1)} mi ${compass(a.brg)} of home` : '')}
+      ${row('Speed', speedTxt(a.gs))}
+      ${row('Vertical', a.vr && Math.abs(a.vr) >= 100 ? fpmTxt(a.vr) : '')}
+      ${row('Squawk', squawkTxt(a.squawk))}
+      ${row('Distance', a.dist != null ? `${distTxt(a.dist)} ${compass(a.brg)} of home` : '')}
       ${row('Status', sp ? SPECIAL[sp].label : '')}
     </div>
     <div class="pt-f">Click for full details</div></div>`;
@@ -1227,6 +1431,7 @@ function normalize(raw) {
     alt: raw.alt_baro ?? raw.altitude ?? raw.alt_geom ?? null,
     gs: raw.gs ?? raw.speed ?? null,
     track: raw.track ?? raw.true_heading ?? raw.mag_heading ?? null,
+    altGps: raw.alt_geom ?? null, // GPS altitude; alt is the pressure (barometric) altitude when there is one
     vr: raw.baro_rate ?? raw.geom_rate ?? raw.vert_rate ?? null,
     squawk: raw.squawk, reg: raw.r || '', type: raw.t || '', desc: raw.desc || '', owner: raw.ownOp || '',
     seenPos: raw.seen_pos ?? raw.seen ?? 0,
@@ -1250,7 +1455,7 @@ function notifySpecial(a) {
   const S = SPECIAL[sp], el = document.createElement('div');
   el.className = 'toast'; el.style.setProperty('--bc', S.color);
   el.innerHTML = `<b>${S.icon} ${sp === 'emergency' ? emergencyOf(a) : S.label[0] + S.label.slice(1).toLowerCase()} aircraft</b> ${sp === 'emergency' ? 'in range' : 'nearby'}<br>`
-    + `${a.flight || a.reg || a.hex.toUpperCase()} · ${a.desc ? nice(a.desc) : a.type || ''}${a.dist != null ? ` · ${a.dist.toFixed(1)} mi ${compass(a.brg)}` : ''}`;
+    + `${a.flight || a.reg || a.hex.toUpperCase()} · ${a.desc ? nice(a.desc) : a.type || ''}${a.dist != null ? ` · ${distTxt(a.dist)} ${compass(a.brg)}` : ''}`;
   el.onclick = () => { select(a.hex, true); el.remove(); };
   $('toasts').appendChild(el);
   setTimeout(() => el.remove(), 12000);
@@ -1465,7 +1670,7 @@ function render() {
   $('sCount').textContent = inside.length;
   $('sCountSub').textContent = `within ${radius} mile${radius > 1 ? 's' : ''} · ${current.length} tracked total`;
   const c = inside[0];
-  $('sClose').textContent = c ? c.dist.toFixed(1) + ' mi' : '–';
+  $('sClose').textContent = c ? distTxt(c.dist) : '–';
   $('sCloseSub').textContent = c ? `${c.flight || c.reg || c.hex.toUpperCase()} · ${compass(c.brg)}` : 'nothing in range';
   // skip planes on the runway (barometric altitude reads ≤ 0 near sea level)
   const airborne = inside.filter(a => typeof a.alt === 'number' && a.alt > 0);
@@ -1473,7 +1678,7 @@ function render() {
   $('sLow').textContent = low ? fmtAlt(low.alt) : '–';
   $('sLowSub').textContent = low ? (low.flight || low.reg || low.hex.toUpperCase()) : ' ';
   const fast = inside.filter(a => a.gs != null).sort((a, b) => b.gs - a.gs)[0];
-  $('sFast').textContent = fast ? Math.round(fast.gs * 1.15078) + ' mph' : '–';
+  $('sFast').textContent = fast ? speedTxt(fast.gs) : '–';
   $('sFastSub').textContent = fast ? `${fast.flight || fast.reg || fast.hex.toUpperCase()} · ${Math.round(fast.gs)} kt` : ' ';
 
   // list
@@ -1500,8 +1705,8 @@ function render() {
           <div class="model">${ownerOf(a) ? 'Owner: ' + ownerOf(a) : 'Owner not listed'}</div>
           <div class="metrics">
             <span style="color:${altColor(a.alt)}">${fmtAlt(a.alt)}${vr}</span>
-            <span>${a.gs != null ? Math.round(a.gs * 1.15078) + ' <em>mph</em>' : ''}</span>
-            <span>${a.dist != null ? a.dist.toFixed(1) + ' <em>mi ' + compass(a.brg) + '</em>' : ''}</span>
+            <span>${speedTxt(a.gs, true)}</span>
+            <span>${a.dist != null ? distTxt(a.dist).replace(/ (\w+)$/, ' <em>$1 ' + compass(a.brg) + '</em>') : ''}</span>
             ${trackedFor(a) ? `<span title="Time since it was first tracked">⏱ ${trackedFor(a)}</span>` : ''}
             ${adsbxBtn(a.hex, a.flight || reg, '🌐 ADSBx', 'chip')}
             ${favBtn(a.hex, reg)}
@@ -1816,20 +2021,21 @@ setTimeout(() => { if (kokoroVoice() && soundOn) kokoroMake(kokoroVoice(), 'Read
 
 // What the voice says, written by the user in Settings > Alerts (each browser keeps its own).
 // {words} are filled in for each plane; any the app doesn't know are dropped along with their comma.
-const SAY_DEFAULT = 'Look, a Plane! {airline} {type}, traveling at {speed}, and is flying at {altitude}, {destination}.';
+const SAY_DEFAULT = 'Look, a Plane! {airline} {type}, traveling at {speed}, and is flying at {altitude}, {destination} from {from}.';
 // earlier defaults: browsers that still have one saved move to the new one
 const SAY_OLD_DEFAULTS = ['Overhead now! {type}, {speed}, {altitude}, {destination}.',
-  'Overhead now! {airline} - {type}, going {speed}, at {altitude}, {destination} from {from}.'];
+  'Overhead now! {airline} - {type}, going {speed}, at {altitude}, {destination} from {from}.',
+  'Look, a Plane! {airline} {type}, traveling at {speed}, and is flying at {altitude}, {destination}.'];
 const city = s => (s || '').replace(/\s*\([^)]*\)\s*$/, ''); // "Orlando (MCO)" -> "Orlando"
 const COMPASS_WORDS = { N: 'north', NE: 'north east', E: 'east', SE: 'south east', S: 'south', SW: 'south west', W: 'west', NW: 'north west' };
 const SAY_TAGS = { // name: [example for the Test button, value for a plane]
   type: ['Boeing 737', a => modelOf(a).replace(/-/g, ' ')], // "A-320" reads more naturally as "A 320"
-  speed: ['280 miles per hour', a => a.gs != null ? Math.round(a.gs * 1.15078) + ' miles per hour' : ''],
+  speed: ['280 miles per hour', a => a.gs == null ? '' : nautical ? Math.round(a.gs) + ' knots' : Math.round(a.gs * 1.15078) + ' miles per hour'],
   altitude: ['3,500 feet', a => typeof a.alt === 'number' ? a.alt.toLocaleString() + ' feet' : ''],
   destination: ['going to Orlando', a => { const to = routeParts(a).to; return to ? 'going to ' + city(to) : ''; }],
   from: ['Tampa', a => city(routeParts(a).from)],
   airline: ['Southwest Airlines', a => airlineOf(a)],
-  distance: ['0.4 miles away', a => a.dist != null ? +a.dist.toFixed(1) + ' miles away' : ''],
+  distance: ['0.4 miles away', a => a.dist == null ? '' : nautical ? +(a.dist / 1.15078).toFixed(1) + ' nautical miles away' : +a.dist.toFixed(1) + ' miles away'],
   direction: ['to the north east', a => a.brg != null ? 'to the ' + COMPASS_WORDS[compass(a.brg)] : ''],
 };
 let sayTemplate = load('skySay', SAY_DEFAULT);
@@ -1948,10 +2154,11 @@ function drawTakeover(a) {
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">${adsbxBtn(a.hex, a.flight || reg, '🌐 View on ADS-B Exchange', 'big')}${shareBtn(a.hex, 'big')}</div>
       <div class="to-grid">
         <div><div class="k">Altitude</div><div class="v" style="color:${color}">${fmtAlt(a.alt)}${a.vr > 300 ? ' ↑' : a.vr < -300 ? ' ↓' : ''}</div></div>
-        <div><div class="k">Speed</div><div class="v">${a.gs != null ? Math.round(a.gs * 1.15078) + ' mph' : '—'}</div></div>
-        <div><div class="k">Distance</div><div class="v">${a.dist.toFixed(2)} mi ${compass(a.brg)}</div></div>
+        <div><div class="k">Speed</div><div class="v">${speedTxt(a.gs) || '—'}</div></div>
+        <div><div class="k">Distance</div><div class="v">${distTxt(a.dist, 2)} ${compass(a.brg)}</div></div>
         <div><div class="k">Heading</div><div class="v">${a.track != null ? Math.round(a.track) + '° ' + compass(a.track) : '—'}</div></div>
-        <div><div class="k">Climb</div><div class="v">${a.vr != null ? (a.vr > 0 ? '+' : '') + a.vr + ' fpm' : '—'}</div></div>
+        <div><div class="k">Vertical speed</div><div class="v">${fpmTxt(a.vr) || '—'}</div></div>
+        <div><div class="k">Squawk</div><div class="v">${squawkTxt(a.squawk) || '—'}</div></div>
         <div><div class="k">Tracked</div><div class="v">${trackedFor(a) || '—'}</div></div>
       </div>
     </div>`;
@@ -2110,12 +2317,13 @@ function renderRegLive(hex) {
   if (!el) return;
   if (!a) { el.innerHTML = '<div><div class="k">Status</div><div class="v">No longer in range</div></div>'; return; }
   const cell = (k, v, style = '') => `<div><div class="k">${k}</div><div class="v" style="${style}">${v ?? '—'}</div></div>`;
-  el.innerHTML = cell('Altitude', fmtAlt(a.alt) + (a.vr > 300 ? ' ↑' : a.vr < -300 ? ' ↓' : ''), 'color:' + altColor(a.alt))
-    + cell('Speed', a.gs != null ? Math.round(a.gs * 1.15078) + ' mph' : null)
-    + cell('Distance', a.dist != null ? a.dist.toFixed(1) + ' mi ' + compass(a.brg) : null)
+  el.innerHTML = cell('Altitude (pressure)', fmtAlt(a.alt) + (a.vr > 300 ? ' ↑' : a.vr < -300 ? ' ↓' : ''), 'color:' + altColor(a.alt))
+    + cell('Altitude (GPS)', gpsAltTxt(a) || null)
+    + cell('Speed', speedTxt(a.gs) || null)
+    + cell('Distance', a.dist != null ? distTxt(a.dist) + ' ' + compass(a.brg) : null)
     + cell('Heading', a.track != null ? Math.round(a.track) + '° ' + compass(a.track) : null)
-    + cell('Climb', a.vr != null ? (a.vr > 0 ? '+' : '') + a.vr + ' fpm' : null)
-    + cell('Squawk', a.squawk);
+    + cell('Vertical speed', fpmTxt(a.vr) || null)
+    + cell('Squawk', squawkTxt(a.squawk) || null);
 }
 
 async function drawRegTrack(hex, fit) {
@@ -2152,7 +2360,7 @@ async function drawRegTrack(hex, fit) {
 // ---------- nearby scrolling alert ----------
 // overhead distance: planes inside this circle set off the alerts (Settings > Alerts; each browser keeps its own)
 let ALERT_MI = load('skyAlertMi', 1);
-const miText = v => +v.toFixed(2) + ' mi';
+const miText = v => distTxt(v, 2);
 $('alertMiIn').value = ALERT_MI;
 $('alertMiVal').textContent = miText(ALERT_MI);
 $('alertMiIn').addEventListener('input', e => {
@@ -2166,7 +2374,7 @@ function renderTicker() {
   const el = $('ticker'), track = $('tickerTrack');
   if (!close.length) { el.className = ''; tickerKey = ''; return; }
   el.className = 'show';
-  $('tickerLbl').textContent = `${close.length} within ${+ALERT_MI.toFixed(2)} mi`;
+  $('tickerLbl').textContent = `${close.length} within ${distTxt(ALERT_MI, 2)}`;
   const items = close.map(a => {
     const Lk = look(a.hex), i = Lk.info || {};
     const reg = a.reg || i.reg || '';
@@ -2180,8 +2388,8 @@ function renderTicker() {
       ownerOf(a) ? 'owner ' + ownerOf(a) : '',
       trackedFor(a) ? 'tracked ' + trackedFor(a) : '',
       `<span style="color:${altColor(a.alt)}">${fmtAlt(a.alt)}${vr}</span>`,
-      a.gs != null ? Math.round(a.gs * 1.15078) + ' mph' : '',
-      `${a.dist.toFixed(2)} mi ${compass(a.brg)} of home`,
+      speedTxt(a.gs),
+      `${distTxt(a.dist, 2)} ${compass(a.brg)} of home`,
       a.track != null ? 'heading ' + Math.round(a.track) + '°' : '',
       a.squawk ? 'squawk ' + a.squawk : '',
     ].filter(Boolean).join(' <span class="dot">·</span> ');
@@ -2359,9 +2567,9 @@ function renderLog() {
   const countRow = (i, label, count, maxC) => `<div class="lb"><span class="rk">${i + 1}</span><div class="nm">${label}<div class="bar" style="width:${count / maxC * 100}%"></div></div><div class="val">${count}</div></div>`;
   let html = '';
   switch (logTab) {
-    case 'closest': html = L.closest.map((p, i) => row(i, p, p.value.toFixed(2) + ' mi', `${fmtAlt(p.alt)} · ${timeOf(p.at)}`)).join(''); break;
+    case 'closest': html = L.closest.map((p, i) => row(i, p, distTxt(p.value, 2), `${fmtAlt(p.alt)} · ${timeOf(p.at)}`)).join(''); break;
     case 'lowest': html = L.lowest.map((p, i) => row(i, p, p.value.toLocaleString() + ' ft', `within 2 mi · ${timeOf(p.at)}`)).join(''); break;
-    case 'fastest': html = L.fastest.map((p, i) => row(i, p, Math.round(p.value * 1.15078) + ' mph', p.value + ' kt')).join(''); break;
+    case 'fastest': html = L.fastest.map((p, i) => row(i, p, speedTxt(p.value), nautical ? Math.round(p.value * 1.15078) + ' mph' : p.value + ' kt')).join(''); break;
     case 'highest': html = L.highest.map((p, i) => row(i, p, p.value.toLocaleString() + ' ft')).join(''); break;
     case 'airlines': html = L.airlines.map((a, i) => countRow(i, `<b>${AIRLINES[a.key] || a.key}</b> <small>${a.key}</small>`, a.count, L.airlines[0].count)).join(''); break;
     case 'types': html = L.types.map((t, i) => countRow(i, nice(t.key), t.count, L.types[0].count)).join(''); break;
@@ -2432,11 +2640,11 @@ async function pollFa() {
 
 // ---------- controls ----------
 $('radius').addEventListener('input', e => {
-  radius = +e.target.value; $('radiusVal').textContent = radius + ' mi'; save('skyRadius', radius);
+  radius = +e.target.value; $('radiusVal').textContent = distTxt(radius, 0); save('skyRadius', radius);
   drawHome(); update(current.length ? rawCache() : []); showZoomPct();
 });
 $('radius').addEventListener('change', fitRadius);
-$('radiusVal').textContent = radius + ' mi';
+$('radiusVal').textContent = distTxt(radius, 0);
 $('showAll').addEventListener('change', e => { showAll = e.target.checked; save('skyShowAll', showAll); update(rawCache()); });
 // rebuild raw-ish rows from tracked state so control changes apply instantly
 function rawCache() {
@@ -2454,7 +2662,7 @@ function drawPois() {
     L.marker(office.pos, {
       zIndexOffset: 900,
       icon: L.divIcon({ className: '', html: `<div class="poi" style="--c:#2a7de1"><i>🏢</i><span>${esc(office.name || 'Office')}</span></div>`, iconSize: [0, 0] }),
-    }).bindTooltip(home ? `${distMi(home, office.pos).toFixed(1)} mi from home` : esc(office.name || 'Office'), { direction: 'top', offset: [0, -16] }).addTo(poiLayer);
+    }).bindTooltip(home ? `${distTxt(distMi(home, office.pos))} from home` : esc(office.name || 'Office'), { direction: 'top', offset: [0, -16] }).addTo(poiLayer);
   }
 }
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2727,7 +2935,7 @@ const SHIP_KIND = [ // [from, to, label, colour] by AIS ship type code
 ];
 const shipKind = s => isCruise(s) ? ['Cruise ship', '#ffffff'] : (SHIP_KIND.find(([a, b]) => s.type >= a && s.type <= b) || [0, 0, 'Ship', '#7d879f']).slice(2);
 const NAV = { 0: 'Under way', 1: 'At anchor', 2: 'Not under command', 3: 'Restricted manoeuvrability', 5: 'Docked', 6: 'Aground', 7: 'Fishing', 8: 'Sailing' };
-const kn = v => `${v.toFixed(v < 10 ? 1 : 0)} kn (${Math.round(v * 1.15078)} mph)`;
+const kn = v => nautical ? `${v.toFixed(v < 10 ? 1 : 0)} kt` : `${v.toFixed(v < 10 ? 1 : 0)} kn (${Math.round(v * 1.15078)} mph)`;
 function shipStatus(s) {
   if (s.nav === 5) return 'Docked';
   if (s.nav === 1) return 'At anchor';
@@ -2747,7 +2955,7 @@ const shipUrl = s => s.imo ? `https://www.vesselfinder.com/vessels/details/${s.i
 function shipCard(s, withLinks) {
   const [kind] = shipKind(s), eta = shipEta(s), line = isCruise(s) ? cruiseLine(s) : null;
   const size = s.length ? `${s.length} m long${s.beam ? ` · ${s.beam} m wide` : ''} (${Math.round(s.length * 3.281)} ft)` : '';
-  const dist = home ? `${distMi(home, [s.lat, s.lon]).toFixed(1)} mi ${compass(bearing(home, [s.lat, s.lon]))} of home` : '';
+  const dist = home ? `${distTxt(distMi(home, [s.lat, s.lon]))} ${compass(bearing(home, [s.lat, s.lon]))} of home` : '';
   const course = s.cog != null && (s.sog || 0) >= 0.5 ? `${Math.round(s.cog)}° ${compass(s.cog)}` : '';
   const row = (k, v) => v ? `<span>${k}</span><span>${esc(v)}</span>` : '';
   const info = isCruise(s) ? shipInfo.get(s.name) : null;
@@ -2824,7 +3032,7 @@ function renderShipPanel() {
   const others = shipData.ships.length - cruise.length;
   body.innerHTML = (cruise.length ? cruise.map(s => `<div class="ship-row" data-mmsi="${s.mmsi}">
       ${shipLogoImg(cruiseLine(s), 'ship-logo-sm')}<div style="flex:1;min-width:0"><b>${esc(s.name || 'Cruise ship')}</b><small>${esc(cruiseLine(s)?.name || 'Cruise ship')} · ${esc(shipStatus(s))}${s.destination ? ` · to ${esc(s.destination)}` : ''}</small></div>
-      <span>${home ? near(s).toFixed(1) + ' mi ' + compass(bearing(home, [s.lat, s.lon])) : ''}</span></div>`).join('')
+      <span>${home ? distTxt(near(s)) + ' ' + compass(bearing(home, [s.lat, s.lon])) : ''}</span></div>`).join('')
     : `<p class="fa-note" style="margin-top:10px">${shipData.status === 'live' ? (exploring ? 'No cruise ships in this area right now.' : 'No cruise ships within about 40 miles right now.') : 'Connecting to AISStream…'}</p>`)
     + (shipData.watch?.ships ? `<div class="fa-note">🌍 Watching ${shipData.watch.ships} cruise ships worldwide · ${shipData.watch.seen} seen so far. Type a ship's name in Jump to.</div>` : '')
     + `<div class="fa-note">${others > 0 ? `${others} other ship${others > 1 ? 's' : ''} and boats on the map${shipsOn ? '' : ' (tick 🚢 Show Ships)'}. ` : ''}Ship data: AISStream.io</div>`;
@@ -3110,12 +3318,19 @@ $('favForm').addEventListener('submit', e => {
 $('favs').open = load('skyFavsOpen', true);
 $('favs').addEventListener('toggle', () => save('skyFavsOpen', $('favs').open));
 
-const mph = kt => Math.round(kt * 1.15078);
+
 function planeWhere(p) {
   if (!p) return 'Not seen yet. Watching for it';
-  if (p.live) return `<span class="live">● Flying now</span>${typeof p.alt === 'number' ? ' · ' + p.alt.toLocaleString() + ' ft' : p.alt === 'ground' ? ' · on the ground' : ''}${p.gs != null ? ' · ' + mph(p.gs) + ' mph' : ''}${p.place ? ' · near ' + esc(p.place) : ''}`;
+  if (p.live) return `<span class="live">● Flying now</span>${typeof p.alt === 'number' ? ' · ' + p.alt.toLocaleString() + ' ft' : p.alt === 'ground' ? ' · on the ground' : ''}${p.gs != null ? ' · ' + speedTxt(p.gs) : ''}${p.place ? ' · near ' + esc(p.place) : ''}`;
   return `Last seen ${esc(p.ago)}${p.place ? ' near ' + esc(p.place) : ''}`;
 }
+// Settings > Display > Units: redraw everything that shows a speed or distance
+$('nauticalIn').checked = nautical;
+$('nauticalIn').addEventListener('change', e => {
+  nautical = e.target.checked; save('skyNautical', nautical);
+  $('radiusVal').textContent = distTxt(radius, 0); $('alertMiVal').textContent = miText(ALERT_MI);
+  drawHome(); update(current.length ? rawCache() : []); renderTicker(); renderLog(); renderAtcPicker(); renderFavs(); pollShips();
+});
 function renderFavs() {
   const live = favs.filter(f => f.plane?.live).length;
   $('favSum').textContent = favs.length ? `· ${favs.length}${live ? `, ${live} flying` : ''}` : '';
@@ -3140,7 +3355,7 @@ function notifyFavorite(a) {
   favNotified.set(a.hex, Date.now());
   const el = document.createElement('div');
   el.className = 'toast'; el.style.setProperty('--bc', '#ffd27a');
-  el.innerHTML = `<b>⭐ Your favorite ${esc(a.reg || a.flight || a.hex.toUpperCase())}</b> is in range<br>${a.desc ? nice(a.desc) : a.type || ''}${a.dist != null ? ` · ${a.dist.toFixed(1)} mi ${compass(a.brg)}` : ''}`;
+  el.innerHTML = `<b>⭐ Your favorite ${esc(a.reg || a.flight || a.hex.toUpperCase())}</b> is in range<br>${a.desc ? nice(a.desc) : a.type || ''}${a.dist != null ? ` · ${distTxt(a.dist)} ${compass(a.brg)}` : ''}`;
   el.onclick = () => { select(a.hex, true); el.remove(); };
   $('toasts').appendChild(el);
   setTimeout(() => el.remove(), 15000);
@@ -3185,7 +3400,7 @@ function showFoundPlane(r, move) {
   const html = `<div class="pt">${i.photo ? `<img class="pt-photo" src="${esc(i.photo)}" alt="" onerror="this.remove()">` : ''}
     <div class="pt-h"><div><b>✈ ${esc(reg)}</b><small>${live ? `Flying now${p.place ? ' near ' + esc(p.place) : ''}` : `Last seen ${esc(p.ago)}${p.place ? ' near ' + esc(p.place) : ''}`}</small></div></div>
     <div class="pt-g">${row('Type', i.type || nice(p.desc) || p.type)}${row('Owner', nice(i.owner || p.owner))}${row('Flight', p.flight !== reg ? p.flight : '')}
-      ${row('Altitude', typeof p.alt === 'number' ? p.alt.toLocaleString() + ' ft' : p.alt === 'ground' ? 'On the ground' : '')}${row('Speed', p.gs != null ? mph(p.gs) + ' mph' : '')}
+      ${row('Altitude', typeof p.alt === 'number' ? p.alt.toLocaleString() + ' ft' : p.alt === 'ground' ? 'On the ground' : '')}${row('Speed', speedTxt(p.gs))}
       ${row('Heading', p.track != null ? COMPASS_WORDS[compass(p.track)] : '')}${row(live ? 'Updated' : 'Seen', live ? p.ago : when)}</div>
     ${live ? '' : `<p class="ship-about">This is where this app last heard it. It has probably flown on since; ADS-B Exchange keeps its full history.</p>`}
     <div class="pt-f">${favBtn(p.hex, reg, true)}${adsbxBtn(p.hex, reg, '🌐 ADS-B Exchange')} · ${tailLink(p.hex, reg, 'Owner & registration')}</div></div>`;
@@ -3227,6 +3442,8 @@ legend.onAdd = () => {
       <div class="lg-row"><span class="lg-ic"><i class="lg-ring" style="border:2px dashed #ff5d73"></i></span>Overhead circle (alerts)</div>
       <h5>Airports</h5>
       ${sq('#ffb547', 14, 'Major airport')}${sq('#ffd27a', 12, 'Regional airport')}${sq('#a9b4d0', 9, 'Small airfield')}${sq('#6fb3ff', 9, 'Seaplane base')}${sq('#c58cff', 12, 'Heliport', true)}
+      <h5>Airport weather (⛅)</h5>
+      ${['VFR', 'MVFR', 'IFR', 'LIFR'].map(c => `<div class="lg-row"><span class="lg-ic"><i class="lg-ring" style="width:12px;height:12px;background:${FLIGHT_CAT[c][1]};border:2px solid #0b1020"></i></span><span><b>${c}</b> ${FLIGHT_CAT[c][0]}</span></div>`).join('')}
       <h5>Ships (with ship tracking)</h5>
       ${ship({ type: 60, length: 290, name: 'CARNIVAL X' }, 'Cruise ship (with its line\'s logo)')}
       ${icon(`<span style="opacity:.55">${shipSvg({ heading: 45, type: 60, length: 290, name: 'CARNIVAL X' })}</span>`, 'Cruise ship, last seen (out of range)')}

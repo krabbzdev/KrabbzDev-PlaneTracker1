@@ -291,6 +291,41 @@ async function metarFor(codes, lat, lon) {
   return data;
 }
 
+// Every weather report (METAR) in an area, for the coloured flying-conditions dots on the map. Asked for in
+// blocks of whole degrees so nearby views share them, and kept 5 minutes (reports come out about once an hour).
+const metarAreaCache = new Map(); // "s,w,n,e" -> { at, data }
+async function metarsIn(s, w, n, e) {
+  const key = [s, w, n, e].join(','), hit = metarAreaCache.get(key);
+  if (hit && Date.now() - hit.at < 5 * 60e3) return hit.data;
+  const r = await get(`https://aviationweather.gov/api/data/metar?format=json&bbox=${s},${w},${n},${e}`, 10000);
+  if (r.status !== 200) return hit ? hit.data : [];
+  const data = (r.body.length ? JSON.parse(r.body) : []).filter(m => m.lat != null).map(m => ({
+    id: m.icaoId, name: m.name || '', lat: m.lat, lon: m.lon, cat: m.fltCat || '', time: m.obsTime ? m.obsTime * 1000 : null,
+    tempC: m.temp, dewC: m.dewp, wdir: m.wdir, wspd: m.wspd, wgst: m.wgst, visib: m.visib, altimHpa: m.altim, clouds: m.clouds || [], raw: m.rawOb || '' }));
+  metarAreaCache.set(key, { at: Date.now(), data });
+  if (metarAreaCache.size > 30) metarAreaCache.delete(metarAreaCache.keys().next().value);
+  return data;
+}
+
+// Temporary flight restrictions (TFRs: VIP visits, stadiums, fires, space launches...) from the FAA, for the
+// red areas on the map. The whole US list is small, so it's fetched at most every 10 minutes and shared.
+let tfrCache = null;
+async function tfrs() {
+  if (tfrCache && Date.now() - tfrCache.at < 10 * 60e3) return tfrCache.data;
+  const r = await get('https://tfr.faa.gov/geoserver/TFR/ows?service=WFS&version=1.1.0&request=GetFeature&typeName=TFR:V_TFR_LOC'
+    + '&maxFeatures=1000&outputFormat=application/json&srsname=EPSG:4326', 20000);
+  if (r.status !== 200) { if (tfrCache) return tfrCache.data; throw new Error('FAA TFR list unavailable (HTTP ' + r.status + ')'); }
+  const round = c => Array.isArray(c[0]) ? c.map(round) : [+c[0].toFixed(4), +c[1].toFixed(4)];
+  const data = (JSON.parse(r.body).features || []).filter(f => f.geometry && /Polygon/.test(f.geometry.type)).map(f => {
+    const p = f.properties || {}, key = String(p.NOTAM_KEY || ''), m = key.match(/^(\d+)\/(\d+)/);
+    return { id: key.split('-')[0], title: p.TITLE || '', type: p.LEGAL || '', state: p.STATE || '',
+      link: m ? `https://tfr.faa.gov/tfr3/?page=detail_${m[1]}_${m[2]}` : 'https://tfr.faa.gov/',
+      geometry: { type: f.geometry.type, coordinates: round(f.geometry.coordinates) } };
+  });
+  tfrCache = { at: Date.now(), data };
+  return data;
+}
+
 const airportWikiCache = new Map();
 async function airportWiki(link) {
   const m = String(link).match(/^https?:\/\/([a-z-]+)\.wikipedia\.org\/wiki\/([^?#]+)/);
@@ -1033,6 +1068,15 @@ const server = http.createServer(async (req, res) => {
       await loadAirports();
       const q = k => Number(url.searchParams.get(k));
       return send(res, 200, JSON.stringify(airportsNear(q('lat'), q('lon'), Math.min(q('r') || 40, 150))));
+    }
+    if (url.pathname === '/api/tfrs') return send(res, 200, JSON.stringify(await tfrs()));
+    if (url.pathname === '/api/metars') {
+      // ?bbox=south,west,north,east, rounded out to whole degrees and capped at about 8 x 10 degrees
+      const [s, w, n, e] = (url.searchParams.get('bbox') || '').split(',').map(Number);
+      if (![s, w, n, e].every(isFinite) || n <= s || e <= w) return send(res, 400, '{"error":"bad area"}');
+      const cy = (s + n) / 2, cx = (w + e) / 2, hy = Math.min(4, (n - s) / 2), hx = Math.min(5, (e - w) / 2);
+      const box = [Math.floor(Math.max(-90, cy - hy)), Math.floor(cx - hx), Math.ceil(Math.min(90, cy + hy)), Math.ceil(cx + hx)];
+      return send(res, 200, JSON.stringify(await metarsIn(...box)));
     }
     if (url.pathname === '/api/findplane') return send(res, 200, JSON.stringify(await findPlane(url.searchParams.get('q'))));
     if (url.pathname === '/api/favorites') {

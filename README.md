@@ -34,6 +34,7 @@ bottom-right corner.
 - **Live map** of aircraft around home (default 20 mile radius), with airports, your home and an optional office
 - **Weather overlay**: live rain radar on the map (US, NWS NEXRAD via Iowa Environmental Mesonet), switched on with 🌧 Weather
 - **Aeronautical charts**: the FAA's VFR Sectional, VFR Terminal Area, IFR Low and IFR High Enroute charts under the map, picked with 🗺 Chart (US, not for navigation)
+- **For pilots**: airport weather dots coloured by flying conditions (VFR / MVFR / IFR / LIFR), the FAA's temporary flight restrictions (TFRs) as red areas, a day/night line, a distance and heading tool, the likely runway in use and sunrise/sunset on airport cards, squawk, vertical speed and pressure + GPS altitude on planes, and knots / nautical miles as an option
 - **Cruise ships and boats** (optional, free): live ship positions from [AISStream.io](https://aisstream.io), with cruise ships highlighted and listed in a Cruise ships panel. Needs your own free AISStream key (Settings → More)
 - **Tray icon**: a ✈ in the Windows system tray while it runs; click to open the dashboard, right-click → Quit to stop it (a tiny helper, tray/Tray.cs, carried inside the .exe and unpacked next to it)
 - **Overhead Plane Alert**: inside the overhead circle (1 mile to start, adjustable), a full-screen close-up with the flight path,
@@ -69,6 +70,8 @@ home address, an optional office, your FlightAware username, and an optional con
 | Airport weather | [NOAA Aviation Weather Center](https://aviationweather.gov) (US government, public domain) |
 | Airline logos | [sexym0nk3y/airline-logos](https://github.com/sexym0nk3y/airline-logos) via jsDelivr (logos are trademarks of their airlines) |
 | Aeronautical charts | [FAA Aeronautical Information Services](https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/) (US government, public domain) |
+| Airport weather (METARs) | [NOAA Aviation Weather Center](https://aviationweather.gov) (US government, public domain) |
+| Temporary flight restrictions | [FAA TFR list](https://tfr.faa.gov) (US government, public domain) |
 | Weather radar | NWS NEXRAD via [Iowa Environmental Mesonet](https://mesonet.agron.iastate.edu) |
 | Ships (optional) | [AISStream.io](https://aisstream.io) live AIS data, with your own free API key |
 | Kokoro voices (optional) | [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) via [kokoro-js](https://github.com/hexgrad/kokoro) (Apache 2.0), downloaded on first use from jsDelivr and Hugging Face; runs in your browser |
@@ -109,7 +112,8 @@ contacts these services directly from your computer:
 - **Planespotters.net, adsbdb, adsb.lol, Wikipedia**: aircraft identifiers, callsigns and registrations, to look up photos, owners and routes
 - **FlightAware**: the feeder username in Settings, to show its public stats page
 - **GitHub**: to check for and download updates
-- **aviationweather.gov**: an airport's code or position, when you click it on the map, for its weather report
+- **aviationweather.gov**: the area the map is showing (for the airport weather dots), and an airport's code or position when you click it
+- **tfr.faa.gov**: nothing about you; the app downloads the list of current TFRs
 - **Esri** (map tiles), **OurAirports** (airport list), **jsDelivr** (airline logos), **Iowa Environmental Mesonet** (weather radar), **AISStream.io** (only if you add a key: the area around your home, so it can send the ships there), **ADS-B Exchange** (only when you open its viewer), **jsDelivr** and **Hugging Face** (the Kokoro voice files, only if you pick a Kokoro voice; the words spoken never leave your PC)
 
 ## License
