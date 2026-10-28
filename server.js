@@ -943,6 +943,13 @@ const server = http.createServer(async (req, res) => {
       saveLog(); saveLastSeen(); savePlanesSeen();
       return setTimeout(() => process.exit(0), 300);
     }
+    if (url.pathname === '/api/open' && req.method === 'POST') {
+      // the tray icon's "Open": same window as when the app starts
+      const local = /^(::1|127\.|::ffff:127\.)/.test(req.socket.remoteAddress || '');
+      if (!local || req.headers['x-ft-tray'] !== '1') return send(res, 403, '{"error":"forbidden"}');
+      openDashboard();
+      return send(res, 200, '{"ok":true}');
+    }
     const tk = url.pathname.match(/^\/api\/track\/([0-9a-f~]{6,7})$/i);
     if (tk) return send(res, 200, JSON.stringify({ points: trackHist.get(tk[1].toLowerCase()) || [] }));
     if (url.pathname === '/api/settings') {
@@ -962,6 +969,7 @@ const server = http.createServer(async (req, res) => {
           setTimeout(watchRefresh, 500);
         }
         if ('aisKey' in b) { settings.aisKey = String(b.aisKey || '').trim().slice(0, 100); setTimeout(watchConnect, 2000); }
+        if ('appWindow' in b) settings.appWindow = !!b.appWindow;
         fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 1));
         aisRefresh();
         latest = null; // next page poll fetches for the new location
@@ -974,6 +982,7 @@ const server = http.createServer(async (req, res) => {
         cruiseLines: Array.isArray(settings.cruiseLines) ? settings.cruiseLines : null,
         cruiseLineOptions: CRUISE_BRANDS.filter(x => x[3]).map(x => x[1]), // lines with a fleet list to watch
         aisKeySet: !!aisKey(), aisKeyHint: aisKey() ? '••••' + aisKey().slice(-4) : '',
+        appWindow: settings.appWindow !== false, appBrowser: process.platform === 'win32' && !!appBrowser(),
       }));
     }
     if (url.pathname === '/api/version') return send(res, 200, JSON.stringify({ ...VERSION, exe: !!sea }));
@@ -1053,8 +1062,31 @@ process.on('unhandledRejection', e => console.log('Background task failed: ' + (
 // --background (used by the "start with Windows" shortcut): run quietly in the tray without opening the browser
 const openBrowser = () => {
   if (process.env.NO_BROWSER || process.argv.includes('--background')) return;
-  require('child_process').exec(`start "" http://localhost:${PORT}`);
+  openDashboard();
 };
+// The dashboard opens in its own app window (Edge, else Chrome) that may play sound before the page is clicked.
+// Browsers normally block a page's sound until it's been clicked, and the chime and voice are the point of the
+// overhead alert. The window uses its own browser profile in the app's folder, because that setting only applies
+// to a browser that isn't already running with your normal profile. Settings > Display can turn this off.
+const BROWSER_PROFILE = path.join(APP_DIR, 'browser-window');
+function appBrowser() {
+  const bases = [process.env['ProgramFiles(x86)'], process.env.ProgramFiles, process.env.LOCALAPPDATA].filter(Boolean);
+  for (const rel of ['Microsoft\\Edge\\Application\\msedge.exe', 'Google\\Chrome\\Application\\chrome.exe'])
+    for (const base of bases) { const p = path.join(base, rel); if (fs.existsSync(p)) return p; }
+  return null;
+}
+function openDashboard() {
+  const url = `http://localhost:${PORT}/`, cp = require('child_process');
+  const exe = process.platform === 'win32' && settings.appWindow !== false ? appBrowser() : null;
+  if (exe) {
+    try {
+      cp.spawn(exe, ['--app=' + url, '--user-data-dir=' + BROWSER_PROFILE, '--autoplay-policy=no-user-gesture-required',
+        '--no-first-run', '--no-default-browser-check', '--window-size=1500,950'], { detached: true, stdio: 'ignore' }).unref();
+      return;
+    } catch (e) { console.log('Could not open the app window: ' + e.message); }
+  }
+  cp.exec(`start "" ${url}`);
+}
 // ---------- ships: live AIS positions from AISStream.io (optional, needs a free API key) ----------
 // AISStream only accepts server connections (never straight from a browser), so this keeps one WebSocket open for
 // the area around home and the page reads /api/ships. Ships report positions over AIS, the ship version of ADS-B.

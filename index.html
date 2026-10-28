@@ -685,6 +685,11 @@
           <option value="1.25">125%</option><option value="1.5">150%</option><option value="1.75">175%</option><option value="2">200% (biggest)</option>
         </select>
       </div>
+      <div class="place">
+        <h4>🪟 Dashboard window</h4>
+        <label class="chk"><input type="checkbox" id="appWinIn"> Open in its own window, with sound on from the start</label>
+        <p class="hint" id="appWinHint">Web browsers keep a page quiet until you click it. In its own window (Microsoft Edge or Google Chrome, without the address bar), the chime and voice work straight away. It's used when the app starts and when you click the tray icon. Untick to open it in a normal browser tab instead.</p>
+      </div>
     </section>
 
     <!-- More: updates and optional accounts -->
@@ -1535,7 +1540,10 @@ function unlockAudio() {
 
 // Sound lock: browsers keep a page silent (chime AND voice) until it has been clicked, and that resets every time the
 // page reloads (including after an update). While that's the case, a bar at the top asks for one click.
-const soundLocked = () => !!navigator.userActivation && !navigator.userActivation.hasBeenActive;
+// Locked until the page is clicked, unless the browser lets it play sound anyway (the app's own window does):
+// a sound player started without a click is then running rather than suspended.
+const soundLocked = () => !!navigator.userActivation && !navigator.userActivation.hasBeenActive && !(audioCtx && audioCtx.state === 'running');
+unlockAudio(); // works straight away where sound is allowed; elsewhere it waits for the first click
 function showSoundLock(force) { $('soundLock').hidden = !(soundOn && (force || soundLocked())); }
 function unlockSound() {
   unlockAudio();
@@ -2284,6 +2292,9 @@ async function openHome(focusHome, firstRun) {
   $('homeResults').innerHTML = $('officeResults').innerHTML = '';
   showWhere('home'); showWhere('office');
   $('faIn').value = cfg.faUser || '';
+  $('appWinIn').checked = cfg.appWindow !== false;
+  $('appWinIn').disabled = !cfg.appBrowser;
+  if (!cfg.appBrowser) $('appWinHint').textContent = 'Needs Microsoft Edge or Google Chrome installed on this PC, so the dashboard opens in your normal browser.';
   $('contactIn').value = cfg.contact || '';
   // ship tracking: the saved key is never sent back, only whether there is one
   aisClear = false; $('aisIn').value = '';
@@ -2394,6 +2405,7 @@ $('saveHome').onclick = async () => {
     office: isFinite(oLat) && isFinite(oLon) ? { name: $('offName').value.trim() || 'Office', pos: [oLat, oLon], label: placeLabel.office } : null,
     faUser: $('faIn').value.trim(),
     contact: $('contactIn').value.trim(),
+    appWindow: $('appWinIn').checked,
     // all ticked = null, so lines added later are watched too
     cruiseLines: (() => { const boxes = [...$('cruiseLines').querySelectorAll('input')]; return !boxes.length || boxes.every(c => c.checked) ? null : boxes.filter(c => c.checked).map(c => c.value); })(),
     ...($('aisIn').value.trim() ? { aisKey: $('aisIn').value.trim() } : aisClear ? { aisKey: '' } : {}),

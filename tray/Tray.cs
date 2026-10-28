@@ -55,9 +55,22 @@ static class Tray
         try { return p.HasExited; } catch { return true; }
     }
 
+    // Asks the app to open its dashboard window (the one where sound works without a click); if the app doesn't
+    // answer, opens the dashboard in the default browser instead.
     static void Open()
     {
-        try { Process.Start(url); } catch { }
+        try
+        {
+            using (var web = new WebClient())
+            {
+                web.Headers["X-FT-Tray"] = "1";
+                web.UploadString(api + "api/open", "");
+            }
+        }
+        catch
+        {
+            try { Process.Start(url); } catch { }
+        }
     }
 
     static void Quit()
