@@ -982,7 +982,7 @@ const server = http.createServer(async (req, res) => {
         cruiseLines: Array.isArray(settings.cruiseLines) ? settings.cruiseLines : null,
         cruiseLineOptions: CRUISE_BRANDS.filter(x => x[3]).map(x => x[1]), // lines with a fleet list to watch
         aisKeySet: !!aisKey(), aisKeyHint: aisKey() ? '••••' + aisKey().slice(-4) : '',
-        appWindow: settings.appWindow !== false, appBrowser: process.platform === 'win32' && !!appBrowser(),
+        appWindow: settings.appWindow === true, appBrowser: process.platform === 'win32' && !!appBrowser(),
       }));
     }
     if (url.pathname === '/api/version') return send(res, 200, JSON.stringify({ ...VERSION, exe: !!sea }));
@@ -1064,10 +1064,11 @@ const openBrowser = () => {
   if (process.env.NO_BROWSER || process.argv.includes('--background')) return;
   openDashboard();
 };
-// The dashboard opens in its own app window (Edge, else Chrome) that may play sound before the page is clicked.
-// Browsers normally block a page's sound until it's been clicked, and the chime and voice are the point of the
-// overhead alert. The window uses its own browser profile in the app's folder, because that setting only applies
-// to a browser that isn't already running with your normal profile. Settings > Display can turn this off.
+// Optionally (Settings > Display, off unless turned on) the dashboard opens in its own app window (Edge, else
+// Chrome) that may play sound before the page is clicked; browsers normally block a page's sound until then. The
+// window uses its own browser profile in the app's folder, because that setting only applies to a browser that isn't
+// already running with your normal profile. The catch: Edge's natural online voices (the upbeat ones) don't work
+// there, only Windows' built-in voices do, so a normal browser tab is the default.
 const BROWSER_PROFILE = path.join(APP_DIR, 'browser-window');
 function appBrowser() {
   const bases = [process.env['ProgramFiles(x86)'], process.env.ProgramFiles, process.env.LOCALAPPDATA].filter(Boolean);
@@ -1077,7 +1078,7 @@ function appBrowser() {
 }
 function openDashboard() {
   const url = `http://localhost:${PORT}/`, cp = require('child_process');
-  const exe = process.platform === 'win32' && settings.appWindow !== false ? appBrowser() : null;
+  const exe = process.platform === 'win32' && settings.appWindow === true ? appBrowser() : null;
   if (exe) {
     try {
       cp.spawn(exe, ['--app=' + url, '--user-data-dir=' + BROWSER_PROFILE, '--autoplay-policy=no-user-gesture-required',

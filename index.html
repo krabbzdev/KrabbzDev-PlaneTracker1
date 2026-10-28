@@ -688,7 +688,7 @@
       <div class="place">
         <h4>🪟 Dashboard window</h4>
         <label class="chk"><input type="checkbox" id="appWinIn"> Open in its own window, with sound on from the start</label>
-        <p class="hint" id="appWinHint">Web browsers keep a page quiet until you click it. In its own window (Microsoft Edge or Google Chrome, without the address bar), the chime and voice work straight away. It's used when the app starts and when you click the tray icon. Untick to open it in a normal browser tab instead.</p>
+        <p class="hint" id="appWinHint">Off: the dashboard opens in a normal browser tab, with Edge's natural, upbeat voice. Sound needs one click on the page after it opens. On: it opens in its own window (Microsoft Edge or Google Chrome, without the address bar) where the chime and voice work straight away, but only with Windows' plainer built-in voice (Zira). Used when the app starts and when you click the tray icon.</p>
       </div>
     </section>
 
@@ -1606,12 +1606,12 @@ async function say(text, retry) {
   setTimeout(() => {
     if (id !== sayId) return;
     speechSynthesis.speak(u);
-    // nothing after 3 s (a voice that failed silently): try again with a voice built into Windows
+    // nothing after 5 s (a voice that failed silently): try again with a voice built into Windows
     if (!retry) setTimeout(() => {
       if (started || id !== sayId) return;
       console.log('Voice "' + (u.voice?.name || 'default') + '" did not start; trying a built-in voice');
       say(text, true);
-    }, 3000);
+    }, 5000);
   }, 60);
 }
 function stopSpeech() { if ('speechSynthesis' in window) speechSynthesis.cancel(); }
@@ -2303,7 +2303,7 @@ async function openHome(focusHome, firstRun) {
   $('homeResults').innerHTML = $('officeResults').innerHTML = '';
   showWhere('home'); showWhere('office');
   $('faIn').value = cfg.faUser || '';
-  $('appWinIn').checked = cfg.appWindow !== false;
+  $('appWinIn').checked = cfg.appWindow === true;
   $('appWinIn').disabled = !cfg.appBrowser;
   if (!cfg.appBrowser) $('appWinHint').textContent = 'Needs Microsoft Edge or Google Chrome installed on this PC, so the dashboard opens in your normal browser.';
   $('contactIn').value = cfg.contact || '';
