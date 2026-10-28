@@ -447,6 +447,8 @@
   .ship-pop img.ph { display: block; width: 100%; height: 130px; object-fit: cover; border-radius: 10px 10px 0 0; }
   .ship-about { margin: 8px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
   /* favorite planes and the plane finder */
+  #voiceStatus:empty { display: none; }
+  #voiceStatus.warn { color: #ffb547; }
   .fav-add { display: flex; gap: 6px; margin-top: 8px; }
   .fav-add input { flex: 1; min-width: 0; font: 13px Inter, sans-serif; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; text-transform: uppercase; }
   .fav-add input::placeholder { text-transform: none; }
@@ -673,6 +675,7 @@
         <p class="hint" style="margin:6px 0">Click to add: <span id="sayTags"></span></p>
         <p class="hint">Anything the app doesn't know for a plane (like where it's going) is left out.</p>
         <div class="row"><button id="voiceTest">▶ Test the voice</button><button id="sayReset">Reset to default</button></div>
+        <p class="hint" id="voiceStatus" style="margin-top:6px"></p>
         <p class="hint" style="margin-top:8px">The voices are the ones your browser has. Microsoft Edge has the most natural-sounding ones (marked "Natural"). Each browser remembers its own choice.</p>
       </div>
       <p class="hint">To turn the alerts on or off, use <b>Overhead Plane Alert</b> and <b>🔔 Sound</b> at the top of the page.</p>
@@ -1581,7 +1584,8 @@ const TIKTOK_LIKE = /jenny|aria|ava|emma|michelle|samantha|zira/i;
 // The voice chosen in Settings > Alerts ('' = automatic: the upbeat pick below), and whether to make it upbeat.
 let voiceName = load('skyVoiceName', ''), voiceUpbeat = load('skyVoiceUpbeat', true);
 function pickVoice(builtInOnly) {
-  const all = speechSynthesis.getVoices(), chosen = voiceName && all.find(v => v.name === voiceName);
+  // voices that failed in this browser are skipped (failedVoices, below)
+  const all = speechSynthesis.getVoices().filter(v => !failedVoices.has(v.name)), chosen = voiceName && all.find(v => v.name === voiceName);
   if (chosen && (chosen.localService || !builtInOnly)) return chosen;
   const en = all.filter(v => /^en-US/i.test(v.lang) && (v.localService || !builtInOnly));
   return (!builtInOnly && en.find(v => TIKTOK_LIKE.test(v.name) && /natural/i.test(v.name)))
@@ -1592,7 +1596,7 @@ function fillVoicePick() {
   if (!('speechSynthesis' in window)) return;
   const sel = $('voicePick'), en = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang));
   const rank = v => (/natural/i.test(v.name) ? 0 : 2) + (/^en-US/i.test(v.lang) ? 0 : 1);
-  const label = v => v.name.replace(/^Microsoft\s+/, '').replace(/\s+-\s+English.*$/, '').replace(/\s*\(Natural\)/, ' (Natural)') + (/^en-US/i.test(v.lang) ? '' : ` · ${v.lang}`);
+  const label = v => v.name.replace(/^Microsoft\s+/, '').replace(/\s+-\s+English.*$/, '').replace(/\s*\(Natural\)/, ' (Natural)') + (/^en-US/i.test(v.lang) ? '' : ` · ${v.lang}`) + (failedVoices.has(v.name) ? ' ⚠ not working here' : '');
   sel.innerHTML = `<option value="">TikTok style (automatic: the most upbeat voice here)</option>`
     + [...en].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name)).map(v => `<option value="${esc(v.name)}">${esc(label(v))}</option>`).join('');
   sel.value = voiceName;
@@ -1607,6 +1611,11 @@ $('voiceUpbeat').addEventListener('change', e => { voiceUpbeat = e.target.checke
 const voicesReady = () => speechSynthesis.getVoices().length ? Promise.resolve()
   : new Promise(r => { speechSynthesis.addEventListener('voiceschanged', r, { once: true }); setTimeout(r, 1500); });
 let sayId = 0;
+// Which voice really spoke, shown under ▶ Test in Settings; voices that failed are marked in the list
+var failedVoices = new Set(); // var: pickVoice, further up, uses it
+const shortVoice = n => String(n || 'the default voice').replace(/^Microsoft\s+/, '').replace(/\s+-\s+English.*$/, '');
+function voiceStatus(msg, warn) { const el = $('voiceStatus'); el.textContent = msg; el.classList.toggle('warn', !!warn); }
+// retry: { from: the voice that failed, why } when trying again with a voice built into Windows
 async function say(text, retry) {
   if (!('speechSynthesis' in window)) return;
   const id = retry ? sayId : ++sayId;
@@ -1614,14 +1623,23 @@ async function say(text, retry) {
   await voicesReady();
   if (id !== sayId) return; // something newer is being said
   const u = new SpeechSynthesisUtterance(text);
-  u.voice = pickVoice(retry);
+  u.voice = pickVoice(!!retry);
   u.lang = u.voice?.lang || 'en-US';
   if (voiceUpbeat) { u.pitch = 1.25; u.rate = 1.12; }
   let started = false;
-  u.onstart = () => { started = true; };
+  const failed = why => {
+    if (retry || started || id !== sayId) return;
+    if (u.voice) { failedVoices.add(u.voice.name); fillVoicePick(); }
+    say(text, { from: u.voice?.name, why });
+  };
+  u.onstart = () => {
+    started = true;
+    voiceStatus(retry ? `⚠ ${shortVoice(retry.from)} doesn't work in this browser (${retry.why}), so ${shortVoice(u.voice?.name)} spoke instead. Pick another voice.`
+      : `🔊 Speaking: ${shortVoice(u.voice?.name)}${voiceUpbeat ? ', upbeat' : ''}`, !!retry);
+  };
   u.onerror = e => {
-    if (e.error === 'not-allowed') return showSoundLock(true); // the browser blocked it: ask for a click
-    if (!retry && !started && id === sayId && !/interrupted|canceled/.test(e.error)) say(text, true);
+    if (e.error === 'not-allowed') { voiceStatus('🔇 The browser blocked sound: click the page once, then try again.', true); return showSoundLock(true); }
+    if (!/interrupted|canceled/.test(e.error)) failed(({ 'synthesis-failed': "it couldn't make the speech", network: 'it needs the internet', 'voice-unavailable': "it isn't available", 'synthesis-unavailable': "it isn't available" })[e.error] || e.error);
   };
   // Chrome can silently drop speech queued right after cancel(), or stay stuck paused: nudge it, then speak
   speechSynthesis.resume();
@@ -1629,11 +1647,7 @@ async function say(text, retry) {
     if (id !== sayId) return;
     speechSynthesis.speak(u);
     // nothing after 5 s (a voice that failed silently): try again with a voice built into Windows
-    if (!retry) setTimeout(() => {
-      if (started || id !== sayId) return;
-      console.log('Voice "' + (u.voice?.name || 'default') + '" did not start; trying a built-in voice');
-      say(text, true);
-    }, 5000);
+    if (!retry) setTimeout(() => failed('it stayed silent'), 5000);
   }, 60);
 }
 function stopSpeech() { if ('speechSynthesis' in window) speechSynthesis.cancel(); }
