@@ -57,6 +57,8 @@
   button:hover, a.btn:hover { border-color: var(--accent); }
   a.btn { font-size: 13px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; text-decoration: none; white-space: nowrap; }
   label.chk { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
+  label.chk.vol input { width: 80px; accent-color: var(--accent); }
+  label.chk.vol b { font: 600 11px var(--mono); min-width: 32px; }
   .chart-sel { font: 13px Inter, sans-serif; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px; cursor: pointer; }
 
   .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 14px 20px; }
@@ -288,7 +290,8 @@
   dialog .src-note a, .live a { color: var(--accent); }
   dialog .cur { font-size: 12px; color: var(--muted); margin: -4px 0 8px; }
   /* Settings window: tabs, one scrolling body, buttons pinned at the bottom */
-  dialog.set-dlg { width: min(520px, calc(94vw / var(--ui))); max-height: calc(90vh / var(--ui)); padding: 0; display: none; flex-direction: column; overflow: hidden; }
+  /* one fixed size whichever tab is open: the tab's contents scroll inside it */
+  dialog.set-dlg { width: min(560px, calc(94vw / var(--ui))); height: min(680px, calc(90vh / var(--ui))); padding: 0; display: none; flex-direction: column; overflow: hidden; }
   dialog.set-dlg[open] { display: flex; }
   .set-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 6px; }
   .set-head h3 { margin: 0; font-size: 18px; }
@@ -559,6 +562,7 @@
   <label class="chk" title="Cruise ships and other boats, live (needs a free AISStream.io key in Settings)"><input type="checkbox" id="shipsOn" checked> 🚢 Show Ships</label>
   <label class="chk" title="Take over the screen with a close-up when a plane passes inside the overhead circle (size in Settings, Alerts)"><input type="checkbox" id="takeoverOn" checked> Overhead Plane Alert</label>
   <label class="chk" title="Chime and spoken announcement when a plane is overhead"><input type="checkbox" id="soundOn" checked> 🔔 Sound</label>
+  <label class="chk vol" title="Volume of the chime and the voice"><span aria-hidden="true">🔉</span><input type="range" id="volIn" min="0" max="1" step="0.05" aria-label="Volume"><b id="volVal"></b></label>
   <button id="homeBtn">⚙ Settings</button>
 </header>
 
@@ -830,7 +834,9 @@ function altColor(alt) {
 const fmtAlt = a => a === 'ground' ? 'Ground' : a == null ? '—' : a.toLocaleString() + ' ft';
 
 // ---------- map ----------
-const map = L.map('map', { zoomControl: true, attributionControl: true, scrollWheelZoom: false }) // zoom with +/- only, so page scrolling never zooms the map.setView(home || [27.9506, -82.4572], 11);
+// zoom with the mouse wheel or +/- (whole steps, so the zoom % stays 100%, 200%, 400%...)
+const map = L.map('map', { zoomControl: true, attributionControl: true, scrollWheelZoom: true })
+  .setView(home || [27.9506, -82.4572], 11);
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
 // Map style, picked with 🌍 Map in the top bar (each browser keeps its own): Esri's free maps. Each style is a
 // background plus, for most, a layer of place names drawn above the weather radar.
@@ -1592,6 +1598,12 @@ $('soundOn').addEventListener('change', e => {
   if (soundOn) { unlockAudio(); setTimeout(chime, 50); } else stopSpeech();
   showSoundLock();
 });
+// volume (🔉 slider beside 🔔 Sound, each browser keeps its own): the chime, the browser's voices and Kokoro
+let volume = load('skyVolume', 1);
+const showVol = () => { $('volIn').value = volume; $('volVal').textContent = Math.round(volume * 100) + '%'; };
+showVol();
+$('volIn').addEventListener('input', e => { volume = +e.target.value; save('skyVolume', volume); showVol(); if (speechAudio) speechAudio.volume = volume; });
+$('volIn').addEventListener('change', () => { unlockAudio(); setTimeout(chime, 50); }); // let go of the slider: hear how loud it is
 // browsers only allow sound once the viewer has clicked or typed on the page, so unlock on any interaction
 function unlockAudio() {
   try {
@@ -1625,7 +1637,7 @@ function chime(delay = 0) {
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
     o.type = 'sine'; o.frequency.value = freq;
     g.gain.setValueAtTime(0, t + at);
-    g.gain.linearRampToValueAtTime(.35, t + at + .02);
+    g.gain.linearRampToValueAtTime(.35 * volume + .0001, t + at + .02);
     g.gain.exponentialRampToValueAtTime(.001, t + at + .7);
     o.connect(g).connect(audioCtx.destination);
     o.start(t + at); o.stop(t + at + .75);
@@ -1685,6 +1697,7 @@ async function say(text, retry) {
   const u = new SpeechSynthesisUtterance(text);
   u.voice = pickVoice(!!retry);
   u.lang = u.voice?.lang || 'en-US';
+  u.volume = volume;
   if (voiceUpbeat) { u.pitch = 1.25; u.rate = 1.12; }
   let started = false;
   const failed = why => {
@@ -1755,6 +1768,7 @@ var speechAudio = null; // var: stopSpeech, above, uses it
 function playBlob(blob) {
   stopSpeech();
   const url = URL.createObjectURL(blob), audio = speechAudio = new Audio(url);
+  audio.volume = volume;
   audio.onended = () => URL.revokeObjectURL(url);
   return audio.play().catch(e => { if (e && e.name === 'NotAllowedError') { voiceStatus('🔇 The browser blocked sound: click the page once, then try again.', true); showSoundLock(true); } throw e; });
 }
