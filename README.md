@@ -42,6 +42,7 @@ bottom-right corner.
   altitude and destination. You can rewrite what it says in Settings → Alerts (🔔 Sound toggle)
 - **Airport and helipad details**: click any airport, heliport or seaplane base for its runways or helipads, radio
   frequencies, current weather, planes arriving and leaving right now, a Wikipedia summary and handy links
+- **Planned route**: click a plane to draw its route on the map, from its departure airport to its destination
 - **Aircraft details**: photo, maker and model, airline, owner, route, altitude, speed and time tracked
 - **Favorite planes**: star any plane (or type its tail number) and the app watches for it worldwide, shows whether
   it's flying now or where it was last seen, and pops up when it flies into range
@@ -63,7 +64,7 @@ home address, an optional office, your FlightAware username, and an optional con
 | What | Source |
 |---|---|
 | Live aircraft | [adsb.fi](https://adsb.fi) open data (free for personal, non-commercial use) |
-| Photos | [Planespotters.net](https://www.planespotters.net) (photographer credited), else a stock model photo from [Wikipedia](https://www.wikipedia.org) |
+| Photos | [Planespotters.net](https://www.planespotters.net), then [Airport-Data.com](https://airport-data.com) (photographer credited), else a stock model photo from [Wikipedia](https://www.wikipedia.org) |
 | Aircraft and owner info | [adsbdb](https://www.adsbdb.com), optional FAA registry file |
 | Routes | [adsb.lol](https://adsb.lol) route data, adsbdb |
 | Airports, runways, radio frequencies | [OurAirports](https://ourairports.com) (public domain) |
@@ -109,7 +110,7 @@ contacts these services directly from your computer:
 
 - **adsb.fi**: your home's map coordinates, to ask which aircraft are nearby; tail numbers you search for, and your favorite planes' codes, to find them
 - **OpenStreetMap Nominatim**: an address you type into Settings, to find its coordinates
-- **Planespotters.net, adsbdb, adsb.lol, Wikipedia**: aircraft identifiers, callsigns and registrations, to look up photos, owners and routes
+- **Planespotters.net, Airport-Data.com, adsbdb, adsb.lol, Wikipedia**: aircraft identifiers, callsigns and registrations, to look up photos, owners and routes
 - **FlightAware**: the feeder username in Settings, to show its public stats page
 - **GitHub**: to check for and download updates
 - **aviationweather.gov**: the area the map is showing (for the airport weather dots), and an airport's code or position when you click it

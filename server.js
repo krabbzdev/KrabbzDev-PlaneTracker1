@@ -51,6 +51,17 @@ function get(url, timeoutMs = 6000) {
   });
 }
 
+// Airport-Data.com's public photo API: a real photo of this plane, with its photographer and a link back,
+// used when Planespotters has none. By tail number when known (transponder codes get reassigned), else by hex.
+async function airportDataPhoto(reg, hex) {
+  try {
+    const r = await get('https://airport-data.com/api/ac_thumb.json?n=1&' + (reg ? 'r=' + encodeURIComponent(reg) : 'm=' + hex.toUpperCase()));
+    if (r.status !== 200) return null;
+    const p = (JSON.parse(r.body).data || [])[0];
+    return p && String(p.image).startsWith('https://') ? { src: p.image, link: p.link, credit: p.photographer || 'Airport-Data.com', site: 'Airport-Data.com' } : null;
+  } catch (e) { return null; }
+}
+
 // Tail numbers get reused too (N865PA was a DHL A300 before it was a Cessna 172), so check the photo's
 // Planespotters link (".../n865pa-dhl-aviation-airbus-a300b4-203") names the same maker as the live aircraft.
 const MAKERS = ['airbus', 'boeing', 'cessna', 'piper', 'embraer', 'bombardier', 'canadair', 'cirrus', 'beech', 'hawker', 'gulfstream',
@@ -172,6 +183,7 @@ async function lookup(hex, cs, reg, mfr = '', model = '', type = '') {
     const p = (JSON.parse(ps.value.body).photos || []).find(x => photoMatches(x.link, mfr));
     if (p) out.photo = { src: p.thumbnail_large?.src || p.thumbnail?.src, link: p.link, credit: p.photographer };
   } catch (e) {}
+  if (!out.photo) out.photo = await airportDataPhoto(reg, hex); // second choice: Airport-Data.com's photo API
   if (!out.photo && (model || type)) out.photo = await stockPhoto(model, mfr, type);
   try {
     const a = JSON.parse(db.value.body).response?.aircraft;

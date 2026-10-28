@@ -470,6 +470,8 @@
   .ship-logo-lg { width: 30px; height: 30px; padding: 2px; border-radius: 6px; background: #fff; object-fit: contain; flex: none; }
   .ship-logo-sm { width: 24px; height: 24px; padding: 2px; border-radius: 5px; background: #fff; object-fit: contain; flex: none; }
   .ship-pop img.ph { display: block; width: 100%; height: 130px; object-fit: cover; border-radius: 10px 10px 0 0; }
+  .leaflet-marker-icon.route-label { width: auto !important; height: auto !important; margin: 8px 0 0 8px; background: rgba(18,26,48,.92); color: #ffd27a; border: 1px solid rgba(255,210,122,.5); border-radius: 6px; padding: 2px 7px; font: 700 11px var(--mono); white-space: nowrap; }
+  .route-label small { color: var(--text); font: 500 10.5px Inter, sans-serif; margin-left: 4px; }
   .info-i { display: inline-grid; place-items: center; width: 15px; height: 15px; margin-left: 6px; padding: 0; border-radius: 50%; border: 1px solid var(--accent); background: transparent; color: var(--accent); font: italic 700 10px Georgia, serif; text-transform: none; letter-spacing: 0; cursor: pointer; vertical-align: 1px; }
   .info-i:hover { background: var(--accent); color: #0b1020; }
   #rgLive > div:has(> .info-txt:not([hidden])), .to-grid > div:has(> .info-txt:not([hidden])) { grid-column: 1 / -1; } /* an open explanation gets the full width */
@@ -1548,10 +1550,10 @@ async function requestLookup(hex, acIn) { // acIn: a plane that isn't in the hom
   render();
 }
 const look = hex => { const v = lookups.get(hex); return v && v !== 'pending' ? v : {}; };
-// photo credit overlay: real photos credit the Planespotters photographer; stock ones say plainly they're the model, not this plane
+// photo credit overlay: real photos credit the photographer and the site (Planespotters or Airport-Data.com); stock ones say plainly they're the model, not this plane
 const photoCredit = p => !p?.src ? '' : p.stock
   ? `<a class="credit" href="${p.link}" target="_blank" rel="noopener">Stock photo of this model · Wikipedia</a>`
-  : p.credit ? `<a class="credit" href="${p.link}" target="_blank" rel="noopener">© ${p.credit} · Planespotters</a>` : '';
+  : p.credit ? `<a class="credit" href="${p.link}" target="_blank" rel="noopener">© ${esc(p.credit)} · ${esc(p.site || 'Planespotters')}</a>` : '';
 
 // Brand from ICAO type code, for when the description or online lookup doesn't name the maker.
 const TYPE_BRANDS = [
@@ -2493,7 +2495,59 @@ function select(hex, pan) {
   if (t && pan) map.panTo([t.aircraft.lat, t.aircraft.lon]);
   if (hex) { requestLookup(hex); openReg(hex, regLabel(hex)); }
   render();
+  drawRoute();
 }
+
+// ---------- planned route of the selected plane ----------
+// Filed flight plans (every waypoint) aren't available for free, so this draws the route the airline publishes
+// (or the one the app worked out): a faint solid line from the departure airport to the plane, and a dashed line on
+// to the destination, along the curve of the earth (the shortest way, which is roughly how planes fly).
+map.createPane('route').style.zIndex = 455; // above airports, under planes
+const routeLayer = L.layerGroup().addTo(map);
+function greatCircle(a, b, steps = 48) {
+  const [la1, lo1, la2, lo2] = [a[0], a[1], b[0], b[1]].map(v => v * SUN_RAD);
+  const d = 2 * Math.asin(Math.sqrt(Math.sin((la2 - la1) / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin((lo2 - lo1) / 2) ** 2));
+  if (d < 0.001) return [a, b];
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const f = i / steps, A = Math.sin((1 - f) * d) / Math.sin(d), B = Math.sin(f * d) / Math.sin(d);
+    const x = A * Math.cos(la1) * Math.cos(lo1) + B * Math.cos(la2) * Math.cos(lo2);
+    const y = A * Math.cos(la1) * Math.sin(lo1) + B * Math.cos(la2) * Math.sin(lo2);
+    const z = A * Math.sin(la1) + B * Math.sin(la2);
+    pts.push([Math.atan2(z, Math.hypot(x, y)) / SUN_RAD, Math.atan2(y, x) / SUN_RAD]);
+  }
+  for (let i = 1; i < pts.length; i++) { // keep the line continuous across the date line
+    while (pts[i][1] - pts[i - 1][1] > 180) pts[i][1] -= 360;
+    while (pts[i][1] - pts[i - 1][1] < -180) pts[i][1] += 360;
+  }
+  return pts;
+}
+function routeEnds(a) {
+  const leg = publishedLeg(a);
+  if (leg) return { from: { pos: leg.A.pos, label: leg.A.label }, to: { pos: leg.B.pos, label: leg.B.label }, guessed: false };
+  const f = inferredFrom(a), t = inferredTo(a);
+  return { from: f && { pos: [f.lat, f.lon], label: aptLabel(f) }, to: t && { pos: [t.lat, t.lon], label: aptLabel(t) }, guessed: true };
+}
+function drawRoute() {
+  routeLayer.clearLayers();
+  const a = selected && tracks.get(selected)?.aircraft;
+  if (!a || a.lat == null) return;
+  const { from, to, guessed } = routeEnds(a), here = [a.lat, a.lon];
+  const code = l => (String(l).match(/\(([A-Z0-9]{3,4})\)\s*$/) || [, l])[1];
+  const end = (p, html) => {
+    L.circleMarker(p.pos, { pane: 'route', radius: 5, color: '#ffd27a', weight: 2, fillColor: '#0b1020', fillOpacity: 1 }).addTo(routeLayer);
+    L.marker(p.pos, { pane: 'route', interactive: false, icon: L.divIcon({ className: 'route-label', html, iconSize: [0, 0] }) }).addTo(routeLayer);
+  };
+  if (from) {
+    L.polyline(greatCircle(from.pos, here), { pane: 'route', color: '#ffd27a', weight: 2, opacity: .45, interactive: false }).addTo(routeLayer);
+    end(from, `🛫 ${esc(code(from.label))}`);
+  }
+  if (to) {
+    L.polyline(greatCircle(here, to.pos), { pane: 'route', color: '#ffd27a', weight: 2.5, opacity: .9, dashArray: '7 7', interactive: false }).addTo(routeLayer);
+    end(to, `🛬 ${esc(code(to.label))} <small>${distTxt(distMi(here, to.pos), 0)} to go${guessed ? ' (likely)' : ''}</small>`);
+  }
+}
+setInterval(drawRoute, 5000); // follow the selected plane as it moves
 const regLabel = hex => { const a = tracks.get(hex)?.aircraft; return a?.reg || look(hex).info?.reg || a?.flight || hex.toUpperCase(); };
 
 // The old right-hand details panel was replaced by the popup window (openReg).
