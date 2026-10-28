@@ -1745,9 +1745,10 @@ setTimeout(() => { if (kokoroVoice() && soundOn) kokoroMake(kokoroVoice(), 'Read
 
 // What the voice says, written by the user in Settings > Alerts (each browser keeps its own).
 // {words} are filled in for each plane; any the app doesn't know are dropped along with their comma.
-const SAY_DEFAULT = 'Overhead now! {airline} - {type}, going {speed}, at {altitude}, {destination} from {from}.';
-// the previous default: browsers that still have it saved move to the new one
-const SAY_OLD_DEFAULTS = ['Overhead now! {type}, {speed}, {altitude}, {destination}.'];
+const SAY_DEFAULT = 'Look, a Plane! {airline} {type}, traveling at {speed}, and is flying at {altitude}, {destination}.';
+// earlier defaults: browsers that still have one saved move to the new one
+const SAY_OLD_DEFAULTS = ['Overhead now! {type}, {speed}, {altitude}, {destination}.',
+  'Overhead now! {airline} - {type}, going {speed}, at {altitude}, {destination} from {from}.'];
 const city = s => (s || '').replace(/\s*\([^)]*\)\s*$/, ''); // "Orlando (MCO)" -> "Orlando"
 const COMPASS_WORDS = { N: 'north', NE: 'north east', E: 'east', SE: 'south east', S: 'south', SW: 'south west', W: 'west', NW: 'north west' };
 const SAY_TAGS = { // name: [example for the Test button, value for a plane]
@@ -1762,9 +1763,20 @@ const SAY_TAGS = { // name: [example for the Test button, value for a plane]
 };
 let sayTemplate = load('skySay', SAY_DEFAULT);
 if (SAY_OLD_DEFAULTS.includes(sayTemplate)) { sayTemplate = SAY_DEFAULT; save('skySay', sayTemplate); }
-// A missing piece takes its lead-in word with it ("going {speed}", "at {altitude}", "from {from}"), then any
-// commas or dashes left hanging are tidied away.
+// Missing pieces are left out tidily:
+// - a phrase between commas whose pieces are all unknown goes completely ("traveling at {speed}"), keeping only any
+//   sentence that ends before its first piece ("a Plane! {airline} {type}" keeps "a Plane!")
+// - otherwise a missing piece takes its lead-in word with it ("at {altitude}", "from {from}")
+// - then any commas or dashes left hanging are tidied away
 function fillSay(template, value) {
+  const known = k => SAY_TAGS[k.toLowerCase()] && value(k.toLowerCase());
+  template = template.split(',').map(part => {
+    const tags = [...part.matchAll(/\{(\w+)\}/g)].filter(m => SAY_TAGS[m[1].toLowerCase()]);
+    if (!tags.length || tags.some(m => known(m[1]))) return part;
+    const before = part.slice(0, tags[0].index), end = Math.max(before.lastIndexOf('!'), before.lastIndexOf('?'), before.lastIndexOf('.'));
+    const trailing = (part.slice(tags[tags.length - 1].index + tags[tags.length - 1][0].length).match(/[.!?]+\s*$/) || [''])[0];
+    return (end >= 0 ? before.slice(0, end + 1) : '') + trailing;
+  }).join(',');
   return template.replace(/(\b(?:going|at|from|to|near|in|by|with)\s+)?\{(\w+)\}/gi, (m, lead, k) => {
     if (!SAY_TAGS[k.toLowerCase()]) return m;
     const v = value(k.toLowerCase());
@@ -1775,7 +1787,9 @@ function fillSay(template, value) {
     .replace(/\s*[-–]\s*(?=[,.!?]|$)/g, '')  // or nothing after it
     .replace(/(\s*,)+(\s*[,.!?]|\s*$)/g, '$2') // commas left by missing pieces
     .replace(/([!?.])\s*,/g, '$1')
-    .replace(/\s+([,.!?])/g, '$1').replace(/\s+/g, ' ').trim();
+    .replace(/\s+([,.!?])/g, '$1').replace(/\s+/g, ' ').trim()
+    .replace(/([!?])\.+/g, '$1').replace(/\.{2,}/g, '.') // "Plane!." -> "Plane!"
+    .replace(/([!?.]\s+)([a-z])/g, (m, p, c) => p + c.toUpperCase()); // a new sentence starts with a capital
 }
 const announcementText = a => fillSay(sayTemplate, k => SAY_TAGS[k][1](a));
 
