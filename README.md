@@ -15,12 +15,21 @@ when a plane passes right overhead.
 2. Your browser opens the dashboard at `http://localhost:8090`. The first time, it asks for your
    **ZIP code or address**. That's it.
 
-Nothing else to install: no Node.js, no accounts. The dashboard can only be opened on the PC it's
-installed on. To stop it, right-click the ✈ tray icon → **Quit**. To uninstall, use Windows
+Nothing else to install: no Node.js, no accounts. The dashboard opens only on the PC it's installed on,
+unless you turn on **Settings → More → Network** to let phones and tablets on your home Wi-Fi watch it too. To stop it, right-click the ✈ tray icon → **Quit**. To uninstall, use Windows
 **Settings → Apps** (your settings and log are left in the install folder; delete it to remove them).
 
 The plain `Krabbz9999-FlightTracker.exe` is in each release too: it's what installed copies update
 themselves from, and it still runs on its own from any folder.
+
+## Support
+
+If something goes wrong, **Settings → More → Help and debugging → Email debug log** (or the tray icon's menu)
+opens an email with the app's log attached.
+
+If Look A Plane! makes you smile, you can [buy me a coffee](https://buymeacoffee.com/krabbzdev).
+
+[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/krabbzdev)
 
 ## Updates
 

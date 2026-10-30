@@ -24,3 +24,5 @@ settings.json.bad
 airport-details-cache.json
 planes-last-seen.json
 browser-window/
+app.log
+app.old.log

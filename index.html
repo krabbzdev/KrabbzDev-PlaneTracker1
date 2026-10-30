@@ -325,6 +325,10 @@
   .set-tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
   .set-body { padding: 14px 18px; overflow-y: auto; flex: 1; }
   .set-foot { display: flex; gap: 8px; justify-content: flex-end; padding: 12px 18px; border-top: 1px solid var(--line); background: var(--panel); }
+  .set-foot .coffee { margin-right: auto; align-self: center; font: 600 12.5px Inter, sans-serif; color: #0b1020; background: #ffdd00; border-radius: 8px; padding: 6px 11px; text-decoration: none; white-space: nowrap; }
+  .set-foot .coffee:hover { filter: brightness(1.08); }
+  a.btn-link { align-self: center; font-size: 12.5px; color: var(--accent); }
+  #debugMsg:empty { display: none; }
   dialog.set-dlg button.primary { background: var(--accent); color: #06121f; border-color: var(--accent); font-weight: 700; }
   dialog.set-dlg .acts.left { justify-content: flex-start; margin: 4px 0 10px; }
   dialog.set-dlg .row { display: flex; gap: 8px; }
@@ -760,6 +764,18 @@
     <!-- More: updates and optional accounts -->
     <section data-pane="more" hidden>
       <div class="place">
+        <h4>🌐 Network</h4>
+        <label class="chk"><input type="checkbox" id="lanIn"> Let other devices on my home network open the dashboard</label>
+        <p class="hint" id="lanHint">Off: only this PC can open it. On: phones, tablets and TVs on the same Wi-Fi can open it in their browser too. They can watch, but only this PC can change settings, favorites or updates. Windows may ask whether to allow the app on your network: choose <b>Private networks</b>. Only turn this on at home, not on public Wi-Fi.</p>
+        <div class="where" id="lanUrls" hidden></div>
+      </div>
+      <div class="place">
+        <h4>🐞 Help and debugging</h4>
+        <p class="hint">If something isn't working, send the app's log. It's a text file of what the app has been doing, with no keys or addresses in its summary.</p>
+        <div class="row"><button type="button" id="debugEmail">✉ Email debug log…</button><a class="btn-link" id="debugDownload" href="/api/debuglog" download>⬇ Download it instead</a></div>
+        <p class="hint" id="debugMsg" style="margin-top:6px"></p>
+      </div>
+      <div class="place">
         <h4>⬆ Updates</h4>
         <div class="where" id="updCur"></div>
         <label class="chk" style="margin:4px 0 8px"><input type="checkbox" id="autoUpd"> Install updates automatically</label>
@@ -794,7 +810,7 @@
     </section>
   </div>
 
-  <div class="set-foot"><button id="cancelHome">Cancel</button><button id="saveHome" class="primary">Save</button></div>
+  <div class="set-foot"><a class="coffee" href="https://buymeacoffee.com/krabbzdev" target="_blank" rel="noopener" title="If Look A Plane! makes you smile, you can buy KrabbzDev a coffee">☕ Buy me a coffee</a><button id="cancelHome">Cancel</button><button id="saveHome" class="primary">Save</button></div>
 </dialog>
 
 <button id="soundLock" type="button" hidden>🔇 Sound is off until you click this page. <b>Click here to turn on the overhead chime and voice</b></button>
@@ -854,6 +870,11 @@ $('uiScale').addEventListener('change', e => {
   map.invalidateSize(); // the map measures its own size, so tell it the page changed
 });
 $('radius').value = radius; $('showAll').checked = showAll;
+
+// ---------- errors on this page go into the app's debug log (Settings > More > Help and debugging) ----------
+function reportError(msg) { try { navigator.sendBeacon('/api/clientlog', String(msg).slice(0, 2000)); } catch (e) {} }
+window.addEventListener('error', e => reportError(`${e.message} at ${(e.filename || '').split('/').pop()}:${e.lineno}:${e.colno}${e.error?.stack ? '\n' + e.error.stack : ''}`));
+window.addEventListener('unhandledrejection', e => reportError('Unhandled: ' + (e.reason?.stack || e.reason)));
 
 // ---------- units: miles and mph, or nautical miles and knots like pilots use (Settings > Display > Units) ----------
 // Everything is worked out in statute miles and knots (what the feed gives); these only change what's shown.
@@ -2847,6 +2868,11 @@ async function openHome(focusHome, firstRun) {
   showWhere('home'); showWhere('office');
   $('faIn').value = cfg.faUser || '';
   $('appWinIn').checked = cfg.appWindow === true;
+  $('lanIn').checked = !!cfg.lanAccess;
+  $('lanUrls').hidden = !cfg.lanUrls?.length;
+  $('lanUrls').innerHTML = cfg.lanUrls?.length ? '📱 On other devices, open: ' + cfg.lanUrls.map(u => `<b>${esc(u)}</b>`).join(' or ') : '';
+  // opened from another device: it can look, but only the PC running the app can change settings
+  if (cfg.thisPc === false) { $('saveHome').disabled = true; $('saveHome').title = 'Settings can only be changed on the PC running the app'; $('debugEmail').disabled = true; }
   $('appWinIn').disabled = !cfg.appBrowser;
   if (!cfg.appBrowser) $('appWinHint').textContent = 'Needs Microsoft Edge or Google Chrome installed on this PC, so the dashboard opens in your normal browser.';
   $('contactIn').value = cfg.contact || '';
@@ -2876,6 +2902,14 @@ $('aisIn').addEventListener('input', () => { aisClear = false; showAis(); });
 $('linesAll').onclick = () => $('cruiseLines').querySelectorAll('input').forEach(c => c.checked = true);
 $('linesNone').onclick = () => $('cruiseLines').querySelectorAll('input').forEach(c => c.checked = false);
 $('aisClear').onclick = () => { $('aisIn').value = ''; aisClear = !!cfg.aisKeySet; showAis(); };
+// Settings > More > Help and debugging: the app gathers its log and opens an email with it attached
+$('debugEmail').onclick = async () => {
+  $('debugMsg').textContent = 'Opening an email…';
+  try {
+    const r = await fetch('/api/debuglog', { method: 'POST' }).then(x => x.json());
+    $('debugMsg').textContent = `An email should open with the log attached. If your mail app can't attach it, the file's folder opens instead: ${r.file}`;
+  } catch (e) { $('debugMsg').textContent = "Couldn't make the log. Use Download it instead."; }
+};
 $('voiceTest').onclick = () => {
   unlockSound();
   const text = fillSay($('sayIn').value || SAY_DEFAULT, k => SAY_TAGS[k][0]);
@@ -2964,6 +2998,7 @@ $('saveHome').onclick = async () => {
     faUser: $('faIn').value.trim(),
     contact: $('contactIn').value.trim(),
     appWindow: $('appWinIn').checked,
+    lanAccess: $('lanIn').checked,
     // all ticked = null, so lines added later are watched too
     cruiseLines: (() => { const boxes = [...$('cruiseLines').querySelectorAll('input')]; return !boxes.length || boxes.every(c => c.checked) ? null : boxes.filter(c => c.checked).map(c => c.value); })(),
     ...($('aisIn').value.trim() ? { aisKey: $('aisIn').value.trim() } : aisClear ? { aisKey: '' } : {}),

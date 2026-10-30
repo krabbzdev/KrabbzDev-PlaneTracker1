@@ -20,6 +20,22 @@ const indexHtml = () => sea ? Buffer.from(sea.getAsset('index.html')) : fs.readF
 let VERSION = { version: '1.0', build: 'dev', date: null };
 try { VERSION = JSON.parse(sea ? Buffer.from(sea.getAsset('version.json')).toString() : fs.readFileSync(path.join(__dirname, 'version.json'), 'utf8')); } catch (e) {}
 
+// ---------- debug log: app.log next to the app (the previous one kept as app.old.log) ----------
+// Everything the app prints, plus errors from the dashboard page, with the time. "Email debug log" (Settings > More,
+// or the tray menu) puts it in one file with the app's details and opens an email with it attached.
+const DEBUG_LOG = path.join(APP_DIR, 'app.log'), DEBUG_LOG_OLD = path.join(APP_DIR, 'app.old.log');
+function debugLog(level, msg) {
+  try {
+    if (fs.existsSync(DEBUG_LOG) && fs.statSync(DEBUG_LOG).size > 1e6) fs.renameSync(DEBUG_LOG, DEBUG_LOG_OLD); // keep it under ~1 MB
+    fs.appendFileSync(DEBUG_LOG, `${new Date().toISOString()} ${level.padEnd(5)} ${String(msg).replace(/\r?\n/g, '\n      ')}\n`);
+  } catch (e) {}
+}
+const consoleLog = console.log.bind(console), consoleError = console.error.bind(console);
+const asText = a => a.map(x => x instanceof Error ? x.stack || x.message : typeof x === 'string' ? x : JSON.stringify(x)).join(' ');
+console.log = (...a) => { consoleLog(...a); debugLog('INFO', asText(a)); };
+console.error = (...a) => { consoleError(...a); debugLog('ERROR', asText(a)); };
+process.on('uncaughtException', e => { debugLog('CRASH', e && e.stack || e); consoleError(e); process.exit(1); });
+
 const PORT = Number(process.env.PORT || 8090);
 // Defaults shown in Settings -> Your accounts until someone changes or clears them there.
 const DEFAULT_FA_USER = 'LoveFamily9999';      // FlightAware feeder whose stats are shown
@@ -949,11 +965,31 @@ function send(res, status, body, type = 'application/json') {
   res.end(body);
 }
 
+let clientLogAt = 0, clientLogCount = 0;
+const isLocalReq = req => /^(::1|127\.|::ffff:127\.)/.test(req.socket.remoteAddress || '');
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
+    // With network access on, other devices can watch but not change anything: settings, favorites, updates,
+    // the debug log and the tray's controls stay with this PC.
+    if (!isLocalReq(req) && (req.method !== 'GET' || /^\/api\/(debuglog|update)/.test(url.pathname)))
+      return send(res, 403, '{"error":"Only the PC running the app can change this"}');
     if (url.pathname === '/' || url.pathname === '/index.html') {
       return send(res, 200, indexHtml(), 'text/html; charset=utf-8');
+    }
+    if (url.pathname === '/api/debuglog') {
+      // ?email=1 (POST): open an email with it attached; otherwise download it
+      if (req.method === 'POST') return send(res, 200, JSON.stringify({ ok: true, file: emailDebugReport() }));
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Disposition': `attachment; filename="LookAPlane-debug-log.txt"` });
+      return res.end(debugReport());
+    }
+    if (url.pathname === '/api/clientlog' && req.method === 'POST') {
+      // errors from the dashboard page, for the debug log (at most a few a minute)
+      if ((clientLogCount = Date.now() - clientLogAt > 60000 ? 0 : clientLogCount + 1) < 10) {
+        if (!clientLogCount) clientLogAt = Date.now();
+        debugLog('PAGE', String(await readBody(req)).slice(0, 2000));
+      }
+      return send(res, 200, '{"ok":true}');
     }
     if (url.pathname === '/api/aircraft') {
       if (!latest || Date.now() - latest.at > 5000) await refreshAircraft();
@@ -1022,6 +1058,7 @@ const server = http.createServer(async (req, res) => {
         }
         if ('aisKey' in b) { settings.aisKey = String(b.aisKey || '').trim().slice(0, 100); setTimeout(watchConnect, 2000); }
         if ('appWindow' in b) settings.appWindow = !!b.appWindow;
+        if ('lanAccess' in b && !!b.lanAccess !== !!settings.lanAccess) { settings.lanAccess = !!b.lanAccess; setTimeout(relisten, 500); }
         fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 1));
         aisRefresh();
         latest = null; // next page poll fetches for the new location
@@ -1033,7 +1070,8 @@ const server = http.createServer(async (req, res) => {
         faUser: faUser(), contact: contactSetting() || '',
         cruiseLines: Array.isArray(settings.cruiseLines) ? settings.cruiseLines : null,
         cruiseLineOptions: CRUISE_BRANDS.filter(x => x[3]).map(x => x[1]), // lines with a fleet list to watch
-        aisKeySet: !!aisKey(), aisKeyHint: aisKey() ? '••••' + aisKey().slice(-4) : '',
+        aisKeySet: !!aisKey(), aisKeyHint: aisKey() && isLocalReq(req) ? '••••' + aisKey().slice(-4) : '',
+        lanAccess: !!settings.lanAccess, lanUrls: lanUrls(), thisPc: isLocalReq(req),
         appWindow: settings.appWindow === true, appBrowser: process.platform === 'win32' && !!appBrowser(),
       }));
     }
@@ -1564,18 +1602,85 @@ function startTray(tries = 0) {
   } catch (e) { console.log('Tray icon unavailable: ' + e.message); }
 }
 
+// ---------- the debug report: app details + both logs in one file, attached to an email ----------
+function debugReport() {
+  const os = require('os'), yes = v => v ? 'yes' : 'no';
+  const lines = [
+    `Krabbz9999 - Look A Plane! ${VERSION.version} build ${VERSION.build} (${VERSION.date || 'from source'})`,
+    `Windows ${os.release()} ${os.arch()} · Node ${process.versions.node} · ${sea ? 'installed .exe' : 'running from source'} · up ${Math.round(process.uptime() / 60)} min`,
+    `Saved ${new Date().toString()}`,
+    '',
+    // settings in outline only: no addresses, usernames or keys
+    `Home set: ${yes(settings.home)} · office: ${yes(settings.office)} · ship key: ${yes(aisKey())} · auto-update: ${yes(autoUpdate())} · network access: ${yes(settings.lanAccess)} · own window: ${yes(settings.appWindow)} · favorites: ${(settings.favorites || []).length}`,
+    `Aircraft feed: ${latest ? `${Math.round((Date.now() - latest.at) / 1000)} s old` : 'none yet'} · ships: ${ais.status}${ais.error ? ' (' + ais.error + ')' : ''}, ${ships.size} known · cruise watch: ${watchSet.size} watched`,
+    `Update check: ${JSON.stringify(updateState).slice(0, 300)}`,
+  ];
+  for (const f of [DEBUG_LOG_OLD, DEBUG_LOG]) {
+    lines.push('', `===== ${path.basename(f)} =====`);
+    try { lines.push(fs.readFileSync(f, 'utf8')); } catch (e) { lines.push('(none)'); }
+  }
+  return lines.join('\n');
+}
+function writeDebugReport() {
+  const d = new Date(), stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
+  const file = path.join(require('os').tmpdir(), `LookAPlane-debug-log-${stamp}.txt`);
+  fs.writeFileSync(file, debugReport());
+  return file;
+}
+// Opens a new email with the report attached. The tray helper does the attaching (Windows' Simple MAPI, like the
+// BusyLightz app); if it can't (no helper, or a mail app like the new Outlook that doesn't take attachments that way)
+// it shows the file in its folder and starts an email to drag it into.
+function emailDebugReport() {
+  const file = writeDebugReport(), subject = `Look A Plane! debug log (build ${VERSION.build})`;
+  const cp = require('child_process');
+  if (process.platform === 'win32' && fs.existsSync(TRAY_EXE)) {
+    cp.spawn(TRAY_EXE, ['--email', file, subject], { detached: true, stdio: 'ignore' }).unref();
+  } else if (process.platform === 'win32') {
+    cp.spawn('explorer.exe', ['/select,', file], { detached: true, stdio: 'ignore' }).unref();
+    cp.exec(`start "" "mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent('Please attach the log file from the folder that just opened:\r\n' + file)}"`);
+  }
+  console.log('Debug log emailed from ' + file);
+  return file;
+}
+
+// ---------- listening: this PC only, or (Settings > More > Network) other devices on the home network too ----------
+const lanHost = () => settings.lanAccess ? '0.0.0.0' : '127.0.0.1';
+function lanUrls() {
+  if (!settings.lanAccess) return [];
+  return Object.values(require('os').networkInterfaces()).flat()
+    .filter(n => n && n.family === 'IPv4' && !n.internal && !/^169\.254\./.test(n.address)).map(n => `http://${n.address}:${PORT}`);
+}
+// switch between the two without restarting the app
+let relistening = 0;
+function relisten() {
+  relistening = 1;
+  server.close();
+  if (server.closeAllConnections) server.closeAllConnections();
+  setTimeout(() => server.listen(PORT, lanHost(), () => {
+    relistening = 0;
+    console.log(settings.lanAccess ? 'Network access on: ' + lanUrls().join(', ') : 'Network access off: this PC only');
+  }), 300);
+}
+
 let listenTries = 0;
 server.on('error', e => {
+  // switching network access: the port may take a moment to free up, so keep trying (never quit over it)
+  if (relistening) {
+    console.log('Network access switch: ' + e.message + (relistening < 10 ? ', trying again' : ''));
+    if (relistening++ < 10) return setTimeout(() => server.listen(PORT, lanHost()), 1000);
+    relistening = 0; settings.lanAccess = false; return setTimeout(() => server.listen(PORT, lanHost()), 1000);
+  }
   if (e.code !== 'EADDRINUSE') throw e;
   // just updated: the old copy may still be letting go of the port, so wait for it
-  if (process.env.FT_RESTART && ++listenTries < 20) return setTimeout(() => server.listen(PORT, HOST), 1000);
+  if (process.env.FT_RESTART && ++listenTries < 20) return setTimeout(() => server.listen(PORT, lanHost()), 1000);
   // already running (e.g. double-clicked twice): just open the existing dashboard
   console.log('Already running - opening it in your browser.'); if (sea) openBrowser(); setTimeout(() => process.exit(0), 1500);
 });
-// Only this PC can open the dashboard (no other devices on the network, and no Windows Firewall prompt)
-const HOST = '127.0.0.1';
-server.listen(PORT, HOST, () => {
+let started = false;
+server.listen(PORT, lanHost(), () => {
+  if (started) return;
+  started = true;
   aisConnect();
-  console.log(`Krabbz9999 - Look A Plane! v${VERSION.version} build ${VERSION.build} running at http://localhost:${PORT}`);
+  console.log(`Krabbz9999 - Look A Plane! v${VERSION.version} build ${VERSION.build} running at http://localhost:${PORT}${settings.lanAccess ? ' and ' + lanUrls().join(', ') : ''}`);
   if (sea) { console.log('To stop it, close this window or right-click the plane icon in the system tray and choose Quit.'); openBrowser(); startTray(); }
 });

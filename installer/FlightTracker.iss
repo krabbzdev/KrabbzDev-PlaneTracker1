@@ -76,6 +76,8 @@ Type: files; Name: "{app}\{#AppExe}.new"
 Type: files; Name: "{app}\airports-cache.json"
 Type: files; Name: "{app}\aircraft-types-cache.json"
 Type: files; Name: "{app}\airport-details-cache.json"
+Type: files; Name: "{app}\app.log"
+Type: files; Name: "{app}\app.old.log"
 ; the dashboard window's own browser profile (cache and page settings)
 Type: filesandordirs; Name: "{app}\browser-window"
 Type: files; Name: "{app}\cruise-fleet.json"
