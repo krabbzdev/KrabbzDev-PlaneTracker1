@@ -27,8 +27,12 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force build | Out-Null
           # The tray icon helper (tray/Tray.cs), bundled inside the .exe; csc ships with Windows (.NET Framework 4)
-          & "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe" -nologo -target:winexe -optimize+ -out:build\Krabbz9999-FlightTracker-Tray.exe tray\Tray.cs
+          & "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe" -nologo -target:winexe -optimize+ -r:System.Web.Extensions.dll -out:build\Krabbz9999-FlightTracker-Tray.exe tray\Tray.cs
           if ($LASTEXITCODE) { throw 'Tray helper failed to compile' }
+          # the build code (the commit this was built from), shown beside the build number in the app
+          $v = Get-Content version.json -Raw | ConvertFrom-Json
+          $v | Add-Member -NotePropertyName commit -NotePropertyValue $env:GITHUB_SHA.Substring(0, 7) -Force
+          $v | ConvertTo-Json -Compress | Set-Content version.json -Encoding utf8NoBOM
           node --experimental-sea-config sea-config.json
           Copy-Item (Get-Command node).Source Krabbz9999-FlightTracker.exe
           # The copy still carries Node.js's own signature; remove it before the app is injected
@@ -43,7 +47,8 @@ jobs:
           $v = Get-Content version.json -Raw | ConvertFrom-Json
           $iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
           if (-not $iscc) { choco install innosetup -y --no-progress | Out-Null; $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
-          & $iscc /Q "/DAppVersion=$($v.version).$($v.build)" installer\FlightTracker.iss
+          $build = if ($v.patch) { "$($v.build).$($v.patch)" } else { "$($v.build)" } # 67, or 67.2 for a day's later builds
+          & $iscc /Q "/DAppVersion=$($v.version).$build" installer\FlightTracker.iss
           if ($LASTEXITCODE) { throw 'Installer build failed' }
 
       - name: Publish the release
@@ -53,6 +58,7 @@ jobs:
         run: |
           $v = Get-Content version.json -Raw | ConvertFrom-Json
           $notes = (git tag -l --format='%(contents)' $env:GITHUB_REF_NAME) -join "`n"
-          if (-not $notes.Trim()) { $notes = "Build $($v.build)" }
+          $build = if ($v.patch) { "$($v.build).$($v.patch)" } else { "$($v.build)" }
+          if (-not $notes.Trim()) { $notes = "Build $build" }
           # the installer is what people download; the plain .exe is what installed copies update themselves from
-          gh release create $env:GITHUB_REF_NAME dist\Krabbz9999-FlightTracker-Setup.exe Krabbz9999-FlightTracker.exe --title "Krabbz9999 - Look A Plane! $($v.version) build $($v.build)" --notes "$notes"
+          gh release create $env:GITHUB_REF_NAME dist\Krabbz9999-FlightTracker-Setup.exe Krabbz9999-FlightTracker.exe --title "Krabbz9999 - Look A Plane! $($v.version) build $build" --notes "$notes"

@@ -20,6 +20,13 @@ const indexHtml = () => sea ? Buffer.from(sea.getAsset('index.html')) : fs.readF
 let VERSION = { version: '1.0', build: 'dev', date: null };
 try { VERSION = JSON.parse(sea ? Buffer.from(sea.getAsset('version.json')).toString() : fs.readFileSync(path.join(__dirname, 'version.json'), 'utf8')); } catch (e) {}
 
+// builds go by day: 67 for the day's first release, then 67.1, 67.2... (release.cmd); shown and compared as "67.2"
+if (VERSION.patch) VERSION.build = `${VERSION.build}.${VERSION.patch}`;
+// the build code: the commit it was built from (stamped in by GitHub's build; from git when running from source)
+if (!VERSION.commit && !sea) {
+  try { VERSION.commit = require('child_process').execSync('git rev-parse --short=7 HEAD', { cwd: __dirname, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch (e) {}
+}
+
 // ---------- debug log: app.log next to the app (the previous one kept as app.old.log) ----------
 // Everything the app prints, plus errors from the dashboard page, with the time. "Email debug log" (Settings > More,
 // or the tray menu) puts it in one file with the app's details and opens an email with it attached.
@@ -983,6 +990,41 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Disposition': `attachment; filename="LookAPlane-debug-log.txt"` });
       return res.end(debugReport());
     }
+    if (url.pathname === '/api/prefs') {
+      if (req.method === 'POST') { // the dashboard's list of settings
+        const list = JSON.parse(await readBody(req) || '[]');
+        if (Array.isArray(list)) {
+          settings.pagePrefs = list.slice(0, 200).filter(p => p && /^[A-Za-z0-9_-]{1,40}$/.test(p.key)).map(p => ({
+            key: p.key, label: String(p.label || p.key).slice(0, 60), group: String(p.group || 'Settings').slice(0, 30), type: p.type,
+            options: Array.isArray(p.options) ? p.options.slice(0, 60).map(o => [String(o[0]).slice(0, 80), String(o[1]).slice(0, 80)]) : undefined,
+            min: p.min, max: p.max, step: p.step, unit: String(p.unit || '').slice(0, 6), scale: +p.scale || 1, value: p.value }));
+          fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 1));
+        }
+        return send(res, 200, '{"ok":true}');
+      }
+      return send(res, 200, JSON.stringify({ prefs: [...(settings.pagePrefs || []), ...appPrefs()] }));
+    }
+    if (url.pathname === '/api/reset' && req.method === 'POST') {
+      // Settings > More > Reset settings to default: every option back to how a fresh install starts. Home, office,
+      // accounts, the ship key, cruise lines and favorites are kept unless "everything" is asked for.
+      const b = JSON.parse(await readBody(req) || '{}');
+      const keep = b.everything ? [] : ['home', 'homeLabel', 'homeName', 'office', 'faUser', 'contact', 'aisKey', 'cruiseLines', 'favorites'];
+      const wasLan = !!settings.lanAccess;
+      settings = Object.fromEntries(Object.entries(settings).filter(([k]) => keep.includes(k)));
+      fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 1));
+      console.log('Settings reset to default' + (b.everything ? ', including home, accounts and favorites' : ''));
+      if (wasLan) setTimeout(relisten, 500);
+      if (b.everything) { setTimeout(aisRefresh, 500); setTimeout(watchConnect, 1000); }
+      return send(res, 200, '{"ok":true}');
+    }
+    if (url.pathname === '/api/prefs/set' && req.method === 'POST') { // picked in the tray menu
+      const b = JSON.parse(await readBody(req) || '{}');
+      return send(res, setPref(String(b.key || ''), b.value) ? 200 : 400, '{"ok":true}');
+    }
+    if (url.pathname === '/api/prefs/changes') {
+      const since = Number(url.searchParams.get('since'));
+      return send(res, 200, JSON.stringify({ seq: prefSeq, now: Date.now(), changes: trayChanges.filter(c => since < 0 || c.seq > since || since > prefSeq) }));
+    }
     if (url.pathname === '/api/clientlog' && req.method === 'POST') {
       // errors from the dashboard page, for the debug log (at most a few a minute)
       if ((clientLogCount = Date.now() - clientLogAt > 60000 ? 0 : clientLogCount + 1) < 10) {
@@ -1072,6 +1114,7 @@ const server = http.createServer(async (req, res) => {
         cruiseLineOptions: CRUISE_BRANDS.filter(x => x[3]).map(x => x[1]), // lines with a fleet list to watch
         aisKeySet: !!aisKey(), aisKeyHint: aisKey() && isLocalReq(req) ? '••••' + aisKey().slice(-4) : '',
         lanAccess: !!settings.lanAccess, lanUrls: lanUrls(), thisPc: isLocalReq(req),
+        localUrl: `http://localhost:${PORT}`, networkUrls: isLocalReq(req) ? networkUrls() : [],
         appWindow: settings.appWindow === true, appBrowser: process.platform === 'win32' && !!appBrowser(),
       }));
     }
@@ -1519,7 +1562,10 @@ setTimeout(() => { loadAirports().catch(() => {}); loadAirportDetails().catch(e 
 const REPO = VERSION.repo || 'krabbzdev/KrabbzDev-PlaneTracker1';
 const EXE_NAME = 'Krabbz9999-FlightTracker.exe';
 let updateState = { checkedAt: null, latest: null, available: false, status: 'idle', error: null };
-const buildOf = tag => { const m = String(tag || '').match(/(\d+)\s*$/); return m ? +m[1] : 0; };
+// "v1.0.67.2" -> "67.2", "v1.0.67" -> 67
+const buildOf = tag => { const m = String(tag || '').trim().match(/^v?\d+\.\d+\.(\d+)(?:\.(\d+))?$/); return !m ? 0 : m[2] ? `${m[1]}.${m[2]}` : +m[1]; };
+// for comparing: 67.2 -> 67.002, so 67.10 comes after 67.9
+const buildNum = b => { const [whole, part] = String(b).split('.'); return (+whole || 0) + (+part || 0) / 1000; };
 
 async function checkForUpdate() {
   try {
@@ -1531,7 +1577,7 @@ async function checkForUpdate() {
     const latest = buildOf(rel.tag_name);
     updateState = { ...updateState, checkedAt: Date.now(), error: null,
       latest: { build: latest, tag: rel.tag_name, url: rel.html_url, notes: (rel.body || '').slice(0, 2000) },
-      available: !!asset && latest > +VERSION.build };
+      available: !!asset && buildNum(latest) > buildNum(VERSION.build) };
     return { rel, asset };
   } catch (e) {
     updateState = { ...updateState, checkedAt: Date.now(), error: e.message };
@@ -1643,12 +1689,51 @@ function emailDebugReport() {
   return file;
 }
 
+// ---------- settings for the tray icon's Settings menu ----------
+// The dashboard sends its list of settings (anything marked data-pref on the page) with their current values; the
+// tray reads the list to build its menu and sends back what's picked; open dashboards apply those changes. The
+// app's own settings (updates, network access, own window) are listed and changed here directly. The page's list
+// is kept in settings.json so the tray menu is complete even before a dashboard has been opened.
+let prefSeq = 0;
+const trayChanges = []; // { seq, at, key, value }: the last 100 changes picked in the tray
+const appPrefs = () => [
+  { key: 'app:autoUpdate', label: 'Install updates automatically', group: 'App', type: 'bool', value: autoUpdate() },
+  { key: 'app:lanAccess', label: 'Network access (other devices can watch)', group: 'App', type: 'bool', value: !!settings.lanAccess },
+  { key: 'app:appWindow', label: 'Open in its own window', group: 'App', type: 'bool', value: settings.appWindow === true },
+];
+function setPref(key, value) {
+  if (key.startsWith('app:')) {
+    const k = key.slice(4), on = !!value;
+    if (!['autoUpdate', 'lanAccess', 'appWindow'].includes(k)) return false;
+    const was = !!settings[k];
+    settings[k] = on;
+    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 1));
+    if (k === 'lanAccess' && was !== on) setTimeout(relisten, 500);
+    console.log(`Tray: ${k} ${on ? 'on' : 'off'}`);
+    return true;
+  }
+  const p = (settings.pagePrefs || []).find(x => x.key === key);
+  if (!p) return false;
+  p.value = value;
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 1));
+  trayChanges.push({ seq: ++prefSeq, at: Date.now(), key, value });
+  if (trayChanges.length > 100) trayChanges.shift();
+  return true;
+}
+
 // ---------- listening: this PC only, or (Settings > More > Network) other devices on the home network too ----------
 const lanHost = () => settings.lanAccess ? '0.0.0.0' : '127.0.0.1';
-function lanUrls() {
-  if (!settings.lanAccess) return [];
-  return Object.values(require('os').networkInterfaces()).flat()
-    .filter(n => n && n.family === 'IPv4' && !n.internal && !/^169\.254\./.test(n.address)).map(n => `http://${n.address}:${PORT}`);
+// the addresses other devices are let in at (none while network access is off)
+const lanUrls = () => settings.lanAccess ? networkUrls() : [];
+// this PC's addresses on its networks, whether or not network access is on
+function networkUrls() {
+  // real network adapters only: not VPN tunnels (a single-address network, 255.255.255.255) or virtual
+  // adapters for virtual machines and WSL, which other devices on the home network can't reach
+  return Object.entries(require('os').networkInterfaces())
+    .filter(([name]) => !/vEthernet|WSL|Hyper-V|VirtualBox|VMware|Loopback/i.test(name))
+    .flatMap(([, list]) => list)
+    .filter(n => n && n.family === 'IPv4' && !n.internal && n.netmask !== '255.255.255.255' && !/^169\.254\./.test(n.address))
+    .map(n => `http://${n.address}:${PORT}`);
 }
 // switch between the two without restarting the app
 let relistening = 0;

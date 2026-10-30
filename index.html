@@ -46,12 +46,17 @@
   .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; letter-spacing: .2px; }
   .brand svg { color: var(--accent); }
   .live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .lan-addr { font: 12px var(--mono); color: var(--muted); white-space: nowrap; }
+  .lan-addr a { color: var(--accent); text-decoration: none; }
+  .lan-addr a:hover { text-decoration: underline; }
+  .lan-addr.off { opacity: .75; }
+  .lan-addr small { font: 11px Inter, sans-serif; }
   .live i { width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 0 rgba(82,211,155,.6); animation: pulse 2s infinite; }
   .live.off i { background: var(--hot); animation: none; }
   @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(82,211,155,.6); } 70% { box-shadow: 0 0 0 8px rgba(82,211,155,0); } 100% { box-shadow: 0 0 0 0 rgba(82,211,155,0); } }
   .spacer { flex: 1; }
   .ctl { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
-  /* 🗺 Map layers: the map options in a drop-down from the top bar */
+  /* 🗺 Map Options: the map options in a drop-down from the top bar */
   .layers-menu { position: relative; }
   .layers-menu > summary { list-style: none; cursor: pointer; font-size: 13px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 11px; user-select: none; white-space: nowrap; }
   .layers-menu > summary::-webkit-details-marker { display: none; }
@@ -80,9 +85,12 @@
   .leaflet-marker-icon.measure-label { background: rgba(18,26,48,.95); color: var(--text); border: 1px solid #ffd27a; border-radius: 8px; padding: 5px 9px; font: 12px Inter, sans-serif; line-height: 1.35; box-shadow: 0 2px 10px rgba(0,0,0,.6); }
   .leaflet-marker-icon.measure-hint { background: rgba(18,26,48,.9); color: #ffd27a; border-radius: 8px; padding: 4px 9px; font: 600 12px Inter, sans-serif; white-space: nowrap; }
   .measure-label small { color: var(--muted); }
+  .leaflet-control.zoom-pct.chart-over { color: #ffb547; }
+  .leaflet-control.zoom-pct.chart-over::after { content: ' ⚠'; }
   .chart-sel { font: 13px Inter, sans-serif; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px; cursor: pointer; }
 
-  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 14px 20px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; padding: 14px 20px; }
+  .stat .v.small { font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-top: 4px; }
   .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
   .stat .k { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
   .stat .v { font-size: 26px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -101,8 +109,25 @@
   #atc { grid-area: atc; }
   #ships { grid-area: ships; }
   #detail { grid-area: detail; }
-  #list { grid-area: list; }
-  #stats, #today, #atc, #ships { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+  /* left column: the aircraft list, with favorites under it */
+  .left-col { grid-area: list; display: flex; flex-direction: column; gap: 12px; min-height: 0; position: relative; }
+  .left-col #favs { flex: none; max-height: 40%; overflow-y: auto; }
+  /* ◀ ▶ hide a side column to give the map more room; the column shrinks to a thin strip with the button */
+  .col-toggle { position: absolute; top: 6px; z-index: 5; width: 22px; height: 22px; padding: 0; border-radius: 6px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font-size: 11px; cursor: pointer; line-height: 1; }
+  .col-toggle:hover { color: var(--text); border-color: var(--accent); }
+  #leftToggle { right: 8px; }
+  #rightToggle { left: auto; right: 8px; }
+  aside { position: relative; }
+  body.hide-left main { grid-template-columns: 30px minmax(0, 1fr) 380px; }
+  body.hide-right main { grid-template-columns: 380px minmax(0, 1fr) 30px; }
+  body.hide-left.hide-right main { grid-template-columns: 30px minmax(0, 1fr) 30px; }
+  body.hide-left .left-col > :not(#leftToggle), body.hide-right aside > :not(#rightToggle) { display: none; }
+  @media (max-width: 1250px) { /* narrower windows: the right column sits under the map, so only the left one changes width */
+    body.hide-right main { grid-template-columns: 360px minmax(0, 1fr); }
+    body.hide-left main, body.hide-left.hide-right main { grid-template-columns: 30px minmax(0, 1fr); }
+  }
+  body.hide-left #leftToggle, body.hide-right #rightToggle { position: static; width: 30px; height: 100%; min-height: 120px; border-radius: 10px; writing-mode: vertical-rl; font-size: 12px; }
+  #stats, #today, #atc, #ships, #favs { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
   #stats[open], #today[open], #atc[open], #ships[open] { padding-bottom: 14px; }
   .st-h { display: flex; align-items: center; gap: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); cursor: pointer; list-style: none; user-select: none; }
   .st-h::-webkit-details-marker { display: none; }
@@ -329,6 +354,32 @@
   .set-foot .coffee:hover { filter: brightness(1.08); }
   a.btn-link { align-self: center; font-size: 12.5px; color: var(--accent); }
   #debugMsg:empty { display: none; }
+  /* 💡 feedback pill and form */
+  body { padding-bottom: 52px; } /* room under the page for the pill */
+  .fb-pill { position: fixed; left: 16px; bottom: 12px; z-index: 1800; display: inline-flex; align-items: center; gap: 8px; padding: 9px 15px; border: 0; border-radius: 999px; background: #3d7be0; color: #fff; font: 600 13px Inter, sans-serif; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+  .fb-pill:hover { background: #4d8af0; }
+  .fb-panel { position: fixed; left: 16px; bottom: 60px; z-index: 1800; width: min(360px, calc(100vw - 32px)); padding: 16px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 14px 40px rgba(0,0,0,.65); font: 13px/1.45 Inter, sans-serif; }
+  .fb-panel[hidden] { display: none; }
+  .fb-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .fb-head b { font-size: 14.5px; }
+  .fb-head button { background: none; border: 0; color: var(--muted); font-size: 15px; cursor: pointer; padding: 2px 4px; }
+  .fb-head button:hover { color: var(--text); }
+  .fb-sub { margin: 6px 0 12px; color: var(--muted); font-size: 12px; }
+  .fb-tabs { display: inline-flex; padding: 3px; gap: 2px; background: var(--bg); border-radius: 9px; border: 1px solid var(--line); }
+  .fb-tabs button { padding: 6px 14px; border: 0; border-radius: 7px; background: none; color: var(--muted); font: 600 12.5px Inter, sans-serif; cursor: pointer; }
+  .fb-tabs button.on { background: var(--panel-2); color: var(--text); }
+  .fb-lbl { display: block; margin: 12px 0 6px; font-size: 12.5px; }
+  #fbText { width: 100%; box-sizing: border-box; resize: vertical; min-height: 96px; padding: 9px 10px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 10px; font: 13px/1.45 Inter, sans-serif; }
+  #fbText:focus { outline: none; border-color: #3d7be0; box-shadow: 0 0 0 2px rgba(61,123,224,.3); }
+  .fb-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .fb-note { flex: 1; color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+  .fb-send { padding: 8px 20px; border: 0; border-radius: 9px; background: #3d7be0; color: #fff; font: 600 13px Inter, sans-serif; cursor: pointer; }
+  .fb-send:disabled { opacity: .45; cursor: default; }
+  .fb-secondary { padding: 8px 11px; border: 1px solid var(--line); border-radius: 9px; background: none; color: var(--text); font: 600 12px Inter, sans-serif; cursor: pointer; }
+  .fb-secondary:disabled { opacity: .45; cursor: default; }
+  @media (max-width: 700px) { .fb-pill-txt { display: none; } .fb-pill { padding: 11px; } }
+  .reset-box { margin-top: 10px; padding: 10px 12px; border: 1px solid #ff5d73; border-radius: 10px; background: rgba(255,93,115,.08); font-size: 12.5px; line-height: 1.45; }
+  button.danger { background: #ff5d73; color: #0b1020; border-color: #ff5d73; font-weight: 600; }
   dialog.set-dlg button.primary { background: var(--accent); color: #06121f; border-color: var(--accent); font-weight: 700; }
   dialog.set-dlg .acts.left { justify-content: flex-start; margin: 4px 0 10px; }
   dialog.set-dlg .row { display: flex; gap: 8px; }
@@ -577,35 +628,36 @@
     Krabbz9999 - Look A Plane!
   </div>
   <span class="live" id="live"><i></i><span id="liveTxt">Connecting…</span></span>
+  <span class="lan-addr" id="lanAddr" hidden title="Network access is on (Settings → More → Network): other devices on your network can open the dashboard at these addresses"></span>
   <div class="spacer"></div>
-  <div class="ctl">Tracker Radius <input type="range" id="radius" min="1" max="25" step="1" value="20"><b id="radiusVal">20 mi</b></div>
+  <div class="ctl">Tracker Radius <input type="range" id="radius" data-pref="Tracker radius" data-pref-group="Map" data-pref-unit=" mi" min="1" max="25" step="1" value="21"><b id="radiusVal">18 nm</b></div>
   <details class="layers-menu" id="layersMenu">
-    <summary title="Choose what the map shows">🗺 Map layers <span class="lm-count" id="layersCount"></span></summary>
+    <summary title="Choose what the map shows">🗺 Map Options <span class="lm-count" id="layersCount"></span></summary>
     <div class="layers-pop">
       <h5>Show on the map</h5>
-      <label class="chk"><input type="checkbox" id="showAll"> Show outside radius</label>
-      <label class="chk"><input type="checkbox" id="showApts" checked> Show Airports</label>
-      <label class="chk" title="A dot at each airport's weather station, coloured by flying conditions: green good, blue marginal, red poor, purple very poor"><input type="checkbox" id="metarOn" checked> ⛅ Airport Weather</label>
-      <label class="chk" title="The FAA's temporary flight restrictions (VIP visits, stadiums, fires...) as red areas"><input type="checkbox" id="tfrOn" checked> ⛔ TFRs</label>
-      <label class="chk" title="Shade the part of the map where it's night right now"><input type="checkbox" id="nightOn" checked> 🌙 Day/Night</label>
-      <label class="chk" title="Live rain radar on the map (US, refreshes every 5 minutes)"><input type="checkbox" id="wxOn" checked> 🌧 Show Weather</label>
-      <label class="chk" title="Cruise ships and other boats, live (needs a free AISStream.io key in Settings)"><input type="checkbox" id="shipsOn" checked> 🚢 Show Ships</label>
+      <label class="chk"><input type="checkbox" id="showAll" data-pref="Show outside radius" data-pref-group="Map options"> Show outside radius</label>
+      <label class="chk"><input type="checkbox" id="showApts" data-pref="Airports" data-pref-group="Map options" checked> Show Airports</label>
+      <label class="chk" title="A dot at each airport's weather station, coloured by flying conditions: green good, blue marginal, red poor, purple very poor"><input type="checkbox" id="metarOn" data-pref="Airport weather" data-pref-group="Map options"> ⛅ Airport Weather</label>
+      <label class="chk" title="The FAA's temporary flight restrictions (VIP visits, stadiums, fires...) as red areas"><input type="checkbox" id="tfrOn" data-pref="TFRs" data-pref-group="Map options"> ⛔ TFRs</label>
+      <label class="chk" title="Shade the part of the map where it's night right now"><input type="checkbox" id="nightOn" data-pref="Day/Night" data-pref-group="Map options"> 🌙 Day/Night</label>
+      <label class="chk" title="Live rain radar on the map (US, refreshes every 5 minutes)"><input type="checkbox" id="wxOn" data-pref="Weather radar" data-pref-group="Map options"> 🌧 Show Weather</label>
+      <label class="chk" title="Cruise ships and other boats, live (needs a free AISStream.io key in Settings)"><input type="checkbox" id="shipsOn" data-pref="Ships" data-pref-group="Map options"> 🚢 Show Ships</label>
       <h5>Look</h5>
       <label class="chk" title="How the map looks"><span>🌍 Map</span>
-        <select id="mapStyleSel" class="chart-sel" aria-label="Map style">
+        <select id="mapStyleSel" data-pref="Map style" data-pref-group="Map" class="chart-sel" aria-label="Map style">
           <option value="dark">Dark</option><option value="light">Light</option><option value="streets">Streets</option>
           <option value="topo">Topographic</option><option value="satellite">Satellite</option>
         </select></label>
       <label class="chk" title="FAA aeronautical charts under the map (US). Not for navigation."><span>🗺 Chart</span>
-        <select id="chartSel" class="chart-sel" aria-label="Aeronautical chart">
+        <select id="chartSel" data-pref="Aeronautical chart" data-pref-group="Map" class="chart-sel" aria-label="Aeronautical chart">
           <option value="">None</option><option value="sectional">VFR Sectional</option><option value="terminal">VFR Terminal Area</option>
           <option value="ifrlow">IFR Low Enroute</option><option value="ifrhigh">IFR High Enroute</option>
         </select></label>
     </div>
   </details>
-  <label class="chk" title="Take over the screen with a close-up when a plane passes inside the overhead circle (size in Settings, Alerts)"><input type="checkbox" id="takeoverOn" checked> Overhead Plane Alert</label>
-  <label class="chk" title="Chime and spoken announcement when a plane is overhead"><input type="checkbox" id="soundOn" checked> 🔔 Sound</label>
-  <label class="chk vol" title="Volume of the chime and the voice"><span aria-hidden="true">🔉</span><input type="range" id="volIn" min="0" max="1" step="0.05" aria-label="Volume"><b id="volVal"></b></label>
+  <label class="chk" title="Take over the screen with a close-up when a plane passes inside the overhead circle (size in Settings, Alerts)"><input type="checkbox" id="takeoverOn" data-pref="Overhead Plane Alert" data-pref-group="Alerts and sound" checked> Overhead Plane Alert</label>
+  <label class="chk" title="Chime and spoken announcement when a plane is overhead"><input type="checkbox" id="soundOn" data-pref="Sound" data-pref-group="Alerts and sound" checked> 🔔 Sound</label>
+  <label class="chk vol" title="Volume of the chime and the voice"><span aria-hidden="true">🔉</span><input type="range" id="volIn" data-pref="Volume" data-pref-group="Alerts and sound" data-pref-scale="100" data-pref-unit="%" min="0" max="1" step="0.05" aria-label="Volume"><b id="volVal"></b></label>
   <button id="homeBtn">⚙ Settings</button>
 </header>
 
@@ -619,37 +671,41 @@
   <div class="stat"><div class="k">Closest</div><div class="v" id="sClose">–</div><div class="s" id="sCloseSub">&nbsp;</div></div>
   <div class="stat"><div class="k">Lowest</div><div class="v" id="sLow">–</div><div class="s" id="sLowSub">&nbsp;</div></div>
   <div class="stat"><div class="k">Fastest</div><div class="v" id="sFast">–</div><div class="s" id="sFastSub">&nbsp;</div></div>
+  <div class="stat"><div class="k">Aircraft today</div><div class="v" id="tdUnique">–</div><div class="s" id="tdYest">&nbsp;</div></div>
+  <div class="stat"><div class="k">Military today</div><div class="v" id="tdMil">–</div><div class="s">&nbsp;</div></div>
+  <div class="stat"><div class="k">Busiest hour</div><div class="v" id="tdBusy">–</div><div class="s" id="tdBusySub">&nbsp;</div></div>
+  <div class="stat"><div class="k">Top type today</div><div class="v small" id="tdTopType">–</div><div class="s" id="tdTopTypeSub">&nbsp;</div></div>
+  <div class="stat"><div class="k">Fastest today</div><div class="v" id="tdFastest">–</div><div class="s" id="tdFastestSub">&nbsp;</div></div>
 </section>
 
 <div class="banner" id="banner"></div>
 
 <main>
-  <div id="list"><div class="list-h" id="listH">Aircraft nearby</div><div id="cards"></div></div>
+  <div class="left-col" id="leftCol">
+    <button type="button" class="col-toggle" id="leftToggle" title="Hide this column (more room for the map)" aria-label="Hide the left column">◀</button>
+    <div id="list"><div class="list-h" id="listH">Aircraft nearby</div><div id="cards"></div></div>
+    <details id="favs" open>
+      <summary class="st-h"><span class="chev">▸</span>⭐ Favorite planes<span class="st-sum" id="favSum"></span></summary>
+      <form id="favForm" class="fav-add" autocomplete="off"><input id="favIn" placeholder="Add a tail number, e.g. N1932K" aria-label="Tail number to add to favorites"><button>⭐ Add</button></form>
+      <div class="fav-msg" id="favMsg"></div>
+      <div id="favList"></div>
+    </details>
+  </div>
   <div id="map"></div>
-  <aside>
+  <aside id="rightCol">
+    <button type="button" class="col-toggle" id="rightToggle" title="Hide this column (more room for the map)" aria-label="Hide the right column">▶</button>
     <details id="stats">
       <summary class="st-h"><span class="chev">▸</span><span class="live" id="stLive"><i></i></span>FlightAware feeder stats<span class="st-sum" id="stSum"></span></summary>
       <div id="faSec"></div>
     </details>
     <details id="today" open>
       <summary class="st-h"><span class="chev">▸</span>📊 Today's log<span class="st-sum" id="tdSum"></span></summary>
-      <div class="td-tiles">
-        <div><div class="k">Aircraft today</div><div class="v" id="tdUnique">–</div><div class="s" id="tdYest">&nbsp;</div></div>
-        <div><div class="k">Military</div><div class="v" id="tdMil">–</div><div class="s">&nbsp;</div></div>
-        <div><div class="k">Busiest hour</div><div class="v" id="tdBusy">–</div><div class="s" id="tdBusySub">&nbsp;</div></div>
-      </div>
       <svg id="tdHours" viewBox="0 0 240 50" preserveAspectRatio="none"></svg>
       <div class="td-axis"><span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>12a</span></div>
       <div class="tabs" id="tdTabs">
         <button data-tab="closest" class="on">Closest</button><button data-tab="lowest">Lowest</button><button data-tab="fastest">Fastest</button><button data-tab="highest">Highest</button><button data-tab="airlines">Airlines</button><button data-tab="types">Types</button><button data-tab="special">Special</button>
       </div>
       <div id="tdList"></div>
-    </details>
-    <details id="favs" open>
-      <summary class="st-h"><span class="chev">▸</span>⭐ Favorite planes<span class="st-sum" id="favSum"></span></summary>
-      <form id="favForm" class="fav-add" autocomplete="off"><input id="favIn" placeholder="Add a tail number, e.g. N1932K" aria-label="Tail number to add to favorites"><button>⭐ Add</button></form>
-      <div class="fav-msg" id="favMsg"></div>
-      <div id="favList"></div>
     </details>
     <details id="atc" open>
       <summary class="st-h"><span class="chev">▸</span>🎧 Listen to ATC<span class="st-sum" id="atcSum"></span></summary>
@@ -720,14 +776,14 @@
       <div class="place">
         <h4>⭕ Overhead distance</h4>
         <p class="hint">How close a plane has to pass to set off the overhead alerts: the banner, the full-screen close-up and the voice. It's the red dashed circle around home on the map, and changes as you drag.</p>
-        <div class="row" style="align-items:center"><input type="range" id="alertMiIn" min="0.25" max="5" step="0.25" aria-label="Overhead distance in miles"><b id="alertMiVal" style="min-width:64px;text-align:right;font-family:var(--mono)"></b></div>
+        <div class="row" style="align-items:center"><input type="range" id="alertMiIn" data-pref="Overhead distance" data-pref-group="Alerts and sound" data-pref-unit=" mi" min="0.25" max="5" step="0.25" aria-label="Overhead distance in miles"><b id="alertMiVal" style="min-width:64px;text-align:right;font-family:var(--mono)"></b></div>
       </div>
       <div class="place">
         <h4>🗣 Announcement voice</h4>
         <p class="hint">A voice speaks when a plane passes inside the overhead circle.</p>
         <label class="lbl" for="voicePick">Voice</label>
-        <select id="voicePick" style="width:100%"></select>
-        <label class="chk" style="margin:6px 0 10px"><input type="checkbox" id="voiceUpbeat"> Upbeat: a little higher and faster, TikTok style</label>
+        <select id="voicePick" data-pref="Voice" data-pref-group="Alerts and sound" style="width:100%"></select>
+        <label class="chk" style="margin:6px 0 10px"><input type="checkbox" id="voiceUpbeat" data-pref="Upbeat voice" data-pref-group="Alerts and sound"> Upbeat: a little higher and faster, TikTok style</label>
         <label class="lbl" for="sayIn">What it says</label>
         <textarea id="sayIn" rows="2" spellcheck="false" style="width:100%;resize:vertical;font:inherit"></textarea>
         <p class="hint" style="margin:6px 0">Click to add: <span id="sayTags"></span></p>
@@ -744,14 +800,14 @@
       <div class="place">
         <h4>🔍 Size of everything</h4>
         <p class="hint">Make text, buttons and panels bigger or smaller. Handy on a TV or wall screen. Changes right away.</p>
-        <select id="uiScale">
+        <select id="uiScale" data-pref="Size of everything" data-pref-group="Display">
           <option value="0.75">75% (smaller)</option><option value="0.9">90%</option><option value="1">100% (normal)</option><option value="1.1">110%</option>
           <option value="1.25">125%</option><option value="1.5">150%</option><option value="1.75">175%</option><option value="2">200% (biggest)</option>
         </select>
       </div>
       <div class="place">
         <h4>📏 Units</h4>
-        <label class="chk"><input type="checkbox" id="nauticalIn"> Pilot units: speeds in knots, distances in nautical miles</label>
+        <label class="chk"><input type="checkbox" id="nauticalIn" data-pref="Pilot units (knots, nautical miles)" data-pref-group="Display"> Pilot units: speeds in knots, distances in nautical miles</label>
         <p class="hint">Off: miles per hour and miles. Altitudes are always in feet. The voice uses the same units.</p>
       </div>
       <div class="place">
@@ -768,6 +824,21 @@
         <label class="chk"><input type="checkbox" id="lanIn"> Let other devices on my home network open the dashboard</label>
         <p class="hint" id="lanHint">Off: only this PC can open it. On: phones, tablets and TVs on the same Wi-Fi can open it in their browser too. They can watch, but only this PC can change settings, favorites or updates. Windows may ask whether to allow the app on your network: choose <b>Private networks</b>. Only turn this on at home, not on public Wi-Fi.</p>
         <div class="where" id="lanUrls" hidden></div>
+      </div>
+      <div class="place">
+        <h4>↺ Reset settings to default</h4>
+        <p class="hint">Puts every option back to how a fresh install starts: map, alerts, sound, voice, display, network and window settings.</p>
+        <div class="row"><button type="button" id="resetAsk">↺ Reset settings to default…</button></div>
+        <div id="resetBox" class="reset-box" hidden>
+          <b>Reset all settings?</b> Your home location, office, accounts, ship tracking key and favorite planes are kept.
+          <label class="chk" style="margin-top:8px"><input type="checkbox" id="resetAll"> Also forget those, like a brand-new install</label>
+          <div class="row" style="margin-top:8px"><button type="button" id="resetGo" class="danger">Reset now</button><button type="button" id="resetCancel">Cancel</button></div>
+        </div>
+      </div>
+      <div class="place">
+        <h4>🙏 Credits</h4>
+        <p class="hint">Look A Plane! is built on free data and tools from many people and organizations: adsb.fi, Planespotters, Airport-Data.com, OurAirports, the FAA, NOAA, OpenStreetMap, Wikipedia, AISStream, Esri, Leaflet, Kokoro and more.</p>
+        <div class="row"><a class="btn-link" href="https://github.com/krabbzdev/KrabbzDev-PlaneTracker1#data-sources-and-credits" target="_blank" rel="noopener">📜 See all the credits on GitHub ↗</a><a class="btn-link" href="https://github.com/krabbzdev/KrabbzDev-PlaneTracker1/wiki/Data-Sources-and-Privacy" target="_blank" rel="noopener">Data sources and privacy ↗</a></div>
       </div>
       <div class="place">
         <h4>🐞 Help and debugging</h4>
@@ -815,7 +886,18 @@
 
 <button id="soundLock" type="button" hidden>🔇 Sound is off until you click this page. <b>Click here to turn on the overhead chime and voice</b></button>
 <div id="toasts"></div>
-<div id="version"><span id="verText" title="Version and build number"></span> · <a href="https://flighttracker.loves3d.com" target="_blank" rel="noopener" title="The Look A Plane! website">Website ↗</a> · <a id="verWiki" href="https://github.com/krabbzdev/KrabbzDev-PlaneTracker1/wiki" target="_blank" rel="noopener" title="How every feature works">Wiki ↗</a> · <a id="verRepo" href="https://github.com/krabbzdev/KrabbzDev-PlaneTracker1" target="_blank" rel="noopener" title="Source code and releases on GitHub">GitHub ↗</a></div>
+
+<!-- 💡 feedback: a floating button at the bottom left that opens a small form (like the one in ShowHud) -->
+<button type="button" id="fbPill" class="fb-pill" aria-haspopup="dialog" aria-controls="fbPanel"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V4"/><path d="M4 4h13l-2 4 2 4H4"/></svg><span class="fb-pill-txt">Have an idea or found an issue?</span></button>
+<section id="fbPanel" class="fb-panel" role="dialog" aria-label="Send feedback" hidden>
+  <div class="fb-head"><b>Have an idea or found an issue?</b><button type="button" id="fbClose" aria-label="Close">✕</button></div>
+  <p class="fb-sub">Opens a pre-filled issue on GitHub for the project. Nothing is sent until you press Submit there.</p>
+  <div class="fb-tabs" role="tablist"><button type="button" role="tab" class="on" data-kind="bug">Bug</button><button type="button" role="tab" data-kind="idea">Feature request</button></div>
+  <label class="fb-lbl" for="fbText" id="fbLbl">What went wrong? What did you expect?</label>
+  <textarea id="fbText" rows="5" maxlength="3000" placeholder="Tell us what you clicked and what happened…"></textarea>
+  <div class="fb-foot"><span class="fb-note" id="fbNote">We include the app's build and which options are on, not your address.</span><button type="button" id="fbCopy" class="fb-secondary">Copy</button><button type="button" id="fbSend" class="fb-send">Send</button></div>
+</section>
+<div id="version"><span id="verText" title="Version and build number"></span><a id="verCode" target="_blank" rel="noopener" hidden></a> · <a href="#" id="verUpdate" title="Check GitHub for a newer build and install it">⬆ Update now</a> · <a href="https://flighttracker.loves3d.com" target="_blank" rel="noopener" title="The Look A Plane! website">Website ↗</a> · <a id="verWiki" href="https://github.com/krabbzdev/KrabbzDev-PlaneTracker1/wiki" target="_blank" rel="noopener" title="How every feature works">Wiki ↗</a> · <a id="verRepo" href="https://github.com/krabbzdev/KrabbzDev-PlaneTracker1" target="_blank" rel="noopener" title="Source code and releases on GitHub">GitHub ↗</a></div>
 
 <dialog id="axDlg" class="ax-dlg">
   <div class="ax-bar">
@@ -855,8 +937,14 @@ const $ = id => document.getElementById(id);
 // ---------- settings ----------
 function load(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
 function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+// These map layers start off now. Browsers that had them on get them switched off once; after that, whatever
+// you pick in 🗺 Map Options sticks.
+if (!load('skyLayersOff1', false)) {
+  for (const k of ['skyShowAll', 'skyMetars', 'skyTfrs', 'skyNight', 'skyWeather', 'skyShips']) save(k, false);
+  save('skyLayersOff1', true);
+}
 let home = null; // comes from the app's settings (see init)
-let radius = load('skyRadius', 20);
+let radius = load('skyRadius', 21); // 21 miles = 18 nautical miles
 let showAll = load('skyShowAll', false);
 // UI scale (Settings > Display): CSS zoom on the whole page, remembered per browser
 let uiScale = load('skyUiScale', 1);
@@ -871,6 +959,50 @@ $('uiScale').addEventListener('change', e => {
 });
 $('radius').value = radius; $('showAll').checked = showAll;
 
+// ---------- settings in the tray menu ----------
+// Every control marked data-pref="Label" (with data-pref-group) is listed for the tray icon's Settings menu: this page
+// sends the app the list and current values, and applies changes picked in the tray as if they were clicked here.
+// So a new setting only needs those attributes to appear in the tray too.
+function prefValue(el) { return el.type === 'checkbox' ? el.checked : el.type === 'range' ? +el.value : el.value; }
+function prefList() {
+  return [...document.querySelectorAll('[data-pref]')].map(el => ({
+    key: el.id, label: el.dataset.pref, group: el.dataset.prefGroup || 'Settings',
+    type: el.type === 'checkbox' ? 'bool' : el.tagName === 'SELECT' ? 'choice' : el.type === 'range' ? 'range' : 'text',
+    options: el.tagName === 'SELECT' ? [...el.options].map(o => [o.value, o.textContent.trim()]) : undefined,
+    min: el.type === 'range' ? +el.min : undefined, max: el.type === 'range' ? +el.max : undefined, step: el.type === 'range' ? +el.step : undefined,
+    unit: el.dataset.prefUnit || '', scale: +(el.dataset.prefScale || 1), value: prefValue(el),
+  }));
+}
+var prefSent = '', traySeq = null;
+function sendPrefs() {
+  const body = JSON.stringify(prefList());
+  if (body === prefSent) return;
+  prefSent = body;
+  fetch('/api/prefs', { method: 'POST', body }).catch(() => { prefSent = ''; });
+}
+['change', 'input'].forEach(ev => document.addEventListener(ev, e => { if (e.target.closest?.('[data-pref]')) setTimeout(sendPrefs, 400); }, true));
+setTimeout(sendPrefs, 2500);
+setInterval(sendPrefs, 30000); // picks up things that fill in later, like the voice list
+async function pullTrayChanges() {
+  let r;
+  try { r = await fetch('/api/prefs/changes?since=' + (traySeq ?? -1)).then(x => x.json()); } catch (e) { return; }
+  if (traySeq !== null && r.seq < traySeq) traySeq = null; // the app restarted (an update): go by time instead
+  // the first time, apply only what was picked in the tray since this browser last checked (it may have been closed)
+  const lastSync = load('skyTraySync', 0);
+  for (const c of r.changes) {
+    if (traySeq === null && c.at <= lastSync) continue;
+    const el = document.getElementById(c.key);
+    if (!el || !el.matches('[data-pref]') || prefValue(el) === c.value) continue;
+    if (el.type === 'checkbox') el.checked = !!c.value; else el.value = c.value;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  traySeq = r.seq;
+  save('skyTraySync', r.now);
+}
+setInterval(pullTrayChanges, 2000);
+pullTrayChanges();
+
 // ---------- errors on this page go into the app's debug log (Settings > More > Help and debugging) ----------
 function reportError(msg) { try { navigator.sendBeacon('/api/clientlog', String(msg).slice(0, 2000)); } catch (e) {} }
 window.addEventListener('error', e => reportError(`${e.message} at ${(e.filename || '').split('/').pop()}:${e.lineno}:${e.colno}${e.error?.stack ? '\n' + e.error.stack : ''}`));
@@ -878,7 +1010,7 @@ window.addEventListener('unhandledrejection', e => reportError('Unhandled: ' + (
 
 // ---------- units: miles and mph, or nautical miles and knots like pilots use (Settings > Display > Units) ----------
 // Everything is worked out in statute miles and knots (what the feed gives); these only change what's shown.
-var nautical = load('skyNautical', false);
+var nautical = load('skyNautical', true); // pilot units unless switched off
 function speedTxt(kt, html) { if (kt == null) return ''; const [v, u] = nautical ? [Math.round(kt), 'kt'] : [Math.round(kt * 1.15078), 'mph']; return html ? `${v} <em>${u}</em>` : `${v} ${u}`; }
 function distTxt(mi, dp = 1) { if (mi == null) return ''; return nautical ? `${+(mi / 1.15078).toFixed(dp)} nm` : `${+mi.toFixed(dp)} mi`; }
 
@@ -980,16 +1112,17 @@ function setChart(name) {
   if (chartLayer) { map.removeLayer(chartLayer); chartLayer = null; }
   if (name) {
     const [svc, minNativeZoom, maxNativeZoom] = CHARTS[name];
-    chartLayer = L.tileLayer(FAA_CHARTS + svc + '/MapServer/tile/{z}/{y}/{x}', { pane: 'charts', opacity: .9, minNativeZoom, maxNativeZoom, maxZoom: 16,
+    chartLayer = L.tileLayer(FAA_CHARTS + svc + '/MapServer/tile/{z}/{y}/{x}', { pane: 'charts', opacity: 1, minNativeZoom, maxNativeZoom, maxZoom: 16, // full strength: the dark map showing through muddied its colours
       attribution: 'Charts: FAA Aeronautical Information Services (not for navigation)' }).addTo(map);
     if (placeNames) map.removeLayer(placeNames);
   } else if (placeNames) placeNames.addTo(map);
+  try { showZoomPct(); } catch (e) {} // the zoom % control isn't there yet while the page is first loading
 }
 $('chartSel').addEventListener('change', e => setChart(e.target.value));
 setMapStyle(load('skyMapStyle', 'dark'));
 setChart(load('skyChart', ''));
 
-// 🗺 Map layers menu: shows how many layers are on; closes when you click elsewhere or press Esc
+// 🗺 Map Options menu: shows how many layers are on; closes when you click elsewhere or press Esc
 function countLayers() { $('layersCount').textContent = `· ${$('layersMenu').querySelectorAll('input[type=checkbox]:checked').length} on`; }
 $('layersMenu').addEventListener('change', countLayers);
 setTimeout(countLayers, 0); // once every option has been set from what was saved
@@ -1000,7 +1133,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') $('layersMen
 map.createPane('weather').style.zIndex = 350;
 const wxUrl = () => 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png?t=' + Math.floor(Date.now() / 300000);
 const wxLayer = L.tileLayer(wxUrl(), { pane: 'weather', opacity: .6, maxZoom: 16, attribution: 'Radar: NWS NEXRAD via Iowa Environmental Mesonet' });
-let wxOn = load('skyWeather', true), wxTimer = null;
+let wxOn = load('skyWeather', false), wxTimer = null;
 function setWeather(on) {
   wxOn = on; save('skyWeather', on); $('wxOn').checked = on;
   clearInterval(wxTimer);
@@ -1108,7 +1241,7 @@ function wxHtml(w) {
 // From the Aviation Weather Center (NOAA), for the area in view, refreshed every 5 minutes. ⛅ Airport Weather in the top bar.
 map.createPane('metars').style.zIndex = 452; // just above the airport squares
 const metarLayer = L.layerGroup().addTo(map);
-let metarOn = load('skyMetars', true), metarLast = '';
+let metarOn = load('skyMetars', false), metarLast = '';
 $('metarOn').checked = metarOn;
 async function loadMetars(force) {
   if (!metarOn || map.getZoom() < 6) { metarLayer.clearLayers(); metarLast = ''; return; }
@@ -1136,7 +1269,7 @@ $('metarOn').addEventListener('change', e => { metarOn = e.target.checked; save(
 // ---------- TFRs: the FAA's temporary flight restrictions as red areas (⛔ TFRs in the top bar) ----------
 map.createPane('tfrs').style.zIndex = 380; // over charts and radar, under airports and planes
 const tfrLayer = L.layerGroup().addTo(map);
-let tfrOn = load('skyTfrs', true);
+let tfrOn = load('skyTfrs', false);
 $('tfrOn').checked = tfrOn;
 const TFR_TYPE = { SECURITY: 'Security (VIP visit, stadium, military)', HAZARDS: 'Hazard (fire, disaster, rescue)', SPACE: 'Space launch or recovery',
   'SPECIAL': 'Special event', 'AIR SHOWS/SPORTS': 'Air show or sporting event', 'VIP': 'VIP movement', '91.141': 'VIP movement (President)', '99.7': 'Special security instructions' };
@@ -1197,7 +1330,7 @@ const clockTxt = d => d ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2
 
 // Day/night line: the night side of the earth shaded, redrawn every 5 minutes (🌙 Day/Night in the top bar)
 map.createPane('night').style.zIndex = 340; // under the weather radar and everything else
-let nightOn = load('skyNight', true), nightShape = null;
+let nightOn = load('skyNight', false), nightShape = null;
 $('nightOn').checked = nightOn;
 function drawNight() {
   if (nightShape) { map.removeLayer(nightShape); nightShape = null; }
@@ -1433,6 +1566,10 @@ function showZoomPct() {
   const el = zoomPct.getContainer();
   if (!home) { el.textContent = Math.round(2 ** (map.getZoom() - 11) * 100) + '%'; return; }
   el.textContent = Math.round(2 ** (map.getZoom() - map.getBoundsZoom(radiusBounds())) * 100) + '%';
+  // past the FAA chart's sharpest zoom it's stretched (and blurry): say so
+  const chartMax = chartLayer?.options.maxNativeZoom, over = chartMax != null && map.getZoom() > chartMax;
+  el.classList.toggle('chart-over', over);
+  el.title = over ? `The chart is sharpest at ${Math.round(2 ** (chartMax - map.getBoundsZoom(radiusBounds())) * 100)}% or less: zoom out for a clearer chart (click to go back to 100%)` : 'Zoom level (100% shows your whole Tracker Radius). Click to go back to the default, 100%.';
 }
 map.on('zoomend', showZoomPct);
 showZoomPct();
@@ -2621,11 +2758,28 @@ async function init() {
 
 // ---------- updates: show the running build, reload when the app has updated itself ----------
 let loadedBuild = null;
+// ⬆ Update now (bottom right): check GitHub, and install a newer build straight away if there is one
+$('verUpdate').onclick = async e => {
+  e.preventDefault();
+  const a = $('verUpdate'), say = (t, ms) => { a.textContent = t; if (ms) setTimeout(() => { a.textContent = '⬆ Update now'; }, ms); };
+  say('⬆ Checking…');
+  try {
+    const r = await fetch('/api/update', { method: 'POST', body: JSON.stringify({ check: true }) }).then(x => x.json());
+    if (!r.exe) return say('Running from source: nothing to install', 5000);
+    if (r.error || !r.latest) return say("Couldn't reach GitHub", 5000);
+    if (!r.available) return say(`✓ Up to date (build ${r.current.build})`, 5000);
+    await fetch('/api/update', { method: 'POST', body: JSON.stringify({ install: true }) });
+    say(`⬆ Installing build ${r.latest.build}… the page reloads by itself`);
+  } catch (err) { say("Couldn't check right now", 5000); }
+};
 async function checkVersion() {
   let v;
   try { v = await fetch('/api/version', { cache: 'no-store' }).then(r => r.json()); } catch (e) { return; } // app restarting
   $('verText').textContent = `v${v.version} · build ${v.build}${v.date ? ' · ' + v.date : ''}`;
   $('verRepo').href = 'https://github.com/' + (v.repo || 'krabbzdev/KrabbzDev-PlaneTracker1');
+  // the build code: the commit it was built from, linked to that commit on GitHub
+  $('verCode').hidden = !v.commit;
+  if (v.commit) { $('verCode').textContent = ' · ' + v.commit; $('verCode').href = $('verRepo').href + '/commit/' + v.commit; $('verCode').title = 'Build code: the exact version of the code this was built from (opens it on GitHub)'; }
   $('verWiki').href = $('verRepo').href + '/wiki';
   if (loadedBuild === null) { loadedBuild = v.build; return; }
   // the app updated itself: reload so this page runs the new version too (not in the middle of an overhead alert)
@@ -2696,6 +2850,13 @@ function renderLog() {
   $('tdMil').innerHTML = `<span style="color:${L.military ? SPECIAL.military.color : 'inherit'}">${L.military}</span>`;
   const peak = L.hourly.indexOf(Math.max(...L.hourly));
   $('tdBusy').textContent = L.hourly[peak] ? hourName(peak) : '–';
+  // the most-seen aircraft type, and the fastest plane, today
+  const top = L.types?.[0], fast = L.fastest?.[0];
+  $('tdTopType').textContent = top ? nice(top.key) : '–';
+  $('tdTopType').title = top ? nice(top.key) : '';
+  $('tdTopTypeSub').textContent = top ? `${top.count} seen${L.types[1] ? ' · next: ' + nice(L.types[1].key) : ''}` : ' ';
+  $('tdFastest').textContent = fast ? speedTxt(fast.value) : '–';
+  $('tdFastestSub').textContent = fast ? `${fast.flight || fast.reg || fast.hex.toUpperCase()}${fast.desc ? ' · ' + nice(fast.desc) : fast.type ? ' · ' + fast.type : ''}` : ' ';
   $('tdBusySub').textContent = L.hourly[peak] ? `${L.hourly[peak]} aircraft` : ' ';
   $('tdSum').textContent = `· ${L.unique.toLocaleString()} aircraft · ${L.military} military`;
 
@@ -2815,12 +2976,27 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 async function loadCfg() {
   try { cfg = await fetch('/api/settings').then(r => r.json()); } catch (e) { cfg = {}; }
   office = cfg.office || null;
+  showLanAddr();
   return cfg;
 }
 async function saveCfg(patch) {
   try { cfg = await fetch('/api/settings', { method: 'POST', body: JSON.stringify(patch) }).then(r => r.json()); } catch (e) {}
   office = cfg.office || null;
+  showLanAddr();
 }
+// Top bar: this PC's network addresses (not localhost). Links when other devices can open the dashboard there
+// (network access on); greyed, with a note, when only this PC can.
+function showLanAddr() {
+  const on = !!cfg.lanAccess, urls = on ? cfg.lanUrls || [] : cfg.networkUrls || [];
+  $('lanAddr').hidden = !urls.length;
+  $('lanAddr').classList.toggle('off', !on);
+  $('lanAddr').title = on ? 'Network access is on: other devices on your network can open the dashboard at these addresses'
+    : "This PC's network address. Other devices can't open the dashboard here until you turn on Settings → More → Network";
+  $('lanAddr').innerHTML = !urls.length ? '' : '🌐 ' + urls.map(u => on ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u.replace(/^https?:\/\//, ''))}</a>`
+    : esc(u.replace(/^https?:\/\//, ''))).join(' · ') + (on ? '' : ' <small>(network access off)</small>');
+}
+// the PC's network address can change (another Wi-Fi, a new lease), so check once a minute
+setInterval(() => fetch('/api/settings').then(r => r.json()).then(c => { cfg.lanUrls = c.lanUrls; cfg.networkUrls = c.networkUrls; cfg.lanAccess = c.lanAccess; showLanAddr(); }).catch(() => {}), 60000);
 
 let picking = null; // 'home' | 'office' while choosing a spot on the map
 // Each place's label is the name of the place picked from the search results ("Tampa, FL 33606"); typing
@@ -2869,8 +3045,12 @@ async function openHome(focusHome, firstRun) {
   $('faIn').value = cfg.faUser || '';
   $('appWinIn').checked = cfg.appWindow === true;
   $('lanIn').checked = !!cfg.lanAccess;
-  $('lanUrls').hidden = !cfg.lanUrls?.length;
-  $('lanUrls').innerHTML = cfg.lanUrls?.length ? '📱 On other devices, open: ' + cfg.lanUrls.map(u => `<b>${esc(u)}</b>`).join(' or ') : '';
+  // every address the dashboard is (or would be) served at
+  const net = cfg.networkUrls || [];
+  $('lanUrls').hidden = !cfg.localUrl;
+  $('lanUrls').innerHTML = `<b>Server addresses</b><br>💻 This PC: <b>${esc(cfg.localUrl || '')}</b>`
+    + (net.length ? `<br>📱 Other devices: ${net.map(u => `<b>${esc(u)}</b>`).join(' · ')} <small>(${cfg.lanAccess ? 'open now' : 'only once network access is on'})</small>`
+      : '<br>📱 Other devices: no home network connection found');
   // opened from another device: it can look, but only the PC running the app can change settings
   if (cfg.thisPc === false) { $('saveHome').disabled = true; $('saveHome').title = 'Settings can only be changed on the PC running the app'; $('debugEmail').disabled = true; }
   $('appWinIn').disabled = !cfg.appBrowser;
@@ -2902,6 +3082,63 @@ $('aisIn').addEventListener('input', () => { aisClear = false; showAis(); });
 $('linesAll').onclick = () => $('cruiseLines').querySelectorAll('input').forEach(c => c.checked = true);
 $('linesNone').onclick = () => $('cruiseLines').querySelectorAll('input').forEach(c => c.checked = false);
 $('aisClear').onclick = () => { $('aisIn').value = ''; aisClear = !!cfg.aisKeySet; showAis(); };
+// ---------- 💡 feedback: the pill at the bottom left ----------
+// Bug or feature request -> a new issue on the project's GitHub page, pre-filled with what was typed and a few
+// facts about the app (build, browser, which map options are on; never the home address or any key). Nothing is
+// sent anywhere until the person presses Submit on GitHub. "Copy" is for people without a GitHub account.
+var fbKind = 'bug';
+const FB_TEXT = {
+  bug: { label: 'What went wrong? What did you expect?', hint: "Tell us what you clicked and what happened…", tag: '[Bug] ', labels: 'bug' },
+  idea: { label: "What would you like Look A Plane! to do?", hint: "Describe your idea, and why it would help…", tag: '[Idea] ', labels: 'enhancement' },
+};
+function setFbKind(kind) {
+  fbKind = kind;
+  document.querySelectorAll('.fb-tabs button').forEach(b => b.classList.toggle('on', b.dataset.kind === kind));
+  $('fbLbl').textContent = FB_TEXT[kind].label;
+  $('fbText').placeholder = FB_TEXT[kind].hint;
+}
+function fbEnabled() { const has = !!$('fbText').value.trim(); $('fbSend').disabled = !has; $('fbCopy').disabled = !has; }
+async function fbReport() {
+  const text = $('fbText').value.trim(), v = await fetch('/api/version').then(r => r.json()).catch(() => ({}));
+  const on = [...document.querySelectorAll('#layersMenu input[type=checkbox]')].filter(c => c.checked).map(c => c.dataset.pref || c.id);
+  const facts = [
+    `Look A Plane! build ${v.build ?? '?'}${v.commit ? ' (' + v.commit + ')' : ''}${v.date ? ' · ' + v.date : ''}${v.exe === false ? ' · from source' : ''}`,
+    `Browser: ${navigator.userAgent}`,
+    `Window: ${innerWidth}×${innerHeight} · page size ${Math.round(uiScale * 100)}%`,
+    `Map: ${$('mapStyleSel').value}${$('chartSel').value ? ' + ' + $('chartSel').value + ' chart' : ''} · ${nautical ? 'pilot units' : 'miles and mph'}`,
+    `Options on: ${on.join(', ') || 'none'}`,
+  ];
+  return { text, v, body: `${text.slice(0, 2500)}\n\n---\n<sub>Sent from the app's feedback form.</sub>\n\n${facts.map(f => '- ' + f).join('\n')}\n` };
+}
+$('fbPill').onclick = () => { $('fbPanel').hidden = !$('fbPanel').hidden; if (!$('fbPanel').hidden) $('fbText').focus(); };
+$('fbClose').onclick = () => { $('fbPanel').hidden = true; };
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('fbPanel').hidden) $('fbPanel').hidden = true; });
+document.querySelectorAll('.fb-tabs button').forEach(b => b.onclick = () => setFbKind(b.dataset.kind));
+$('fbText').addEventListener('input', fbEnabled);
+$('fbSend').onclick = async () => {
+  const { text, body } = await fbReport(), t = FB_TEXT[fbKind];
+  const title = t.tag + text.split('\n')[0].slice(0, 70);
+  const url = `${$('verRepo').href}/issues/new?title=${encodeURIComponent(title)}&labels=${t.labels}&body=${encodeURIComponent(body)}`;
+  window.open(url, '_blank', 'noopener');
+  $('fbNote').textContent = 'GitHub opened in a new tab: press Submit there to send it.';
+  $('fbText').value = ''; fbEnabled();
+};
+$('fbCopy').onclick = async () => {
+  const { body } = await fbReport();
+  try { await navigator.clipboard.writeText(body); $('fbNote').textContent = 'Copied. Paste it into an email or message to the developer.'; }
+  catch (e) { $('fbText').select(); $('fbNote').textContent = "Couldn't copy: select the text and copy it yourself."; }
+};
+fbEnabled();
+
+// Settings > More > Reset settings to default: the app's settings, then this browser's, then start over
+$('resetAsk').onclick = () => { $('resetBox').hidden = false; $('resetAll').checked = false; };
+$('resetCancel').onclick = () => { $('resetBox').hidden = true; };
+$('resetGo').onclick = async () => {
+  $('resetGo').disabled = true;
+  try { await fetch('/api/reset', { method: 'POST', body: JSON.stringify({ everything: $('resetAll').checked }) }); } catch (e) {}
+  try { Object.keys(localStorage).filter(k => k.startsWith('sky')).forEach(k => localStorage.removeItem(k)); } catch (e) {}
+  location.reload();
+};
 // Settings > More > Help and debugging: the app gathers its log and opens an email with it attached
 $('debugEmail').onclick = async () => {
   $('debugMsg').textContent = 'Opening an email…';
@@ -3023,7 +3260,7 @@ map.createPane('ships').style.zIndex = 440; // above airports' labels area, belo
 const shipLayer = L.layerGroup().addTo(map);
 const shipMarkers = new Map(); // MMSI -> marker
 let shipData = { keySet: false, status: 'off', ships: [] };
-let shipsOn = load('skyShips', true);
+let shipsOn = load('skyShips', false);
 $('shipsOn').checked = shipsOn;
 $('shipsOn').addEventListener('change', e => { shipsOn = e.target.checked; save('skyShips', shipsOn); drawShips(); });
 
@@ -3476,6 +3713,20 @@ $('favForm').addEventListener('submit', e => {
   changeFav({ add: v }).then(() => { $('favIn').value = ''; }).catch(err => { $('favMsg').textContent = err.message; })
     .finally(() => { $('favIn').disabled = false; $('favIn').focus(); });
 });
+// ◀ ▶ hide or show the side columns (each browser remembers); the map grows into the space
+function setColumn(side, hidden) {
+  document.body.classList.toggle('hide-' + side, hidden);
+  save('skyHide' + side, hidden);
+  const b = $(side + 'Toggle'), arrows = side === 'left' ? ['◀', '▶'] : ['▶', '◀'];
+  b.textContent = hidden ? arrows[1] + (side === 'left' ? ' Aircraft' : ' Panels') : arrows[0];
+  b.title = hidden ? 'Show this column again' : 'Hide this column (more room for the map)';
+  setTimeout(() => map.invalidateSize(), 50);
+}
+$('leftToggle').onclick = () => setColumn('left', !document.body.classList.contains('hide-left'));
+$('rightToggle').onclick = () => setColumn('right', !document.body.classList.contains('hide-right'));
+setColumn('left', load('skyHideleft', false));
+setColumn('right', load('skyHideright', false));
+
 $('favs').open = load('skyFavsOpen', true);
 $('favs').addEventListener('toggle', () => save('skyFavsOpen', $('favs').open));
 

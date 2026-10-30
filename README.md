@@ -27,6 +27,9 @@ themselves from, and it still runs on its own from any folder.
 If something goes wrong, **Settings → More → Help and debugging → Email debug log** (or the tray icon's menu)
 opens an email with the app's log attached.
 
+Got an idea or found a bug? Use the **Have an idea or found an issue?** button at the bottom left of the dashboard: it opens a
+pre-filled issue on this project's GitHub page (nothing is sent until you press Submit there), or you can copy the text.
+
 If Look A Plane! makes you smile, you can [buy me a coffee](https://buymeacoffee.com/krabbzdev).
 
 [![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/krabbzdev)

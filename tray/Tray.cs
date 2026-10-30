@@ -39,9 +39,20 @@ static class Tray
 
         var menu = new ContextMenuStrip();
         menu.Items.Add("Open Look A Plane!", null, (s, e) => Open()).Font = new Font(menu.Font, FontStyle.Bold);
+        var settingsMenu = new ToolStripMenuItem("Settings");
+        settingsMenu.DropDownItems.Add("(loading…)");
+        settingsMenu.DropDownOpening += (s, e) => TraySettings.Build(settingsMenu, api);
+        menu.Items.Add(settingsMenu);
         menu.Items.Add("Check for updates", null, (s, e) => CheckForUpdates());
         menu.Items.Add("Email debug log...", null, (s, e) => AskApp("api/debuglog"));
         menu.Items.Add("☕ Buy me a coffee", null, (s, e) => { try { Process.Start(CoffeeUrl); } catch { } });
+        menu.Items.Add(new ToolStripSeparator());
+        // build details, read from the app each time the menu opens; clicking opens that build on GitHub
+        var buildItem = new ToolStripMenuItem("Build…") { ForeColor = SystemColors.GrayText };
+        string buildUrl = null;
+        buildItem.Click += (s, e) => { if (buildUrl != null) try { Process.Start(buildUrl); } catch { } };
+        menu.Items.Add(buildItem);
+        menu.Opening += (s, e) => { string text; buildUrl = BuildDetails(out text); buildItem.Text = text; };
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Quit", null, (s, e) => Quit());
 
@@ -97,14 +108,16 @@ static class Tray
             {
                 using (var web = new WebClient())
                 {
-                    string r = web.UploadString(api + "api/update", "{\"check\":true}");
-                    int now = Build(r, "current"), latest = Build(r, "latest");
-                    if (latest > now)
+                    // the app works out whether there's a newer build ("available"); builds look like 67 or 67.2
+                    var r = (System.Collections.Generic.Dictionary<string, object>)new System.Web.Script.Serialization.JavaScriptSerializer()
+                        .DeserializeObject(web.UploadString(api + "api/update", "{\"check\":true}"));
+                    string now = Build(r, "current"), latest = Build(r, "latest");
+                    if (r.ContainsKey("available") && r["available"] is bool && (bool)r["available"])
                     {
                         web.UploadString(api + "api/update", "{\"install\":true}");
                         tell("Updating to build " + latest + ". It restarts by itself in a few seconds.", ToolTipIcon.Info);
                     }
-                    else if (latest > 0) tell("You're up to date (build " + now + ").", ToolTipIcon.Info);
+                    else if (latest != "") tell("You're up to date (build " + now + ").", ToolTipIcon.Info);
                     else tell("Couldn't reach GitHub to check. Try again later.", ToolTipIcon.Warning);
                 }
             }
@@ -112,11 +125,33 @@ static class Tray
         });
     }
 
-    // "build":N inside the app's "current" or "latest" section of its update reply (0 if missing)
-    static int Build(string json, string section)
+    // the build number in the app's "current" or "latest" part of its update reply ("" if missing)
+    static string Build(System.Collections.Generic.Dictionary<string, object> r, string section)
     {
-        var m = Regex.Match(json, "\"" + section + "\"\\s*:\\s*\\{[^}]*?\"build\"\\s*:\\s*(\\d+)");
-        return m.Success ? int.Parse(m.Groups[1].Value) : 0;
+        object part, build;
+        return r.TryGetValue(section, out part) && part is System.Collections.Generic.Dictionary<string, object>
+            && ((System.Collections.Generic.Dictionary<string, object>)part).TryGetValue("build", out build) && build != null
+            ? Convert.ToString(build, System.Globalization.CultureInfo.InvariantCulture) : "";
+    }
+
+    // "Build 67.2 · a1b2c3d · 2026-10-30" from the app (/api/version), and the GitHub page for that build
+    static string BuildDetails(out string text)
+    {
+        text = "Build details unavailable";
+        try
+        {
+            using (var web = new WebClient { Encoding = System.Text.Encoding.UTF8 })
+            {
+                var v = (System.Collections.Generic.Dictionary<string, object>)new System.Web.Script.Serialization.JavaScriptSerializer()
+                    .DeserializeObject(web.DownloadString(api + "api/version"));
+                Func<string, string> get = k => v.ContainsKey(k) && v[k] != null ? Convert.ToString(v[k], System.Globalization.CultureInfo.InvariantCulture) : "";
+                string build = get("build"), commit = get("commit"), date = get("date"), repo = get("repo");
+                text = "Build " + build + (commit != "" ? " · " + commit : "") + (date != "" ? " · " + date : "");
+                if (repo == "") return null;
+                return "https://github.com/" + repo + (commit != "" ? "/commit/" + commit : "/releases/tag/v" + get("version") + "." + build);
+            }
+        }
+        catch { return null; }
     }
 
     // KrabbzDev's tip jar (the same one as the BusyLightz app).
@@ -274,5 +309,89 @@ static class DebugEmail
                 Marshal.FreeHGlobal(recips);
             }
         }
+    }
+}
+
+// The Settings menu: every setting the app lists (the dashboard's and the app's own), grouped as on the page.
+// Rebuilt each time it's opened, so new settings in the app show up here without changing this helper.
+// On/off settings are ticks, choices are pick lists, sliders offer a few values across their range.
+static class TraySettings
+{
+    static readonly System.Web.Script.Serialization.JavaScriptSerializer Json = new System.Web.Script.Serialization.JavaScriptSerializer();
+
+    public static void Build(ToolStripMenuItem root, string api)
+    {
+        root.DropDownItems.Clear();
+        object[] prefs;
+        try
+        {
+            using (var web = new WebClient { Encoding = System.Text.Encoding.UTF8 })
+                prefs = (object[])((System.Collections.Generic.Dictionary<string, object>)Json.DeserializeObject(web.DownloadString(api + "api/prefs")))["prefs"];
+        }
+        catch { root.DropDownItems.Add(new ToolStripMenuItem("Couldn't reach the app") { Enabled = false }); return; }
+        if (prefs.Length <= 3) root.DropDownItems.Add(new ToolStripMenuItem("Open the dashboard once to list all its settings") { Enabled = false });
+
+        var groups = new System.Collections.Generic.Dictionary<string, ToolStripMenuItem>();
+        foreach (System.Collections.Generic.Dictionary<string, object> p in prefs)
+        {
+            string group = Str(p, "group"), key = Str(p, "key"), label = Str(p, "label"), type = Str(p, "type");
+            ToolStripMenuItem g;
+            if (!groups.TryGetValue(group, out g)) { g = new ToolStripMenuItem(group); groups[group] = g; root.DropDownItems.Add(g); }
+            object value; p.TryGetValue("value", out value);
+
+            if (type == "bool")
+            {
+                bool on = value is bool && (bool)value;
+                g.DropDownItems.Add(new ToolStripMenuItem(label, null, (s, e) => Set(api, key, !on)) { Checked = on });
+            }
+            else if (type == "choice" && p.ContainsKey("options") && p["options"] is object[])
+            {
+                var sub = new ToolStripMenuItem(label);
+                foreach (object[] o in (object[])p["options"])
+                {
+                    string v = Convert.ToString(o[0]), text = Convert.ToString(o[1]);
+                    sub.DropDownItems.Add(new ToolStripMenuItem(text, null, (s, e) => Set(api, key, v)) { Checked = v == Convert.ToString(value) });
+                }
+                g.DropDownItems.Add(sub);
+            }
+            else if (type == "range")
+            {
+                double min = Num(p, "min"), max = Num(p, "max"), step = Num(p, "step"), scale = Num(p, "scale"), now = value == null ? double.NaN : Convert.ToDouble(value);
+                if (step <= 0) step = 1;
+                if (scale == 0) scale = 1;
+                string unit = Str(p, "unit");
+                var sub = new ToolStripMenuItem(label + (double.IsNaN(now) ? "" : ": " + Show(now * scale) + unit));
+                var values = new System.Collections.Generic.SortedSet<double>();
+                for (int i = 0; i <= 4; i++) values.Add(Math.Round((min + (max - min) * i / 4) / step) * step); // five steps across the range
+                if (!double.IsNaN(now)) values.Add(now);
+                foreach (double v in values)
+                {
+                    double val = v;
+                    sub.DropDownItems.Add(new ToolStripMenuItem(Show(val * scale) + unit, null, (s, e) => Set(api, key, val)) { Checked = Math.Abs(val - now) < step / 2 });
+                }
+                g.DropDownItems.Add(sub);
+            }
+        }
+    }
+
+    static string Str(System.Collections.Generic.Dictionary<string, object> p, string k) { object v; return p.TryGetValue(k, out v) && v != null ? Convert.ToString(v) : ""; }
+    static double Num(System.Collections.Generic.Dictionary<string, object> p, string k) { object v; return p.TryGetValue(k, out v) && v != null ? Convert.ToDouble(v) : 0; }
+    static string Show(double v) { return Math.Round(v, 2).ToString(System.Globalization.CultureInfo.InvariantCulture); }
+
+    static void Set(string api, string key, object value)
+    {
+        string body = Json.Serialize(new System.Collections.Generic.Dictionary<string, object> { { "key", key }, { "value", value } });
+        System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+        {
+            try
+            {
+                using (var web = new WebClient())
+                {
+                    web.Headers["Content-Type"] = "application/json";
+                    web.UploadString(api + "api/prefs/set", body);
+                }
+            }
+            catch { }
+        });
     }
 }
