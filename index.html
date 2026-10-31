@@ -2392,9 +2392,9 @@ setTimeout(() => { if (kokoroVoice() && soundOn) kokoroMake(kokoroVoice(), 'Read
 
 // What the voice says, written by the user in Settings > Alerts (each browser keeps its own).
 // {words} are filled in for each plane; any the app doesn't know are dropped along with their comma.
-const SAY_DEFAULT = 'Look, a Plane!. {airline} {type}, traveling at {speed}, and is flying at {altitude}, {destination} from {from}.';
+const SAY_DEFAULT = 'Look, a Plane!. {airline} {type}, traveling at {speed}, and is flying at {altitude}, {destination} from {from} to {arrival}.';
 // earlier defaults: browsers that still have one saved move to the new one
-const SAY_OLD_DEFAULTS = ['Overhead now! {type}, {speed}, {altitude}, {destination}.',
+const SAY_OLD_DEFAULTS = ['Look, a Plane!. {airline} {type}, traveling at {speed}, and is flying at {altitude}, {destination} from {from}.','Overhead now! {type}, {speed}, {altitude}, {destination}.',
   'Overhead now! {airline} - {type}, going {speed}, at {altitude}, {destination} from {from}.',
   'Look, a Plane! {airline} {type}, traveling at {speed}, and is flying at {altitude}, {destination}.',
   'Look, a Plane! {airline} {type}, traveling at {speed}, and is flying at {altitude}, {destination} from {from}.'];
@@ -2420,7 +2420,7 @@ const SAY_TAGS = { // name: [example for the Test button, value for a plane]
     const to = routeEnds(a).to;
     if (!to || a.alt === 'ground' || !(a.gs > 60)) return '';
     const m = distMi([a.lat, a.lon], to.pos) / (a.gs * 1.15078) * 60, h = Math.floor(m / 60);
-    return 'arriving in about ' + (m < 1 ? 'a minute' : m < 60 ? Math.round(m) + ' minutes' : h + (h === 1 ? ' hour ' : ' hours ') + Math.round(m % 60) + ' minutes');
+    return 'arriving in about ' + (m < 1.5 ? 'a minute' : m < 60 ? Math.round(m) + ' minutes' : h + (h === 1 ? ' hour ' : ' hours ') + Math.round(m % 60) + ' minutes');
   }],
 };
 let sayTemplate = load('skySay', SAY_DEFAULT);
@@ -2442,7 +2442,7 @@ function fillSay(template, value) {
   return template.replace(/(\b(?:going|at|from|to|near|in|by|with)\s+)?\{(\w+)\}/gi, (m, lead, k) => {
     if (!SAY_TAGS[k.toLowerCase()]) return m;
     const v = value(k.toLowerCase());
-    return v ? (lead || '') + v : '';
+    return v ? (k.toLowerCase() === 'arrival' ? '' : lead || '') + v : ''; // {arrival} already says "arriving in about", so a lead-in "to" is dropped
   })
     .replace(/\s+/g, ' ')
     .replace(/(^|[!?.,])\s*[-–]\s*/g, '$1 ') // a dash with nothing before it
