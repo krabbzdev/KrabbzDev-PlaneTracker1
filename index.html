@@ -608,6 +608,7 @@
   .rg-cap { font-size: 11px; color: var(--muted); margin-top: 4px; }
   .rg-owner { font-size: 17px; font-weight: 600; }
   .rg-co { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+  .sweep-cv { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 450; }
   .rt-head { display: flex; align-items: center; gap: 12px; background: none !important; padding: 2px 0 6px !important; }
   .rt-head > div:not(.rt-bar) { background: none !important; padding: 0 !important; min-width: 0; }
   .rt-head b { display: block; font: 700 24px var(--mono); }
@@ -663,6 +664,7 @@
       <label class="chk" title="The FAA's temporary flight restrictions (VIP visits, stadiums, fires...) as red areas"><input type="checkbox" id="tfrOn" data-pref="TFRs" data-pref-group="Map options"> ⛔ TFRs</label>
       <label class="chk" title="Shade the part of the map where it's night right now"><input type="checkbox" id="nightOn" data-pref="Day/Night" data-pref-group="Map options"> 🌙 Day/Night</label>
       <label class="chk" title="Live rain radar on the map (US, refreshes every 5 minutes)"><input type="checkbox" id="wxOn" data-pref="Weather radar" data-pref-group="Map options"> 🌧 Show Weather</label>
+      <label class="chk" title="A radar beam sweeping round your Tracker Radius"><input type="checkbox" id="sweepOn" data-pref="Radar sweep" data-pref-group="Map options"> 📡 Radar sweep</label>
       <label class="chk" title="Cruise ships and other boats, live (needs a free AISStream.io key in Settings)"><input type="checkbox" id="shipsOn" data-pref="Ships" data-pref-group="Map options"> 🚢 Show Ships</label>
       <h5>Look</h5>
       <label class="chk" title="How the map looks"><span>🌍 Map</span>
@@ -1249,6 +1251,45 @@ function drawHome() {
   const south = L.latLng(home[0] - ALERT_MI * MI / 111320, home[1]);
   L.marker(south, { icon: L.divIcon({ className: 'ring-label ring-overhead', html: `Overhead ${distTxt(ALERT_MI, 2)}`, iconSize: [90, 14], iconAnchor: [45, -2] }), interactive: false }).addTo(ringLayer);
 }
+
+// ---------- radar sweep (Map Options): a beam turning round the Tracker Radius, drawn on a canvas over the map ----------
+// A canvas the size of the map (not a huge rotating element) so it stays cheap at any zoom.
+const sweepCv = document.createElement('canvas');
+sweepCv.className = 'sweep-cv';
+map.getContainer().appendChild(sweepCv);
+let sweepOn = load('skySweep', false), sweepRaf = 0, sweepRgb = '76,201,240', sweepColorAt = 0;
+$('sweepOn').checked = sweepOn;
+function sweepDraw(t) {
+  const size = map.getSize(), dpr = window.devicePixelRatio || 1;
+  if (sweepCv.width !== Math.round(size.x * dpr) || sweepCv.height !== Math.round(size.y * dpr)) { sweepCv.width = Math.round(size.x * dpr); sweepCv.height = Math.round(size.y * dpr); }
+  const ctx = sweepCv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, size.x, size.y);
+  if (!home) return;
+  if (t - sweepColorAt > 1000) { // follow the theme's accent colour
+    sweepColorAt = t;
+    const hex = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+    if (/^#[0-9a-f]{6}$/i.test(hex)) sweepRgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(',');
+  }
+  const c = map.latLngToContainerPoint(home), edge = map.latLngToContainerPoint([home[0] + radius * MI / 111320, home[1]]);
+  const r = Math.abs(c.y - edge.y), a = (t / 5000 % 1) * 2 * Math.PI - Math.PI / 2, trail = 1.1;
+  ctx.save();
+  ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, 2 * Math.PI); ctx.clip();
+  const g = ctx.createConicGradient(a - trail, c.x, c.y), end = trail / (2 * Math.PI);
+  g.addColorStop(0, `rgba(${sweepRgb},0)`); g.addColorStop(end, `rgba(${sweepRgb},.34)`); g.addColorStop(Math.min(end + .001, 1), `rgba(${sweepRgb},0)`);
+  ctx.fillStyle = g; ctx.fillRect(c.x - r, c.y - r, r * 2, r * 2);
+  ctx.strokeStyle = `rgba(${sweepRgb},.85)`; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(c.x + r * Math.cos(a), c.y + r * Math.sin(a)); ctx.stroke();
+  ctx.restore();
+}
+function sweepLoop(t) { sweepRaf = sweepOn ? requestAnimationFrame(sweepLoop) : 0; if (sweepOn) sweepDraw(t); }
+function setSweep(on) {
+  sweepOn = on; save('skySweep', on);
+  if (on && !sweepRaf) sweepRaf = requestAnimationFrame(sweepLoop);
+  if (!on) { cancelAnimationFrame(sweepRaf); sweepRaf = 0; sweepCv.getContext('2d').clearRect(0, 0, sweepCv.width, sweepCv.height); }
+}
+$('sweepOn').addEventListener('change', e => setSweep(e.target.checked));
+if (sweepOn) sweepRaf = requestAnimationFrame(sweepLoop);
 
 // ---------- airports ----------
 let airportList = [];
@@ -2361,6 +2402,17 @@ const SAY_TAGS = { // name: [example for the Test button, value for a plane]
   airline: ['Southwest Airlines', a => airlineOf(a)],
   distance: ['0.4 miles away', a => a.dist == null ? '' : nautical ? +(a.dist / 1.15078).toFixed(1) + ' nautical miles away' : +a.dist.toFixed(1) + ' miles away'],
   direction: ['to the north east', a => a.brg != null ? 'to the ' + COMPASS_WORDS[compass(a.brg)] : ''],
+  tail: ['N 2 1 9 N V', a => (a.reg || '').replace(/[^A-Za-z0-9]/g, '').split('').join(' ')], // spelled out so the voice reads each character
+  heading: ['flying south east', a => a.track != null ? 'flying ' + COMPASS_WORDS[compass(a.track)] : ''],
+  vertical: ['climbing at 1,200 feet per minute', a => typeof a.vr !== 'number' || Math.abs(a.vr) < 300 ? '' : (a.vr > 0 ? 'climbing at ' : 'descending at ') + Math.round(Math.abs(a.vr)).toLocaleString() + ' feet per minute'],
+  owner: ['owned by NetJets', a => ownerOf(a) ? 'owned by ' + ownerOf(a) : ''],
+  age: ['3 years old', a => { const age = new Date().getFullYear() - parseInt(a.year, 10); return !a.year || age < 0 || age > 120 ? '' : age === 0 ? 'brand new' : age === 1 ? '1 year old' : age + ' years old'; }],
+  arrival: ['arriving in about 12 minutes', a => {
+    const to = routeEnds(a).to;
+    if (!to || a.alt === 'ground' || !(a.gs > 60)) return '';
+    const m = distMi([a.lat, a.lon], to.pos) / (a.gs * 1.15078) * 60, h = Math.floor(m / 60);
+    return 'arriving in about ' + (m < 1 ? 'a minute' : m < 60 ? Math.round(m) + ' minutes' : h + (h === 1 ? ' hour ' : ' hours ') + Math.round(m % 60) + ' minutes');
+  }],
 };
 let sayTemplate = load('skySay', SAY_DEFAULT);
 if (SAY_OLD_DEFAULTS.includes(sayTemplate)) { sayTemplate = SAY_DEFAULT; save('skySay', sayTemplate); }
