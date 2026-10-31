@@ -27,20 +27,7 @@
   body { display: flex; flex-direction: column; min-height: calc(100vh / var(--ui)); }
   body > main { flex: 1; }
 
-  /* Under-1-mile alert ticker */
-  #ticker { display: none; align-items: stretch; height: 40px; background: linear-gradient(90deg, rgba(255,93,115,.22), rgba(255,181,71,.14)); border-bottom: 1px solid rgba(255,93,115,.5); overflow: hidden; }
-  #ticker.show { display: flex; }
-  #ticker .lbl { flex: none; display: flex; align-items: center; gap: 8px; padding: 0 16px; background: var(--hot); color: #fff; font: 700 12px Inter, sans-serif; letter-spacing: 1px; text-transform: uppercase; position: relative; z-index: 1; box-shadow: 6px 0 12px rgba(11,16,32,.6); }
-  #ticker .lbl i { width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: blink 1s infinite; }
   @keyframes blink { 50% { opacity: .2; } }
-  #ticker .viewport { flex: 1; overflow: hidden; position: relative; mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent); }
-  #ticker .track { display: inline-flex; white-space: nowrap; height: 100%; align-items: center; animation: scroll var(--dur, 30s) linear infinite; will-change: transform; }
-  #ticker:hover .track { animation-play-state: paused; }
-  @keyframes scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-  #ticker .item { display: inline-flex; align-items: center; gap: 10px; padding: 0 36px 0 0; font: 500 14px var(--mono); cursor: pointer; }
-  #ticker .item b { font-weight: 700; color: #fff; }
-  #ticker .item .dot { color: var(--muted); }
-  #ticker .item img { height: 28px; width: 42px; object-fit: cover; border-radius: 4px; }
 
   header { display: flex; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
   .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; letter-spacing: .2px; }
@@ -667,11 +654,6 @@
   <button id="homeBtn">⚙ Settings</button>
 </header>
 
-<div id="ticker" title="Hover to pause · click an aircraft to select it">
-  <div class="lbl"><i></i><span id="tickerLbl">Nearby</span></div>
-  <div class="viewport"><div class="track" id="tickerTrack"></div></div>
-</div>
-
 <section class="stats">
   <div class="stat" data-go="list" tabindex="0" role="button" title="Show the aircraft list"><div class="k">👀 Overhead Now</div><div class="v" id="sCount">–</div><div class="s" id="sCountSub">within 20 miles</div></div>
   <div class="stat" data-go="close" tabindex="0" role="button" title="Open the closest plane"><div class="k">🎯 Closest Now</div><div class="v" id="sClose">–</div><div class="s" id="sCloseSub">&nbsp;</div></div>
@@ -780,7 +762,7 @@
     <section data-pane="alerts" hidden>
       <div class="place">
         <h4>⭕ Overhead distance</h4>
-        <p class="hint">How close a plane has to pass to set off the overhead alerts: the banner, the full-screen close-up and the voice. It's the red dashed circle around home on the map, and changes as you drag.</p>
+        <p class="hint">How close a plane has to pass to set off the overhead alerts: the full-screen close-up and the voice. It's the red dashed circle around home on the map, and changes as you drag.</p>
         <div class="row" style="align-items:center"><input type="range" id="alertMiIn" data-pref="Overhead distance" data-pref-group="Alerts and sound" data-pref-unit=" mi" min="0.25" max="5" step="0.25" aria-label="Overhead distance in miles"><b id="alertMiVal" style="min-width:64px;text-align:right;font-family:var(--mono)"></b></div>
       </div>
       <div class="place">
@@ -1965,7 +1947,6 @@ function render() {
   }
   if (!firstLoad || current.length) { lastInside = insideSet; firstLoad = false; }
   renderDetail();
-  renderTicker();
   updateTakeover();
 }
 
@@ -2624,49 +2605,7 @@ $('alertMiVal').textContent = miText(ALERT_MI);
 $('alertMiIn').addEventListener('input', e => {
   ALERT_MI = +e.target.value; save('skyAlertMi', ALERT_MI);
   $('alertMiVal').textContent = miText(ALERT_MI);
-  drawHome(); renderTicker(); // redraw the red circle and the banner right away
-});
-let tickerKey = '';
-function renderTicker() {
-  const close = current.filter(a => a.dist != null && a.dist < ALERT_MI).sort((a, b) => a.dist - b.dist);
-  const el = $('ticker'), track = $('tickerTrack');
-  if (!close.length) { el.className = ''; tickerKey = ''; return; }
-  el.className = 'show';
-  $('tickerLbl').textContent = `${close.length} within ${distTxt(ALERT_MI, 2)}`;
-  const items = close.map(a => {
-    const Lk = look(a.hex), i = Lk.info || {};
-    const reg = a.reg || i.reg || '';
-    const vr = a.vr > 300 ? ' ↑ climbing' : a.vr < -300 ? ' ↓ descending' : '';
-    const parts = [
-      `<b>${a.flight || reg || a.hex.toUpperCase()}</b>`,
-      a.flight && reg && reg !== a.flight ? reg : '',
-      modelOf(a),
-      airlineOf(a),
-      routeOf(a) ? `<span style="color:var(--accent)">${routeOf(a)}</span>` : '',
-      ownerOf(a) ? 'owner ' + ownerOf(a) : '',
-      trackedFor(a) ? 'tracked ' + trackedFor(a) : '',
-      `<span style="color:${altColor(a.alt)}">${fmtAlt(a.alt)}${vr}</span>`,
-      speedTxt(a.gs),
-      `${distTxt(a.dist, 2)} ${compass(a.brg)} of home`,
-      a.track != null ? 'heading ' + Math.round(a.track) + '°' : '',
-      a.squawk ? 'squawk ' + a.squawk : '',
-    ].filter(Boolean).join(' <span class="dot">·</span> ');
-    const img = Lk.photo?.src ? `<img src="${Lk.photo.src}" alt="">` : '';
-    return `<span class="item" data-hex="${a.hex}">✈ ${img}${parts}</span>`;
-  }).join('');
-  // Two copies side by side so translateX(-50%) loops seamlessly.
-  track.innerHTML = items + items;
-  // Only reset the speed when the set of aircraft changes, so the scroll doesn't jump every update.
-  const key = close.map(a => a.hex).join(',');
-  if (key !== tickerKey) {
-    tickerKey = key;
-    requestAnimationFrame(() => track.style.setProperty('--dur', Math.max(15, track.scrollWidth / 2 / 70) + 's'));
-  }
-  close.forEach(a => requestLookup(a.hex));
-}
-$('tickerTrack').addEventListener('click', e => {
-  const item = e.target.closest('.item');
-  if (item) select(item.dataset.hex, true);
+  drawHome(); // redraw the red circle right away
 });
 
 $('cards').addEventListener('click', e => {
@@ -3808,7 +3747,7 @@ $('nauticalIn').checked = nautical;
 $('nauticalIn').addEventListener('change', e => {
   nautical = e.target.checked; save('skyNautical', nautical);
   $('radiusVal').textContent = distTxt(radius, 0); $('alertMiVal').textContent = miText(ALERT_MI); showEmerg();
-  drawHome(); update(current.length ? rawCache() : []); renderTicker(); renderLog(); renderAtcPicker(); renderFavs(); pollShips();
+  drawHome(); update(current.length ? rawCache() : []); renderLog(); renderAtcPicker(); renderFavs(); pollShips();
 });
 function renderFavs() {
   const live = favs.filter(f => f.plane?.live).length;
