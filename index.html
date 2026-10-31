@@ -784,6 +784,11 @@
         <div class="row" style="align-items:center"><input type="range" id="alertMiIn" data-pref="Overhead distance" data-pref-group="Alerts and sound" data-pref-unit=" mi" min="0.25" max="5" step="0.25" aria-label="Overhead distance in miles"><b id="alertMiVal" style="min-width:64px;text-align:right;font-family:var(--mono)"></b></div>
       </div>
       <div class="place">
+        <h4>🚨 Emergency bar distance</h4>
+        <p class="hint">The red bar at the top of the page shows planes with an emergency (squawk 7500, 7600 or 7700, or an emergency status) that are within this distance of home. Planes farther away don't set it off.</p>
+        <div class="row" style="align-items:center"><input type="range" id="emergNmIn" min="5" max="40" step="5" aria-label="Emergency bar distance in nautical miles" data-pref="Emergency bar distance" data-pref-group="Alerts and sound" data-pref-unit=" nm"><b id="emergNmVal" style="min-width:64px;text-align:right;font-family:var(--mono)"></b></div>
+      </div>
+      <div class="place">
         <h4>🗣 Announcement voice</h4>
         <p class="hint">A voice speaks when a plane passes inside the overhead circle.</p>
         <label class="lbl" for="voicePick">Voice</label>
@@ -2675,8 +2680,13 @@ document.querySelector('.stats').addEventListener('keydown', e => { if (e.key ==
 // 🚨 The bar at the very top: every tracked plane with an emergency (squawk 7500, 7600 or 7700, or the emergency status
 // the feed reports), whether or not it's inside the radius. Click one to open that plane.
 const EMERGENCY_NAMES = { general: 'EMERGENCY', lifeguard: 'MEDICAL EMERGENCY', minfuel: 'MINIMUM FUEL', nordo: 'RADIO FAILURE', unlawful: 'HIJACK', downed: 'DOWNED AIRCRAFT', reserved: 'EMERGENCY' };
+// only planes within this many nautical miles of home set the bar off (Settings > Alerts; 20 nm to start)
+var EMERG_NM = load('skyEmergNm', 20);
+function showEmerg() { $('emergNmIn').value = EMERG_NM; $('emergNmVal').textContent = distTxt(EMERG_NM * 1.15078, 0); }
+showEmerg();
+$('emergNmIn').addEventListener('input', e => { EMERG_NM = +e.target.value; save('skyEmergNm', EMERG_NM); showEmerg(); updateEmergencyBar(); });
 function updateEmergencyBar() {
-  const bar = $('emergencyBar'), list = current.filter(a => emergencyOf(a)).sort((a, b) => (a.dist ?? 1e9) - (b.dist ?? 1e9));
+  const bar = $('emergencyBar'), list = current.filter(a => emergencyOf(a) && (a.dist == null || a.dist <= EMERG_NM * 1.15078)).sort((a, b) => (a.dist ?? 1e9) - (b.dist ?? 1e9));
   bar.hidden = !list.length;
   bar.innerHTML = list.map(a => {
     const what = EMERGENCY_NAMES[String(a.emergency || '').toLowerCase()] || emergencyOf(a);
@@ -3783,7 +3793,7 @@ function planeWhere(p) {
 $('nauticalIn').checked = nautical;
 $('nauticalIn').addEventListener('change', e => {
   nautical = e.target.checked; save('skyNautical', nautical);
-  $('radiusVal').textContent = distTxt(radius, 0); $('alertMiVal').textContent = miText(ALERT_MI);
+  $('radiusVal').textContent = distTxt(radius, 0); $('alertMiVal').textContent = miText(ALERT_MI); showEmerg();
   drawHome(); update(current.length ? rawCache() : []); renderTicker(); renderLog(); renderAtcPicker(); renderFavs(); pollShips();
 });
 function renderFavs() {
