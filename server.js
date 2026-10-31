@@ -43,7 +43,7 @@ console.log = (...a) => { consoleLog(...a); debugLog('INFO', asText(a)); };
 console.error = (...a) => { consoleError(...a); debugLog('ERROR', asText(a)); };
 process.on('uncaughtException', e => { debugLog('CRASH', e && e.stack || e); consoleError(e); process.exit(1); });
 
-const PORT = Number(process.env.PORT || 8090);
+let PORT = Number(process.env.PORT || 8090); // moves to another port if this one is taken by some other program (see the listen code at the bottom)
 // Defaults shown in Settings -> Your accounts until someone changes or clears them there.
 const DEFAULT_FA_USER = 'LoveFamily9999';      // FlightAware feeder whose stats are shown
 const DEFAULT_CONTACT = 'noreply@loves3d.com'; // contact Planespotters asks every app for
@@ -1852,14 +1852,33 @@ server.on('error', e => {
   if (e.code !== 'EADDRINUSE') throw e;
   // just updated: the old copy may still be letting go of the port, so wait for it
   if (process.env.FT_RESTART && ++listenTries < 20) return setTimeout(() => server.listen(PORT, lanHost()), 1000);
-  // already running (e.g. double-clicked twice): just open the existing dashboard
-  console.log('Already running - opening it in your browser.'); if (sea) openBrowser(); setTimeout(() => process.exit(0), 1500);
+  // our own app already running (e.g. double-clicked twice): just open the existing dashboard.
+  // Some other program using the port: move to the next free one (then any port Windows picks) and remember it.
+  isOurApp(PORT).then(ours => {
+    if (ours) { console.log('Already running - opening it in your browser.'); if (sea) openBrowser(); return setTimeout(() => process.exit(0), 1500); }
+    const was = PORT; PORT = portTries++ < 10 ? PORT + 1 : 0;
+    console.log(`Port ${was} is in use by another program, trying ${PORT || 'one Windows picks'}`);
+    server.listen(PORT, lanHost(), startedUp);
+  });
 });
-let started = false;
-server.listen(PORT, lanHost(), () => {
+const isOurApp = port => new Promise(done => {
+  const r = http.get({ host: '127.0.0.1', port, path: '/api/version', timeout: 1500 }, res => {
+    let b = ''; res.on('data', d => b += d); res.on('end', () => { try { done(!!JSON.parse(b).repo); } catch (e) { done(false); } });
+  });
+  r.on('error', () => done(false)); r.on('timeout', () => { r.destroy(); done(false); });
+});
+let started = false, portTries = 0;
+if (!process.env.PORT && settings.port) PORT = Number(settings.port) || PORT; // the port picked last time, so bookmarks keep working
+server.listen(PORT, lanHost(), startedUp);
+function startedUp() {
   if (started) return;
   started = true;
+  PORT = server.address().port;
+  if (!process.env.PORT && PORT !== (Number(settings.port) || 8090)) { // remember a moved port; the default needs no saving
+    settings.port = PORT;
+    try { fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 1)); } catch (e) {}
+  }
   aisConnect();
   console.log(`Krabbz9999 - Look A Plane! v${VERSION.version} build ${VERSION.build} running at http://localhost:${PORT}${settings.lanAccess ? ' and ' + lanUrls().join(', ') : ''}`);
   if (sea) { console.log('To stop it, close this window or right-click the plane icon in the system tray and choose Quit.'); openBrowser(); startTray(); }
-});
+}

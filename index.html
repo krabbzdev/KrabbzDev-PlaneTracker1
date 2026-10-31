@@ -2758,8 +2758,8 @@ document.querySelector('.stats').addEventListener('keydown', e => { if (e.key ==
 // 🚨 The bar at the very top: every tracked plane with an emergency (squawk 7500, 7600 or 7700, or the emergency status
 // the feed reports), whether or not it's inside the radius. Click one to open that plane.
 const EMERGENCY_NAMES = { general: 'EMERGENCY', lifeguard: 'MEDICAL EMERGENCY', minfuel: 'MINIMUM FUEL', nordo: 'RADIO FAILURE', unlawful: 'HIJACK', downed: 'DOWNED AIRCRAFT', reserved: 'EMERGENCY' };
-// only planes within this many nautical miles of home set the bar off (Settings > Alerts; 20 nm to start)
-var EMERG_NM = load('skyEmergNm', 20);
+// only planes within this many nautical miles of home set the bar off (Settings > Alerts; 40 nm to start)
+var EMERG_NM = load('skyEmergNm', 40);
 function showEmerg() { $('emergNmIn').value = EMERG_NM; $('emergNmVal').textContent = distTxt(EMERG_NM * 1.15078, 0); }
 showEmerg();
 $('emergNmIn').addEventListener('input', e => { EMERG_NM = +e.target.value; save('skyEmergNm', EMERG_NM); showEmerg(); updateEmergencyBar(); });
