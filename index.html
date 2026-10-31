@@ -1674,7 +1674,13 @@ const heliSvg = (color, rot) =>
 // ADS-B emitter category A7 = rotorcraft; type codes and descriptions catch helicopters that don't send it
 const HELI_TYPES = /^(R22|R44|R66|EC(20|25|30|35|45|55|75)|AS(32|50|55|65)|H(47|53|60|64|65|125|135|145|155|160|175)|B(06|05|212|222|230|407|412|427|429|430|505|525)|BK17|S(61|64|70|76|92)|A(109|119|129|139|149|169|189)|MD(52|60|90)|H500|UH1|UH60|CH47|AH64|EH10|NH90|MI(8|17|24|26)|KA(32|50|52)|G2CA|EN28|EN48|CABR|S300)$/;
 const isHeli = a => a.category === 'A7' || HELI_TYPES.test(a.type || '') || /HELICOPTER|COPTER|ROTORCRAFT/i.test(a.desc || '');
-const aircraftSvg = (a, color, rot) => (a && isHeli(a) ? heliSvg : planeSvg)(color, rot);
+// Airliner: swept-wing jet. Private plane: smaller, straight wings with a propeller. Airline callsigns and the big ADS-B size
+// categories (A3 to A5) are airliners, except the fractional/charter jet operators; military aircraft keep the jet shape.
+const lightSvg = (color, rot) =>
+  `<svg width="26" height="26" viewBox="0 0 24 24" style="transform:rotate(${rot}deg)"><path fill="${color}" stroke="#0b1020" stroke-width="1" d="M12 3c.8 0 1.3.8 1.3 2v3.6l8.2 1v2.4l-8.2-.6v5l2.7 1.6v1.6L12 19.5l-4 .1v-1.6l2.7-1.6v-5l-8.2.6V9.6l8.2-1V5c0-1.2.5-2 1.3-2z"/><path d="M9.3 2.4h5.4" stroke="${color}" stroke-width="1.4" stroke-linecap="round"/></svg>`;
+const PRIVATE_OPS = /^(EJA|EJM|LXJ|XOJ|GAJ|TWY|VJT|JTL|NJE|FFL)\d/;
+const isAirliner = a => a.category !== 'A1' && ((/^[A-Z]{3}\d/.test(a.flight || '') && !PRIVATE_OPS.test(a.flight)) || /^A[345]$/.test(a.category || ''));
+const aircraftSvg = (a, color, rot) => (a && isHeli(a) ? heliSvg : a && !isAirliner(a) && !(a.flags & 1) ? lightSvg : planeSvg)(color, rot);
 
 // Military / interesting / emergency aircraft
 const EMERGENCY_SQUAWKS = { '7500': 'HIJACK', '7600': 'RADIO FAILURE', '7700': 'EMERGENCY' };
@@ -3997,7 +4003,8 @@ legend.onAdd = () => {
     <div class="lg-grad" style="background:linear-gradient(90deg, ${grad})"></div>
     <div class="lg-scale"><span>0</span><span>10k</span><span>20k</span><span>30k</span><span>40k ft</span></div>
     <div class="lg-panel" hidden>
-      ${icon(planeSvg(altColor(30000), 45), 'Plane, pointing the way it flies')}
+      ${icon(planeSvg(altColor(30000), 45), 'Airliner, pointing the way it flies')}
+      ${icon(lightSvg(altColor(5000), 45), 'Private or small plane')}
       ${icon(heliSvg(altColor(1500), 45), 'Helicopter')}
       ${icon(planeSvg('#9aa4bf', 45), 'On the ground')}
       ${icon(planeSvg('#5b6684', 45), 'Outside your Tracker Radius')}
