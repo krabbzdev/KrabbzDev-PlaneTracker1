@@ -361,6 +361,49 @@ async function tfrs() {
   return data;
 }
 
+// The air traffic control center (ARTCC) over a spot, with its low and high altitude layers, from the FAA's airspace
+// boundaries (public). Remembered for an hour per tenth of a degree.
+const artccCache = new Map();
+// FlightAware AeroAPI (the user's own key, from Settings): the flight plan's real from/to and times.
+// It bills per request, so a flight is asked about at most once every 10 minutes.
+const aeroCache = new Map();
+async function aeroFlight(ident) {
+  const hit = aeroCache.get(ident);
+  if (hit && Date.now() - hit.at < 600e3) return hit.v;
+  const r = await fetch('https://aeroapi.flightaware.com/aeroapi/flights/' + encodeURIComponent(ident) + '?max_pages=1', { headers: { 'x-apikey': settings.aeroKey }, signal: AbortSignal.timeout(10000) });
+  if (r.status === 401 || r.status === 403) return { error: 'FlightAware did not accept the key' };
+  if (!r.ok) return { error: 'FlightAware answered ' + r.status };
+  const list = (await r.json()).flights || [];
+  const f = list.find(x => x.actual_off && !x.actual_on) || list.find(x => !x.actual_on && !x.cancelled) || list[0];
+  let v = { none: true };
+  if (f) {
+    await loadAirports();
+    const end = p => {
+      if (!p) return null;
+      const a = airports.find(x => x[1] === p.code_icao || x[1] === p.code);
+      return { label: (p.city ? p.city + ' ' : '') + '(' + (p.code_iata || p.code_icao || p.code) + ')', pos: a ? [a[4], a[5]] : null };
+    };
+    v = { from: end(f.origin), to: end(f.destination), status: f.status, type: f.aircraft_type, reg: f.registration, progress: f.progress_percent,
+      out: f.actual_out || f.estimated_out || f.scheduled_out, in: f.actual_in || f.estimated_in || f.scheduled_in,
+      outKind: f.actual_out ? 'Departed' : f.estimated_out ? 'Estimated departure' : 'Scheduled departure',
+      inKind: f.actual_in ? 'Arrived' : f.estimated_in ? 'Estimated arrival' : 'Scheduled arrival' };
+  }
+  aeroCache.set(ident, { at: Date.now(), v });
+  return v;
+}
+async function artccAt(lat, lon) {
+  const key = lat.toFixed(1) + ',' + lon.toFixed(1), hit = artccCache.get(key);
+  if (hit && Date.now() - hit.at < 3600e3) return hit.list;
+  const r = await get('https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Boundary_Airspace/FeatureServer/0/query?where='
+    + encodeURIComponent("TYPE_CODE='ARTCC'") + `&geometry=${lon},${lat}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects`
+    + '&outFields=IDENT,NAME,LOCAL_TYPE&returnGeometry=false&f=json', 10000);
+  if (r.status !== 200) return hit ? hit.list : [];
+  const list = (JSON.parse(r.body).features || []).map(f => ({ ident: f.attributes.IDENT, name: f.attributes.NAME, level: /_H$/.test(f.attributes.LOCAL_TYPE || '') ? 'H' : 'L' }));
+  artccCache.set(key, { at: Date.now(), list });
+  if (artccCache.size > 500) artccCache.delete(artccCache.keys().next().value);
+  return list;
+}
+
 const airportWikiCache = new Map();
 async function airportWiki(link) {
   const m = String(link).match(/^https?:\/\/([a-z-]+)\.wikipedia\.org\/wiki\/([^?#]+)/);
@@ -1035,7 +1078,7 @@ const server = http.createServer(async (req, res) => {
       // Settings > More > Reset settings to default: every option back to how a fresh install starts. Home, office,
       // accounts, the ship key, cruise lines and favorites are kept unless "everything" is asked for.
       const b = JSON.parse(await readBody(req) || '{}');
-      const keep = b.everything ? [] : ['home', 'homeLabel', 'homeName', 'office', 'faUser', 'contact', 'aisKey', 'cruiseLines', 'favorites'];
+      const keep = b.everything ? [] : ['home', 'homeLabel', 'homeName', 'office', 'faUser', 'contact', 'aisKey', 'aeroKey', 'cruiseLines', 'favorites'];
       const wasLan = !!settings.lanAccess;
       settings = Object.fromEntries(Object.entries(settings).filter(([k]) => keep.includes(k)));
       fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 1));
@@ -1126,6 +1169,7 @@ const server = http.createServer(async (req, res) => {
           setTimeout(watchRefresh, 500);
         }
         if ('aisKey' in b) { settings.aisKey = String(b.aisKey || '').trim().slice(0, 100); setTimeout(watchConnect, 2000); }
+        if ('aeroKey' in b) { settings.aeroKey = String(b.aeroKey || '').trim().slice(0, 100); aeroCache.clear(); }
         if ('appWindow' in b) settings.appWindow = !!b.appWindow;
         if ('lanAccess' in b && !!b.lanAccess !== !!settings.lanAccess) { settings.lanAccess = !!b.lanAccess; setTimeout(relisten, 500); }
         fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 1));
@@ -1139,6 +1183,7 @@ const server = http.createServer(async (req, res) => {
         faUser: faUser(), contact: contactSetting() || '',
         cruiseLines: Array.isArray(settings.cruiseLines) ? settings.cruiseLines : null,
         cruiseLineOptions: CRUISE_BRANDS.filter(x => x[3]).map(x => x[1]), // lines with a fleet list to watch
+        aeroKeySet: !!settings.aeroKey, aeroKeyHint: settings.aeroKey && isLocalReq(req) ? '••••' + settings.aeroKey.slice(-4) : '',
         aisKeySet: !!aisKey(), aisKeyHint: aisKey() && isLocalReq(req) ? '••••' + aisKey().slice(-4) : '',
         lanAccess: !!settings.lanAccess, lanUrls: lanUrls(), thisPc: isLocalReq(req),
         localUrl: `http://localhost:${PORT}`, networkUrls: isLocalReq(req) ? networkUrls() : [],
@@ -1188,6 +1233,17 @@ const server = http.createServer(async (req, res) => {
       await loadAirports();
       const q = k => Number(url.searchParams.get(k));
       return send(res, 200, JSON.stringify(airportsNear(q('lat'), q('lon'), Math.min(q('r') || 40, 150))));
+    }
+    if (url.pathname === '/api/aero') { // the real flight plan from FlightAware, when the user saved a key
+      const id = (url.searchParams.get('ident') || '').trim().toUpperCase();
+      if (!settings.aeroKey) return send(res, 200, '{"error":"nokey"}');
+      if (!/^[A-Z0-9]{2,8}$/.test(id)) return send(res, 400, '{"error":"bad flight"}');
+      return send(res, 200, JSON.stringify(await aeroFlight(id).catch(e => ({ error: 'FlightAware not reachable' }))));
+    }
+    if (url.pathname === '/api/artcc') { // which air traffic control center is over a spot
+      const lat = Number(url.searchParams.get('lat')), lon = Number(url.searchParams.get('lon'));
+      if (!(Math.abs(lat) <= 90 && Math.abs(lon) <= 180)) return send(res, 400, '{"error":"bad position"}');
+      return send(res, 200, JSON.stringify(await artccAt(lat, lon)));
     }
     if (url.pathname === '/api/tfrs') return send(res, 200, JSON.stringify(await tfrs()));
     if (url.pathname === '/api/metars') {
