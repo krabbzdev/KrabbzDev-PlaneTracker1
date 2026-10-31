@@ -228,6 +228,14 @@
   .links { display: flex; gap: 12px; margin-top: 10px; font-size: 12px; }
   .links a { color: var(--accent); text-decoration: none; }
 
+  /* 🚨 emergency bar: pinned to the top of the page while any tracked plane has an emergency */
+  .emerg-bar { position: sticky; top: 0; z-index: 2500; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 14px; padding: 9px 16px; background: #c4123f; color: #fff; font: 600 13.5px Inter, sans-serif; box-shadow: 0 4px 18px rgba(0,0,0,.55); animation: emergPulse 1.6s ease-in-out infinite; }
+  .emerg-bar[hidden] { display: none; }
+  .emerg-bar button { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border: 1px solid rgba(255,255,255,.55); border-radius: 8px; background: rgba(0,0,0,.28); color: #fff; font: inherit; cursor: pointer; text-align: left; }
+  .emerg-bar button:hover { background: rgba(0,0,0,.5); }
+  .emerg-bar b { letter-spacing: .6px; }
+  .emerg-bar small { font: 500 12px Inter, sans-serif; opacity: .92; }
+  @keyframes emergPulse { 50% { background: #8f0d2e; } }
   .banner { display: none; margin: 0 20px 12px; padding: 10px 14px; border-radius: 10px; background: rgba(255,93,115,.12); border: 1px solid rgba(255,93,115,.4); font-size: 13px; }
   .banner.show { display: block; }
 
@@ -619,6 +627,7 @@
 </style>
 </head>
 <body>
+<div id="emergencyBar" class="emerg-bar" role="alert" hidden></div>
 <header>
   <div class="brand">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg>
@@ -1882,6 +1891,7 @@ function update(list) {
     }
   }
   current = rows;
+  updateEmergencyBar();
   render();
 }
 
@@ -2661,6 +2671,21 @@ function goStat(card) {
 }
 document.querySelector('.stats').addEventListener('click', e => { const c = e.target.closest('.stat'); if (c) goStat(c); });
 document.querySelector('.stats').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { const c = e.target.closest('.stat'); if (c) { e.preventDefault(); goStat(c); } } });
+
+// 🚨 The bar at the very top: every tracked plane with an emergency (squawk 7500, 7600 or 7700, or the emergency status
+// the feed reports), whether or not it's inside the radius. Click one to open that plane.
+const EMERGENCY_NAMES = { general: 'EMERGENCY', lifeguard: 'MEDICAL EMERGENCY', minfuel: 'MINIMUM FUEL', nordo: 'RADIO FAILURE', unlawful: 'HIJACK', downed: 'DOWNED AIRCRAFT', reserved: 'EMERGENCY' };
+function updateEmergencyBar() {
+  const bar = $('emergencyBar'), list = current.filter(a => emergencyOf(a)).sort((a, b) => (a.dist ?? 1e9) - (b.dist ?? 1e9));
+  bar.hidden = !list.length;
+  bar.innerHTML = list.map(a => {
+    const what = EMERGENCY_NAMES[String(a.emergency || '').toLowerCase()] || emergencyOf(a);
+    const detail = [modelOf(a) || a.type, typeof a.alt === 'number' || a.alt === 'ground' ? fmtAlt(a.alt) : '', speedTxt(a.gs),
+      a.dist != null ? distTxt(a.dist) + ' ' + compass(a.brg) + ' of home' : '', a.squawk ? 'squawk ' + a.squawk : ''].filter(Boolean).join(' · ');
+    return `<button type="button" data-hex="${a.hex}" title="Open this plane">🚨 <b>${esc(what)}</b> ${esc(a.flight || a.reg || a.hex.toUpperCase())} <small>${esc(detail)}</small></button>`;
+  }).join('');
+}
+$('emergencyBar').addEventListener('click', e => { const b = e.target.closest('button'); if (b) select(b.dataset.hex, true); });
 
 function select(hex, pan) {
   selected = hex;
