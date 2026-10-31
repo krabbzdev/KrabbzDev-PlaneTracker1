@@ -2349,13 +2349,15 @@ const SAY_OLD_DEFAULTS = ['Overhead now! {type}, {speed}, {altitude}, {destinati
   'Look, a Plane! {airline} {type}, traveling at {speed}, and is flying at {altitude}, {destination}.',
   'Look, a Plane! {airline} {type}, traveling at {speed}, and is flying at {altitude}, {destination} from {from}.'];
 const city = s => (s || '').replace(/\s*\([^)]*\)\s*$/, ''); // "Orlando (MCO)" -> "Orlando"
+// spoken: the city, then the airport code letter by letter ("Tampa, T P A") so the voice doesn't read "PIE" as a word
+const cityAndCode = s => { const c = (s || '').match(/\(([A-Z0-9]{3,4})\)\s*$/); return c ? city(s) + ', ' + c[1].split('').join(' ') : city(s); };
 const COMPASS_WORDS = { N: 'north', NE: 'north east', E: 'east', SE: 'south east', S: 'south', SW: 'south west', W: 'west', NW: 'north west' };
 const SAY_TAGS = { // name: [example for the Test button, value for a plane]
   type: ['Boeing 737', a => modelOf(a).replace(/-/g, ' ')], // "A-320" reads more naturally as "A 320"
   speed: ['280 miles per hour', a => a.gs == null ? '' : nautical ? Math.round(a.gs) + ' knots' : Math.round(a.gs * 1.15078) + ' miles per hour'],
   altitude: ['3,500 feet', a => typeof a.alt === 'number' ? a.alt.toLocaleString() + ' feet' : ''],
-  destination: ['going to Orlando', a => { const to = routeParts(a).to; return to ? 'going to ' + city(to) : ''; }],
-  from: ['Tampa', a => city(routeParts(a).from)],
+  destination: ['going to Orlando, M C O', a => { const to = routeParts(a).to; return to ? 'going to ' + cityAndCode(to) : ''; }],
+  from: ['Tampa, T P A', a => cityAndCode(routeParts(a).from)],
   airline: ['Southwest Airlines', a => airlineOf(a)],
   distance: ['0.4 miles away', a => a.dist == null ? '' : nautical ? +(a.dist / 1.15078).toFixed(1) + ' nautical miles away' : +a.dist.toFixed(1) + ' miles away'],
   direction: ['to the north east', a => a.brg != null ? 'to the ' + COMPASS_WORDS[compass(a.brg)] : ''],
