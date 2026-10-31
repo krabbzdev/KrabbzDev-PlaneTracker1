@@ -16,7 +16,7 @@ when a plane passes right overhead.
    **ZIP code or address**. That's it.
 
 Nothing else to install: no Node.js, no accounts. The dashboard opens only on the PC it's installed on,
-unless you turn on **Settings → More → Network** to let phones and tablets on your home Wi-Fi watch it too. To stop it, right-click the ✈ tray icon → **Quit**. To uninstall, use Windows
+unless you turn on **Settings → Network** to let phones and tablets on your home Wi-Fi watch it too. To stop it, right-click the ✈ tray icon → **Quit**. To uninstall, use Windows
 **Settings → Apps** (your settings and log are left in the install folder; delete it to remove them).
 
 The plain `Krabbz9999-FlightTracker.exe` is in each release too: it's what installed copies update
@@ -24,10 +24,10 @@ themselves from, and it still runs on its own from any folder.
 
 ## Support
 
-If something goes wrong, **Settings → More → Help and debugging → Email debug log** (or the tray icon's menu)
+If something goes wrong, **Settings → Help → Email debug log** (or the tray icon's menu)
 opens an email with the app's log attached.
 
-Got an idea or found a bug? Use **Send feedback** in Settings → More (or the tray icon's right-click menu): it opens a
+Got an idea or found a bug? Use **Send feedback** in Settings → Help (or the tray icon's right-click menu): it opens a
 pre-filled issue on this project's GitHub page (nothing is sent until you press Submit there), or you can copy the text.
 
 If Look A Plane! makes you smile, you can [buy me a coffee](https://buymeacoffee.com/krabbzdev).

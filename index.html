@@ -637,7 +637,7 @@
     Krabbz9999 - Look A Plane!
   </div>
   <span class="live" id="live"><i></i><span id="liveTxt">Connecting…</span></span>
-  <span class="lan-addr" id="lanAddr" hidden title="Network access is on (Settings → More → Network): other devices on your network can open the dashboard at these addresses"></span>
+  <span class="lan-addr" id="lanAddr" hidden title="Network access is on (Settings → Network): other devices on your network can open the dashboard at these addresses"></span>
   <div class="spacer"></div>
   <div class="ctl">Tracker Radius <input type="range" id="radius" data-pref="Tracker radius" data-pref-group="Map" data-pref-unit=" mi" min="1" max="25" step="1" value="21"><b id="radiusVal">18 nm</b></div>
   <details class="layers-menu" id="layersMenu">
@@ -734,7 +734,7 @@
     <button role="tab" data-tab="loc" class="on">📍 Location</button>
     <button role="tab" data-tab="alerts">🔔 Alerts</button>
     <button role="tab" data-tab="display">🖥 Display</button>
-    <button role="tab" data-tab="more">⚙ More</button>
+    <button role="tab" data-tab="ships">🚢 Ships</button><button role="tab" data-tab="flights">✈️ Flights</button><button role="tab" data-tab="feeder">📡 Feeder</button><button role="tab" data-tab="network">🌐 Network</button><button role="tab" data-tab="updates">⬆ Updates</button><button role="tab" data-tab="news">🆕 What's new</button><button role="tab" data-tab="help">🐞 Help</button><button role="tab" data-tab="credits">🙏 Credits</button><button role="tab" data-tab="reset">↺ Reset</button>
   </div>
 
   <div class="set-body">
@@ -833,53 +833,7 @@
     </section>
 
     <!-- More: updates and optional accounts -->
-    <section data-pane="more" hidden>
-      <div class="place">
-        <h4>🌐 Network</h4>
-        <label class="chk"><input type="checkbox" id="lanIn"> Let other devices on my home network open the dashboard</label>
-        <p class="hint" id="lanHint">Off: only this PC can open it. On: phones, tablets and TVs on the same Wi-Fi can open it in their browser too. They can watch, but only this PC can change settings, favorites or updates. The first time, Windows may show a firewall popup asking to allow <b>Node.js JavaScript Runtime</b> (the app is built on Node.js): tick <b>Private networks</b> and click <b>Allow access</b>. If you missed it, other devices can't connect until you allow it in Windows Security → Firewall &amp; network protection → Allow an app through firewall. Only turn this on at home, not on public Wi-Fi.</p>
-        <div class="where" id="lanUrls" hidden></div>
-      </div>
-      <div class="place">
-        <h4>↺ Reset settings to default</h4>
-        <p class="hint">Puts every option back to how a fresh install starts: map, alerts, sound, voice, display, network and window settings.</p>
-        <div class="row"><button type="button" id="resetAsk">↺ Reset settings to default…</button></div>
-        <div id="resetBox" class="reset-box" hidden>
-          <b>Reset all settings?</b> Your home location, office, accounts, ship tracking key and favorite planes are kept.
-          <label class="chk" style="margin-top:8px"><input type="checkbox" id="resetAll"> Also forget those, like a brand-new install</label>
-          <div class="row" style="margin-top:8px"><button type="button" id="resetGo" class="danger">Reset now</button><button type="button" id="resetCancel">Cancel</button></div>
-        </div>
-      </div>
-      <div class="place">
-        <h4>🆕 What's new</h4>
-        <p class="hint">The changes in the latest versions of Look A Plane!</p>
-        <div class="row"><button type="button" id="newsBtn">Show what's new</button></div>
-        <div id="newsList" class="hint"></div>
-      </div>
-      <div class="place">
-        <h4>🙏 Credits</h4>
-        <p class="hint">Look A Plane! is built on free data and tools from many people and organizations: adsb.fi, Planespotters, Airport-Data.com, OurAirports, the FAA, NOAA, OpenStreetMap, Wikipedia, AISStream, Esri, Leaflet, Kokoro and more.</p>
-        <div class="row"><a class="btn-link" href="https://github.com/krabbzdev/KrabbzDev-PlaneTracker1#data-sources-and-credits" target="_blank" rel="noopener">📜 See all the credits on GitHub ↗</a><a class="btn-link" href="https://github.com/krabbzdev/KrabbzDev-PlaneTracker1/wiki/Data-Sources-and-Privacy" target="_blank" rel="noopener">Data sources and privacy ↗</a></div>
-      </div>
-      <div class="place">
-        <h4>🐞 Help and debugging</h4>
-        <p class="hint">Got an idea or found a bug? <b>Send feedback</b> opens a short form (it goes to GitHub). If something isn't working, send the app's log. It's a text file of what the app has been doing, with no keys or addresses in its summary.</p>
-        <div class="row"><button type="button" id="fbOpen">💡 Send feedback…</button><button type="button" id="debugEmail">✉ Email debug log…</button><a class="btn-link" id="debugDownload" href="/api/debuglog" download>⬇ Download it instead</a></div>
-        <p class="hint" id="debugMsg" style="margin-top:6px"></p>
-      </div>
-      <div class="place">
-        <h4>⬆ Updates</h4>
-        <div class="where" id="updCur"></div>
-        <label class="chk" style="margin:4px 0 8px"><input type="checkbox" id="autoUpd"> Install updates automatically</label>
-        <div class="acts left"><button id="updCheck">Check for updates</button><button id="updInstall" class="primary" style="display:none">Install now</button></div>
-      </div>
-      <div class="place" id="aeroBox">
-        <h4>✈️ Flight plans <small>optional, your own FlightAware key</small></h4>
-        <p class="hint">Fills in where each flight really is going (and its departure and arrival times) on the plane card. It uses FlightAware's AeroAPI. That is a separate product from a FlightAware website membership: create a key at <a href="https://www.flightaware.com/aeroapi/portal/" target="_blank" rel="noopener">flightaware.com/aeroapi</a>, then paste it below.</p>
-        <div class="where" id="aeroCur"></div>
-        <div class="row"><input id="aeroIn" placeholder="Paste your AeroAPI key" autocomplete="off" spellcheck="false"><button id="aeroClear" title="Remove the saved key">Remove</button></div>
-        <p class="hint">AeroAPI charges per request, so the app asks about a flight only when you open its card, at most once every 10 minutes. The key stays on this PC (in settings.json).</p>
-      </div>
+    <section data-pane="ships" hidden>
       <div class="place" id="aisPlace">
         <h4>🚢 Ship tracking <small>optional, free</small></h4>
         <p class="hint">Shows cruise ships and other boats near you, live, using AISStream.io. It's free, but you need your own key:</p>
@@ -896,6 +850,17 @@
         <div class="acts left" style="margin:6px 0 4px"><button type="button" id="linesAll">Select all</button><button type="button" id="linesNone">Clear all</button></div>
         <p class="hint">The app remembers where these lines' ships were last seen anywhere in the world, so you can jump to them by name. AISStream can watch up to 190 ships, so choosing fewer lines leaves room for all of their ships.</p>
       </div>
+    </section>
+    <section data-pane="flights" hidden>
+      <div class="place" id="aeroBox">
+        <h4>✈️ Flight plans <small>optional, your own FlightAware key</small></h4>
+        <p class="hint">Fills in where each flight really is going (and its departure and arrival times) on the plane card. It uses FlightAware's AeroAPI. That is a separate product from a FlightAware website membership: create a key at <a href="https://www.flightaware.com/aeroapi/portal/" target="_blank" rel="noopener">flightaware.com/aeroapi</a>, then paste it below.</p>
+        <div class="where" id="aeroCur"></div>
+        <div class="row"><input id="aeroIn" placeholder="Paste your AeroAPI key" autocomplete="off" spellcheck="false"><button id="aeroClear" title="Remove the saved key">Remove</button></div>
+        <p class="hint">AeroAPI charges per request, so the app asks about a flight only when you open its card, at most once every 10 minutes. The key stays on this PC (in settings.json).</p>
+      </div>
+    </section>
+    <section data-pane="feeder" hidden>
       <div class="place">
         <h4>📡 FlightAware feeder <small>optional</small></h4>
         <p class="hint">Only if you run your own ADS-B receiver that feeds FlightAware. Your stats then show in the right-hand panel.</p>
@@ -907,6 +872,57 @@
         </details>
       </div>
     </section>
+    <section data-pane="network" hidden>
+      <div class="place">
+        <h4>🌐 Network</h4>
+        <label class="chk"><input type="checkbox" id="lanIn"> Let other devices on my home network open the dashboard</label>
+        <p class="hint" id="lanHint">Off: only this PC can open it. On: phones, tablets and TVs on the same Wi-Fi can open it in their browser too. They can watch, but only this PC can change settings, favorites or updates. The first time, Windows may show a firewall popup asking to allow <b>Node.js JavaScript Runtime</b> (the app is built on Node.js): tick <b>Private networks</b> and click <b>Allow access</b>. If you missed it, other devices can't connect until you allow it in Windows Security → Firewall &amp; network protection → Allow an app through firewall. Only turn this on at home, not on public Wi-Fi.</p>
+        <div class="where" id="lanUrls" hidden></div>
+      </div>
+    </section>
+    <section data-pane="updates" hidden>
+      <div class="place">
+        <h4>⬆ Updates</h4>
+        <div class="where" id="updCur"></div>
+        <label class="chk" style="margin:4px 0 8px"><input type="checkbox" id="autoUpd"> Install updates automatically</label>
+        <div class="acts left"><button id="updCheck">Check for updates</button><button id="updInstall" class="primary" style="display:none">Install now</button></div>
+      </div>
+    </section>
+    <section data-pane="news" hidden>
+      <div class="place">
+        <h4>🆕 What's new</h4>
+        <p class="hint">The changes in the latest versions of Look A Plane!</p>
+        <div class="row"><button type="button" id="newsBtn">Show what's new</button></div>
+        <div id="newsList" class="hint"></div>
+      </div>
+    </section>
+    <section data-pane="help" hidden>
+      <div class="place">
+        <h4>🐞 Help and debugging</h4>
+        <p class="hint">Got an idea or found a bug? <b>Send feedback</b> opens a short form (it goes to GitHub). If something isn't working, send the app's log. It's a text file of what the app has been doing, with no keys or addresses in its summary.</p>
+        <div class="row"><button type="button" id="fbOpen">💡 Send feedback…</button><button type="button" id="debugEmail">✉ Email debug log…</button><a class="btn-link" id="debugDownload" href="/api/debuglog" download>⬇ Download it instead</a></div>
+        <p class="hint" id="debugMsg" style="margin-top:6px"></p>
+      </div>
+    </section>
+    <section data-pane="credits" hidden>
+      <div class="place">
+        <h4>🙏 Credits</h4>
+        <p class="hint">Look A Plane! is built on free data and tools from many people and organizations: adsb.fi, Planespotters, Airport-Data.com, OurAirports, the FAA, NOAA, OpenStreetMap, Wikipedia, AISStream, Esri, Leaflet, Kokoro and more.</p>
+        <div class="row"><a class="btn-link" href="https://github.com/krabbzdev/KrabbzDev-PlaneTracker1#data-sources-and-credits" target="_blank" rel="noopener">📜 See all the credits on GitHub ↗</a><a class="btn-link" href="https://github.com/krabbzdev/KrabbzDev-PlaneTracker1/wiki/Data-Sources-and-Privacy" target="_blank" rel="noopener">Data sources and privacy ↗</a></div>
+      </div>
+    </section>
+    <section data-pane="reset" hidden>
+      <div class="place">
+        <h4>↺ Reset settings to default</h4>
+        <p class="hint">Puts every option back to how a fresh install starts: map, alerts, sound, voice, display, network and window settings.</p>
+        <div class="row"><button type="button" id="resetAsk">↺ Reset settings to default…</button></div>
+        <div id="resetBox" class="reset-box" hidden>
+          <b>Reset all settings?</b> Your home location, office, accounts, ship tracking key and favorite planes are kept.
+          <label class="chk" style="margin-top:8px"><input type="checkbox" id="resetAll"> Also forget those, like a brand-new install</label>
+          <div class="row" style="margin-top:8px"><button type="button" id="resetGo" class="danger">Reset now</button><button type="button" id="resetCancel">Cancel</button></div>
+        </div>
+      </div>
+    </section>
   </div>
 
   <div class="set-foot"><a class="coffee" href="https://buymeacoffee.com/krabbzdev" target="_blank" rel="noopener" title="If Look A Plane! makes you smile, you can buy KrabbzDev a coffee">☕ Buy me a coffee</a><button id="cancelHome">Cancel</button><button id="saveHome" class="primary">Save</button></div>
@@ -915,7 +931,7 @@
 <button id="soundLock" type="button" hidden>🔇 Sound is off until you click this page. <b>Click here to turn on the overhead chime and voice</b></button>
 <div id="toasts"></div>
 
-<!-- 💡 feedback form: opened from Settings > More > Help and debugging, or the tray icon's menu (which opens the page with #feedback) -->
+<!-- 💡 feedback form: opened from Settings > Help, or the tray icon's menu (which opens the page with #feedback) -->
 <section id="fbPanel" class="fb-panel" role="dialog" aria-label="Send feedback" hidden>
   <div class="fb-head"><b>Have an idea or found an issue?</b><button type="button" id="fbClose" aria-label="Close">✕</button></div>
   <p class="fb-sub">Opens a pre-filled issue on GitHub for the project. Nothing is sent until you press Submit there.</p>
@@ -1044,7 +1060,7 @@ async function pullTrayChanges() {
 setInterval(pullTrayChanges, 2000);
 pullTrayChanges();
 
-// ---------- errors on this page go into the app's debug log (Settings > More > Help and debugging) ----------
+// ---------- errors on this page go into the app's debug log (Settings > Help) ----------
 function reportError(msg) { try { navigator.sendBeacon('/api/clientlog', String(msg).slice(0, 2000)); } catch (e) {} }
 window.addEventListener('error', e => reportError(`${e.message} at ${(e.filename || '').split('/').pop()}:${e.lineno}:${e.colno}${e.error?.stack ? '\n' + e.error.stack : ''}`));
 window.addEventListener('unhandledrejection', e => reportError('Unhandled: ' + (e.reason?.stack || e.reason)));
@@ -3094,12 +3110,12 @@ function showLanAddr() {
   $('lanAddr').hidden = !urls.length;
   $('lanAddr').classList.toggle('off', !on);
   $('lanAddr').title = on ? 'Network access is on: other devices on your network can open the dashboard at these addresses'
-    : "This PC's network address. Other devices can't open the dashboard here until you turn on Settings → More → Network: click to go there";
+    : "This PC's network address. Other devices can't open the dashboard here until you turn on Settings → Network: click to go there";
   $('lanAddr').innerHTML = !urls.length ? '' : '🌐 ' + urls.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a>`).join(' · ')
     + (on ? '' : ' <small>(network access off)</small>');
 }
 // with network access off the address can't be opened yet, so clicking it goes to the switch instead
-$('lanAddr').addEventListener('click', e => { if (!cfg.lanAccess && e.target.closest('a')) { e.preventDefault(); openHome(false).then(() => showTab('more')); } });
+$('lanAddr').addEventListener('click', e => { if (!cfg.lanAccess && e.target.closest('a')) { e.preventDefault(); openHome(false).then(() => showTab('network')); } });
 // the PC's network address can change (another Wi-Fi, a new lease), so check once a minute
 setInterval(() => fetch('/api/settings').then(r => r.json()).then(c => { cfg.lanUrls = c.lanUrls; cfg.networkUrls = c.networkUrls; cfg.lanAccess = c.lanAccess; showLanAddr(); }).catch(() => {}), 60000);
 
@@ -3256,7 +3272,7 @@ $('fbCopy').onclick = async () => {
 };
 fbEnabled();
 
-// Settings > More > Reset settings to default: the app's settings, then this browser's, then start over
+// Settings > Reset: the app's settings, then this browser's, then start over
 $('resetAsk').onclick = () => { $('resetBox').hidden = false; $('resetAll').checked = false; };
 $('resetCancel').onclick = () => { $('resetBox').hidden = true; };
 $('resetGo').onclick = async () => {
@@ -3265,7 +3281,7 @@ $('resetGo').onclick = async () => {
   try { Object.keys(localStorage).filter(k => k.startsWith('sky')).forEach(k => localStorage.removeItem(k)); } catch (e) {}
   location.reload();
 };
-// Settings > More > Help and debugging: the app gathers its log and opens an email with it attached
+// Settings > Help: the app gathers its log and opens an email with it attached
 $('debugEmail').onclick = async () => {
   $('debugMsg').textContent = 'Opening an email…';
   try {
@@ -3381,7 +3397,7 @@ map.on('click', e => {
   $('homeDlg').showModal();
 });
 
-// ---------- ships (live AIS via the app's /api/ships; needs a free AISStream.io key in Settings > More) ----------
+// ---------- ships (live AIS via the app's /api/ships; needs a free AISStream.io key in Settings > Ships) ----------
 // Cruise ships are big and labelled; other ships are small, coloured by kind, and named when you hover them.
 map.createPane('ships').style.zIndex = 440; // above airports' labels area, below planes
 const shipLayer = L.layerGroup().addTo(map);
@@ -3543,7 +3559,7 @@ function renderShipPanel() {
     $('shipsSum').textContent = 'not set up';
     body.innerHTML = `<p class="fa-note" style="margin-top:10px">See cruise ships and other boats near you, live. It's free: you just need an AISStream.io key.</p>
       <button class="atc-btn" id="shipSetup" style="margin-top:8px">🚢 Set up ship tracking</button>`;
-    $('shipSetup').onclick = () => openHome(false).then(() => { showTab('more'); $('aisIn').focus(); });
+    $('shipSetup').onclick = () => openHome(false).then(() => { showTab('ships'); $('aisIn').focus(); });
     return;
   }
   if (shipData.error && shipData.status !== 'live') { $('shipsSum').textContent = 'problem'; body.innerHTML = `<p class="fa-note err-note">${esc(shipData.error)}</p>`; return; }
@@ -3723,7 +3739,7 @@ async function findShipLive(p) {
     if (finding !== me) return;
     if (r?.status === 'nokey') {
       box.innerHTML = `<div class="msg">Finding ships needs ship tracking set up (free). <a href="#" id="jumpSetup">Set it up</a></div>`;
-      $('jumpSetup').onclick = e => { e.preventDefault(); box.innerHTML = ''; openHome(false).then(() => { showTab('more'); $('aisIn').focus(); }); };
+      $('jumpSetup').onclick = e => { e.preventDefault(); box.innerHTML = ''; openHome(false).then(() => { showTab('ships'); $('aisIn').focus(); }); };
       finding = null; return;
     }
     if (r?.status === 'lastseen') {
