@@ -1240,6 +1240,14 @@ const server = http.createServer(async (req, res) => {
       if (!/^[A-Z0-9]{2,8}$/.test(id)) return send(res, 400, '{"error":"bad flight"}');
       return send(res, 200, JSON.stringify(await aeroFlight(id).catch(e => ({ error: 'FlightAware not reachable' }))));
     }
+    if (url.pathname === '/api/whatsnew') { // the notes of the latest releases, from GitHub, kept for an hour
+      if (!whatsNew || Date.now() - whatsNew.at > 3600e3) {
+        const r = await get(`https://api.github.com/repos/${REPO}/releases?per_page=8`, 10000);
+        if (r.status !== 200) return send(res, 502, '{"error":"GitHub did not answer"}');
+        whatsNew = { at: Date.now(), list: JSON.parse(r.body).map(x => ({ build: buildOf(x.tag_name), date: (x.published_at || '').slice(0, 10), notes: (x.body || '').slice(0, 1500) })) };
+      }
+      return send(res, 200, JSON.stringify(whatsNew.list));
+    }
     if (url.pathname === '/api/artcc') { // which air traffic control center is over a spot
       const lat = Number(url.searchParams.get('lat')), lon = Number(url.searchParams.get('lon'));
       if (!(Math.abs(lat) <= 90 && Math.abs(lon) <= 180)) return send(res, 400, '{"error":"bad position"}');
@@ -1652,6 +1660,7 @@ const buildOf = tag => { const m = String(tag || '').trim().match(/^v?\d+\.\d+\.
 // for comparing: 67.2 -> 67.002, so 67.10 comes after 67.9
 const buildNum = b => { const [whole, part] = String(b).split('.'); return (+whole || 0) + (+part || 0) / 1000; };
 
+let whatsNew = null;
 async function checkForUpdate() {
   try {
     const r = await get(`https://api.github.com/repos/${REPO}/releases/latest`, 10000);

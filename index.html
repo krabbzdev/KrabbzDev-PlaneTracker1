@@ -835,6 +835,12 @@
         </div>
       </div>
       <div class="place">
+        <h4>🆕 What's new</h4>
+        <p class="hint">The changes in the latest versions of Look A Plane!</p>
+        <div class="row"><button type="button" id="newsBtn">Show what's new</button></div>
+        <div id="newsList" class="hint"></div>
+      </div>
+      <div class="place">
         <h4>🙏 Credits</h4>
         <p class="hint">Look A Plane! is built on free data and tools from many people and organizations: adsb.fi, Planespotters, Airport-Data.com, OurAirports, the FAA, NOAA, OpenStreetMap, Wikipedia, AISStream, Esri, Leaflet, Kokoro and more.</p>
         <div class="row"><a class="btn-link" href="https://github.com/krabbzdev/KrabbzDev-PlaneTracker1#data-sources-and-credits" target="_blank" rel="noopener">📜 See all the credits on GitHub ↗</a><a class="btn-link" href="https://github.com/krabbzdev/KrabbzDev-PlaneTracker1/wiki/Data-Sources-and-Privacy" target="_blank" rel="noopener">Data sources and privacy ↗</a></div>
@@ -3191,6 +3197,14 @@ async function fbReport() {
   return { text, v, body: `${text.slice(0, 2500)}\n\n---\n<sub>Sent from the app's feedback form.</sub>\n\n${facts.map(f => '- ' + f).join('\n')}\n` };
 }
 function openFeedback() { $('fbPanel').hidden = false; $('fbText').focus(); }
+$('newsBtn').onclick = async () => {
+  const el = $('newsList'); el.textContent = 'Loading…';
+  try {
+    const list = await (await fetch('/api/whatsnew')).json();
+    if (!Array.isArray(list)) throw 0;
+    el.innerHTML = list.map(r => `<p style="margin:8px 0 0"><b>Build ${esc(r.build)}</b> <small>${esc(r.date)}</small><br>${esc(r.notes.replace(/^Build [\d.]+:\s*/, '')) || 'No notes.'}</p>`).join('');
+  } catch (e) { el.textContent = "Couldn't load the release notes (needs an internet connection)."; }
+};
 $('fbOpen').onclick = () => { $('homeDlg').close(); openFeedback(); }; // Settings is a modal box: close it first
 if (location.hash === '#feedback') { history.replaceState(null, '', location.pathname); setTimeout(openFeedback, 800); } // from the tray menu
 $('fbClose').onclick = () => { $('fbPanel').hidden = true; };
