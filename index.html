@@ -951,14 +951,15 @@ function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch 
 // These map layers start off now. Browsers that had them on get them switched off once; after that, whatever
 // you pick in 🗺 Map Options sticks.
 if (!load('skyLayersOff1', false)) {
-  for (const k of ['skyShowAll', 'skyMetars', 'skyTfrs', 'skyNight', 'skyWeather']) save(k, false);
+  for (const k of ['skyMetars', 'skyTfrs', 'skyNight', 'skyWeather']) save(k, false);
   save('skyLayersOff1', true);
 }
 // Ships are on by default now: switch them on once in browsers that had them off, then your choice sticks.
 if (!load('skyShipsOn1', false)) { save('skyShips', true); save('skyShipsOn1', true); }
+if (!load('skyShowAllOn1', false)) { save('skyShowAll', true); save('skyShowAllOn1', true); } // same for "Show outside radius"
 let home = null; // comes from the app's settings (see init)
 let radius = load('skyRadius', 21); // 21 miles = 18 nautical miles
-let showAll = load('skyShowAll', false);
+let showAll = load('skyShowAll', true);
 // UI scale (Settings > Display): CSS zoom on the whole page, remembered per browser
 let uiScale = load('skyUiScale', 1);
 // --ui lets the CSS divide window-relative sizes (vh/vw) by the zoom, so the page still fills the window
