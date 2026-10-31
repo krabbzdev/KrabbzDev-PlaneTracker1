@@ -2991,10 +2991,12 @@ function showLanAddr() {
   $('lanAddr').hidden = !urls.length;
   $('lanAddr').classList.toggle('off', !on);
   $('lanAddr').title = on ? 'Network access is on: other devices on your network can open the dashboard at these addresses'
-    : "This PC's network address. Other devices can't open the dashboard here until you turn on Settings → More → Network";
-  $('lanAddr').innerHTML = !urls.length ? '' : '🌐 ' + urls.map(u => on ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u.replace(/^https?:\/\//, ''))}</a>`
-    : esc(u.replace(/^https?:\/\//, ''))).join(' · ') + (on ? '' : ' <small>(network access off)</small>');
+    : "This PC's network address. Other devices can't open the dashboard here until you turn on Settings → More → Network: click to go there";
+  $('lanAddr').innerHTML = !urls.length ? '' : '🌐 ' + urls.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a>`).join(' · ')
+    + (on ? '' : ' <small>(network access off)</small>');
 }
+// with network access off the address can't be opened yet, so clicking it goes to the switch instead
+$('lanAddr').addEventListener('click', e => { if (!cfg.lanAccess && e.target.closest('a')) { e.preventDefault(); openHome(false).then(() => showTab('more')); } });
 // the PC's network address can change (another Wi-Fi, a new lease), so check once a minute
 setInterval(() => fetch('/api/settings').then(r => r.json()).then(c => { cfg.lanUrls = c.lanUrls; cfg.networkUrls = c.networkUrls; cfg.lanAccess = c.lanAccess; showLanAddr(); }).catch(() => {}), 60000);
 
