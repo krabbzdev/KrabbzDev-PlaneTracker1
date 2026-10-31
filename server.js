@@ -831,13 +831,40 @@ const CRUISE_BRANDS = [
   [/^oceania( cruises)?$/i, 'Oceania Cruises', /^(Marina|Riviera|Insignia|Sirena|Regatta|Nautica|Vista|Allura)$/, null],
   [/^(regent( seven seas)?( cruises)?|rssc)$/i, 'Regent Seven Seas Cruises', /^Seven Seas /, null],
   [/^silversea( cruises)?$/i, 'Silversea', /^Silver /, null],
-  [/^margaritaville( at sea)?$/i, 'Margaritaville at Sea', /^Margaritaville/, null],
+  // no Wikipedia category for this line: a list of its ships' articles instead
+  [/^margaritaville( at sea)?$/i, 'Margaritaville at Sea', /^Margaritaville/, ['Margaritaville at Sea Paradise', 'Margaritaville at Sea Islander']],
   [/^explora( journeys)?$/i, 'Explora Journeys', /^Explora /, null],
 ];
 const cleanShipTitle = t => t.replace(/^(MS|MV|SS|RMS|GTS|MSC|MTS)\s+(?=\S)/, m => m.trim() === 'MSC' ? m : '').replace(/\s*\(ship\)$/i, '').trim();
 const fleetCache = new Map();
+// Forgiving ship search: "Canival breeze" finds Carnival Breeze. The fleet ship whose name is closest to what was
+// typed, if it's within about one typo in five letters (and the name is long enough that this can't match by chance).
+function editDistance(a, b) {
+  const row = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = row[0]; row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const old = row[j];
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = old;
+    }
+  }
+  return row[b.length];
+}
+function fuzzyShip(q, bare) {
+  const want = bare(q);
+  if (want.length < 8) return null;
+  let best = null;
+  for (const s of fleet) {
+    const d = Math.min(editDistance(want, bare(s.name)), editDistance(want, bare(s.title || s.name)));
+    if (d <= Math.max(1, Math.floor(want.length * 0.2)) && (!best || d < best.d)) best = { s, d };
+  }
+  return best && best.s;
+}
+
 async function cruiseFleet(category, pattern) {
   if (!category) return [];
+  if (Array.isArray(category)) return category.map(title => ({ name: cleanShipTitle(title), title })); // a fixed list of ship articles
   const c = fleetCache.get(category);
   if (c && Date.now() - c.at < 86400000) return c.list;
   const r = await get('https://en.wikipedia.org/w/api.php?action=query&list=categorymembers&cmtype=page&cmlimit=200&format=json&cmtitle='
@@ -901,7 +928,7 @@ async function placeSearch(q) {
     }
     if (!out.length && /[A-Z]{3}/.test(code) && /\s/.test(code)) {
       const bare = s => s.toUpperCase().replace(/^(MS|MV|SS|RMS)\s+/, '').replace(/\s+/g, ' ').trim();
-      const known = fleet.find(s => bare(s.name) === bare(q) || bare(s.title) === bare(q));
+      const known = fleet.find(s => bare(s.name) === bare(q) || bare(s.title) === bare(q)) || fuzzyShip(q, bare);
       // Wikipedia titles are case-sensitive after the first letter: "Carnival pride" -> "Carnival Pride"
       const titled = q.trim().replace(/\s+/g, ' ').replace(/\b[a-z]/g, c => c.toUpperCase());
       const id = known ? { title: known.title || known.name, mmsi: known.mmsi, imo: known.imo } : await shipIds(titled);
@@ -1465,7 +1492,9 @@ async function buildFleet() {
   let cached = null;
   try { cached = JSON.parse(fs.readFileSync(FLEET_FILE, 'utf8')); } catch (e) {}
   if (cached?.ships?.length) { fleet = cached.ships; watchRefresh(); }
-  if (cached && Date.now() - cached.at < 7 * 86400000) return; // rebuilt weekly
+  // rebuilt weekly, or right away when a cruise line has been added that the saved list doesn't have yet
+  const missingLine = CRUISE_BRANDS.some(([, line, , cat]) => cat && !(cached?.ships || []).some(s => s.line === line));
+  if (cached && !missingLine && Date.now() - cached.at < 7 * 86400000) return;
   const out = [], seen = new Set();
   for (const [, line, pattern, category] of CRUISE_BRANDS) {
     if (!category) continue;

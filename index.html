@@ -1031,6 +1031,11 @@ const gpsAltTxt = a => typeof a.altGps === 'number' && a.alt !== 'ground' ? a.al
 
 // ---------- ⓘ explanations: a small "i" beside each number on a plane's cards; click it for a simple explanation ----------
 const INFO = {
+  'From': 'The airport the plane took off from.',
+  'Going to': 'The airport the plane is flying to, from the flight plan the airline publishes. "(likely)" means the app is guessing, from where the plane took off or where it is heading.',
+  'Distance to go': 'How far the plane still has to fly to get there, in a straight line. Planes follow the curve of the earth, so the real path can be a little longer.',
+  'Arrives in about': 'A guess at how long until it lands, worked out from how far away it is and how fast it is going right now. Winds, and slowing down to land, change it.',
+  'Route': 'Private planes and some flights don\'t share their flight plan, so the app can only show a route when it knows one or can work it out.',
   'Altitude': 'How high the plane is above the sea, in feet. A big jet cruises around 35,000 feet: that\'s about 6 miles up, higher than the tallest mountain!',
   'Altitude (pressure)': 'How high the plane is, worked out from the air around it. The higher you go, the thinner the air gets, so the plane can tell its height by how much the air is pushing. All pilots and air traffic controllers use this number, so everyone agrees how high everyone is.',
   'Altitude (GPS)': 'How high the plane is according to satellites in space, the same kind that tell a phone where it is on a map. It\'s usually a little different from the pressure altitude, because weather changes the air.',
@@ -2522,6 +2527,7 @@ async function openReg(hex, reg) {
     ${Lk.photo?.src ? `<div class="rg-photo" style="background-image:url('${Lk.photo.src}')">${photoCredit(Lk.photo)}</div>` : ''}
     <div class="rg-links">${links}</div>
     <div class="rg-head"><div class="t">${reg}${ageBadge(F?.year || a.year)}</div><div class="s">${[make, model].filter(Boolean).join(' ')}${a.flight && a.flight !== reg ? ' · flying as ' + a.flight : ''}${airlineOf(a) ? ' (' + airlineOf(a) + ')' : ''}</div></div>
+    <div class="rg-sec"><h4>Route</h4><div class="rg-grid" id="rgRoute" style="grid-template-columns:repeat(2,minmax(0,1fr))"></div></div>
     <div class="rg-sec"><h4>Right now</h4><div class="rg-grid" id="rgLive"></div></div>
     <div class="rg-sec"><h4>Flight path</h4><div id="rgMap" class="rg-map"></div><div class="rg-cap" id="rgCap"></div></div>
     <div class="rg-sec"><h4>Registered owner${F?.fractional ? ' · fractional ownership' : ''}</h4>
@@ -2568,6 +2574,14 @@ function renderRegLive(hex) {
     + cell('Heading', a.track != null ? Math.round(a.track) + '° ' + compass(a.track) : null)
     + cell('Vertical speed', fpmTxt(a.vr) || null)
     + cell('Squawk', squawkTxt(a.squawk) || null);
+  // where it's going, from the route the airline publishes (or, for private flights, the app's own guess)
+  const rt = $('rgRoute'), r = routeEnds(a), togo = r.to ? distMi([a.lat, a.lon], r.to.pos) : null;
+  const mins = togo != null && a.alt !== 'ground' && a.gs > 60 ? togo / (a.gs * 1.15078) * 60 : null;
+  const etaTxt = m => m < 1 ? 'under a minute' : m < 60 ? Math.round(m) + ' min' : Math.floor(m / 60) + ' h ' + Math.round(m % 60) + ' min';
+  if (rt) rt.innerHTML = r.from || r.to
+    ? cell('From', r.from?.label || null) + cell('Going to', r.to ? r.to.label + (r.guessed ? ' (likely)' : '') : null)
+      + cell('Distance to go', togo != null ? distTxt(togo) : null) + cell('Arrives in about', mins != null ? etaTxt(mins) : null)
+    : cell('Route', 'Not published for this flight');
 }
 
 async function drawRegTrack(hex, fit) {
