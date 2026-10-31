@@ -951,9 +951,11 @@ function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch 
 // These map layers start off now. Browsers that had them on get them switched off once; after that, whatever
 // you pick in 🗺 Map Options sticks.
 if (!load('skyLayersOff1', false)) {
-  for (const k of ['skyShowAll', 'skyMetars', 'skyTfrs', 'skyNight', 'skyWeather', 'skyShips']) save(k, false);
+  for (const k of ['skyShowAll', 'skyMetars', 'skyTfrs', 'skyNight', 'skyWeather']) save(k, false);
   save('skyLayersOff1', true);
 }
+// Ships are on by default now: switch them on once in browsers that had them off, then your choice sticks.
+if (!load('skyShipsOn1', false)) { save('skyShips', true); save('skyShipsOn1', true); }
 let home = null; // comes from the app's settings (see init)
 let radius = load('skyRadius', 21); // 21 miles = 18 nautical miles
 let showAll = load('skyShowAll', false);
@@ -3357,7 +3359,7 @@ map.createPane('ships').style.zIndex = 440; // above airports' labels area, belo
 const shipLayer = L.layerGroup().addTo(map);
 const shipMarkers = new Map(); // MMSI -> marker
 let shipData = { keySet: false, status: 'off', ships: [] };
-let shipsOn = load('skyShips', false);
+let shipsOn = load('skyShips', true);
 $('shipsOn').checked = shipsOn;
 $('shipsOn').addEventListener('change', e => { shipsOn = e.target.checked; save('skyShips', shipsOn); drawShips(); });
 
