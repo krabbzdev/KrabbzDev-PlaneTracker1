@@ -27,7 +27,7 @@ themselves from, and it still runs on its own from any folder.
 If something goes wrong, **Settings → More → Help and debugging → Email debug log** (or the tray icon's menu)
 opens an email with the app's log attached.
 
-Got an idea or found a bug? Use the **Have an idea or found an issue?** button at the bottom left of the dashboard: it opens a
+Got an idea or found a bug? Use **Send feedback** in Settings → More (or the tray icon's right-click menu): it opens a
 pre-filled issue on this project's GitHub page (nothing is sent until you press Submit there), or you can copy the text.
 
 If Look A Plane! makes you smile, you can [buy me a coffee](https://buymeacoffee.com/krabbzdev).

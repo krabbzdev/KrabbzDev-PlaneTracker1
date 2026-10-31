@@ -91,7 +91,8 @@
 
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; padding: 14px 20px; }
   .stat .v.small { font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-top: 4px; }
-  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; text-align: center; cursor: pointer; transition: border-color .15s, transform .15s; }
+  .stat:hover, .stat:focus-visible { border-color: var(--accent); transform: translateY(-1px); outline: none; }
   .stat .k { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
   .stat .v { font-size: 26px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .stat .s { font-size: 12px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -354,11 +355,8 @@
   .set-foot .coffee:hover { filter: brightness(1.08); }
   a.btn-link { align-self: center; font-size: 12.5px; color: var(--accent); }
   #debugMsg:empty { display: none; }
-  /* 💡 feedback pill and form */
-  body { padding-bottom: 52px; } /* room under the page for the pill */
-  .fb-pill { position: fixed; left: 16px; bottom: 12px; z-index: 1800; display: inline-flex; align-items: center; gap: 8px; padding: 9px 15px; border: 0; border-radius: 999px; background: #3d7be0; color: #fff; font: 600 13px Inter, sans-serif; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
-  .fb-pill:hover { background: #4d8af0; }
-  .fb-panel { position: fixed; left: 16px; bottom: 60px; z-index: 1800; width: min(360px, calc(100vw - 32px)); padding: 16px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 14px 40px rgba(0,0,0,.65); font: 13px/1.45 Inter, sans-serif; }
+  /* 💡 feedback form */
+  .fb-panel { position: fixed; left: 16px; bottom: 16px; z-index: 1800; width: min(360px, calc(100vw - 32px)); padding: 16px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 14px 40px rgba(0,0,0,.65); font: 13px/1.45 Inter, sans-serif; }
   .fb-panel[hidden] { display: none; }
   .fb-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
   .fb-head b { font-size: 14.5px; }
@@ -377,7 +375,6 @@
   .fb-send:disabled { opacity: .45; cursor: default; }
   .fb-secondary { padding: 8px 11px; border: 1px solid var(--line); border-radius: 9px; background: none; color: var(--text); font: 600 12px Inter, sans-serif; cursor: pointer; }
   .fb-secondary:disabled { opacity: .45; cursor: default; }
-  @media (max-width: 700px) { .fb-pill-txt { display: none; } .fb-pill { padding: 11px; } }
   .reset-box { margin-top: 10px; padding: 10px 12px; border: 1px solid #ff5d73; border-radius: 10px; background: rgba(255,93,115,.08); font-size: 12.5px; line-height: 1.45; }
   button.danger { background: #ff5d73; color: #0b1020; border-color: #ff5d73; font-weight: 600; }
   dialog.set-dlg button.primary { background: var(--accent); color: #06121f; border-color: var(--accent); font-weight: 700; }
@@ -667,15 +664,14 @@
 </div>
 
 <section class="stats">
-  <div class="stat"><div class="k">Overhead now</div><div class="v" id="sCount">–</div><div class="s" id="sCountSub">within 20 miles</div></div>
-  <div class="stat"><div class="k">Closest</div><div class="v" id="sClose">–</div><div class="s" id="sCloseSub">&nbsp;</div></div>
-  <div class="stat"><div class="k">Lowest</div><div class="v" id="sLow">–</div><div class="s" id="sLowSub">&nbsp;</div></div>
-  <div class="stat"><div class="k">Fastest</div><div class="v" id="sFast">–</div><div class="s" id="sFastSub">&nbsp;</div></div>
-  <div class="stat"><div class="k">Aircraft today</div><div class="v" id="tdUnique">–</div><div class="s" id="tdYest">&nbsp;</div></div>
-  <div class="stat"><div class="k">Military today</div><div class="v" id="tdMil">–</div><div class="s">&nbsp;</div></div>
-  <div class="stat"><div class="k">Busiest hour</div><div class="v" id="tdBusy">–</div><div class="s" id="tdBusySub">&nbsp;</div></div>
-  <div class="stat"><div class="k">Top type today</div><div class="v small" id="tdTopType">–</div><div class="s" id="tdTopTypeSub">&nbsp;</div></div>
-  <div class="stat"><div class="k">Fastest today</div><div class="v" id="tdFastest">–</div><div class="s" id="tdFastestSub">&nbsp;</div></div>
+  <div class="stat" data-go="list" tabindex="0" role="button" title="Show the aircraft list"><div class="k">👀 Overhead now</div><div class="v" id="sCount">–</div><div class="s" id="sCountSub">within 20 miles</div></div>
+  <div class="stat" data-go="close" tabindex="0" role="button" title="Open the closest plane"><div class="k">🎯 Closest</div><div class="v" id="sClose">–</div><div class="s" id="sCloseSub">&nbsp;</div></div>
+  <div class="stat" data-go="low" tabindex="0" role="button" title="Open the lowest plane"><div class="k">🪂 Lowest</div><div class="v" id="sLow">–</div><div class="s" id="sLowSub">&nbsp;</div></div>
+  <div class="stat" data-go="fast" tabindex="0" role="button" title="Open the fastest plane right now"><div class="k">⚡ Fastest</div><div class="v" id="sFast">–</div><div class="s" id="sFastSub">&nbsp;</div></div>
+  <div class="stat" data-go="log" tabindex="0" role="button" title="Open today's log"><div class="k">🛫 Aircraft today</div><div class="v" id="tdUnique">–</div><div class="s" id="tdYest">&nbsp;</div></div>
+  <div class="stat" data-go="log" tabindex="0" role="button" title="Open today's log"><div class="k">🔥 Busiest hour</div><div class="v" id="tdBusy">–</div><div class="s" id="tdBusySub">&nbsp;</div></div>
+  <div class="stat" data-go="types" tabindex="0" role="button" title="See the most-seen aircraft types today"><div class="k">🏆 Top type today</div><div class="v small" id="tdTopType">–</div><div class="s" id="tdTopTypeSub">&nbsp;</div></div>
+  <div class="stat" data-go="fastest" tabindex="0" role="button" title="See the fastest planes seen today"><div class="k">🚀 Fastest today</div><div class="v" id="tdFastest">–</div><div class="s" id="tdFastestSub">&nbsp;</div></div>
 </section>
 
 <div class="banner" id="banner"></div>
@@ -822,7 +818,7 @@
       <div class="place">
         <h4>🌐 Network</h4>
         <label class="chk"><input type="checkbox" id="lanIn"> Let other devices on my home network open the dashboard</label>
-        <p class="hint" id="lanHint">Off: only this PC can open it. On: phones, tablets and TVs on the same Wi-Fi can open it in their browser too. They can watch, but only this PC can change settings, favorites or updates. Windows may ask whether to allow the app on your network: choose <b>Private networks</b>. Only turn this on at home, not on public Wi-Fi.</p>
+        <p class="hint" id="lanHint">Off: only this PC can open it. On: phones, tablets and TVs on the same Wi-Fi can open it in their browser too. They can watch, but only this PC can change settings, favorites or updates. The first time, Windows may show a firewall popup asking to allow <b>Node.js JavaScript Runtime</b> (the app is built on Node.js): tick <b>Private networks</b> and click <b>Allow access</b>. If you missed it, other devices can't connect until you allow it in Windows Security → Firewall &amp; network protection → Allow an app through firewall. Only turn this on at home, not on public Wi-Fi.</p>
         <div class="where" id="lanUrls" hidden></div>
       </div>
       <div class="place">
@@ -842,8 +838,8 @@
       </div>
       <div class="place">
         <h4>🐞 Help and debugging</h4>
-        <p class="hint">If something isn't working, send the app's log. It's a text file of what the app has been doing, with no keys or addresses in its summary.</p>
-        <div class="row"><button type="button" id="debugEmail">✉ Email debug log…</button><a class="btn-link" id="debugDownload" href="/api/debuglog" download>⬇ Download it instead</a></div>
+        <p class="hint">Got an idea or found a bug? <b>Send feedback</b> opens a short form (it goes to GitHub). If something isn't working, send the app's log. It's a text file of what the app has been doing, with no keys or addresses in its summary.</p>
+        <div class="row"><button type="button" id="fbOpen">💡 Send feedback…</button><button type="button" id="debugEmail">✉ Email debug log…</button><a class="btn-link" id="debugDownload" href="/api/debuglog" download>⬇ Download it instead</a></div>
         <p class="hint" id="debugMsg" style="margin-top:6px"></p>
       </div>
       <div class="place">
@@ -887,8 +883,7 @@
 <button id="soundLock" type="button" hidden>🔇 Sound is off until you click this page. <b>Click here to turn on the overhead chime and voice</b></button>
 <div id="toasts"></div>
 
-<!-- 💡 feedback: a floating button at the bottom left that opens a small form (like the one in ShowHud) -->
-<button type="button" id="fbPill" class="fb-pill" aria-haspopup="dialog" aria-controls="fbPanel"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V4"/><path d="M4 4h13l-2 4 2 4H4"/></svg><span class="fb-pill-txt">Have an idea or found an issue?</span></button>
+<!-- 💡 feedback form: opened from Settings > More > Help and debugging, or the tray icon's menu (which opens the page with #feedback) -->
 <section id="fbPanel" class="fb-panel" role="dialog" aria-label="Send feedback" hidden>
   <div class="fb-head"><b>Have an idea or found an issue?</b><button type="button" id="fbClose" aria-label="Close">✕</button></div>
   <p class="fb-sub">Opens a pre-filled issue on GitHub for the project. Nothing is sent until you press Submit there.</p>
@@ -1900,14 +1895,17 @@ function render() {
   $('sCount').textContent = inside.length;
   $('sCountSub').textContent = `within ${radius} mile${radius > 1 ? 's' : ''} · ${current.length} tracked total`;
   const c = inside[0];
+  statPlane.close = c?.hex;
   $('sClose').textContent = c ? distTxt(c.dist) : '–';
   $('sCloseSub').textContent = c ? `${c.flight || c.reg || c.hex.toUpperCase()} · ${compass(c.brg)}` : 'nothing in range';
   // skip planes on the runway (barometric altitude reads ≤ 0 near sea level)
   const airborne = inside.filter(a => typeof a.alt === 'number' && a.alt > 0);
   const low = airborne.slice().sort((a, b) => a.alt - b.alt)[0];
+  statPlane.low = low?.hex;
   $('sLow').textContent = low ? fmtAlt(low.alt) : '–';
   $('sLowSub').textContent = low ? (low.flight || low.reg || low.hex.toUpperCase()) : ' ';
   const fast = inside.filter(a => a.gs != null).sort((a, b) => b.gs - a.gs)[0];
+  statPlane.fast = fast?.hex;
   $('sFast').textContent = fast ? speedTxt(fast.gs) : '–';
   $('sFastSub').textContent = fast ? `${fast.flight || fast.reg || fast.hex.toUpperCase()} · ${Math.round(fast.gs)} kt` : ' ';
 
@@ -2251,11 +2249,12 @@ setTimeout(() => { if (kokoroVoice() && soundOn) kokoroMake(kokoroVoice(), 'Read
 
 // What the voice says, written by the user in Settings > Alerts (each browser keeps its own).
 // {words} are filled in for each plane; any the app doesn't know are dropped along with their comma.
-const SAY_DEFAULT = 'Look, a Plane! {airline} {type}, traveling at {speed}, and is flying at {altitude}, {destination} from {from}.';
+const SAY_DEFAULT = 'Look, a Plane!. {airline} {type}, traveling at {speed}, and is flying at {altitude}, {destination} from {from}.';
 // earlier defaults: browsers that still have one saved move to the new one
 const SAY_OLD_DEFAULTS = ['Overhead now! {type}, {speed}, {altitude}, {destination}.',
   'Overhead now! {airline} - {type}, going {speed}, at {altitude}, {destination} from {from}.',
-  'Look, a Plane! {airline} {type}, traveling at {speed}, and is flying at {altitude}, {destination}.'];
+  'Look, a Plane! {airline} {type}, traveling at {speed}, and is flying at {altitude}, {destination}.',
+  'Look, a Plane! {airline} {type}, traveling at {speed}, and is flying at {altitude}, {destination} from {from}.'];
 const city = s => (s || '').replace(/\s*\([^)]*\)\s*$/, ''); // "Orlando (MCO)" -> "Orlando"
 const COMPASS_WORDS = { N: 'north', NE: 'north east', E: 'east', SE: 'south east', S: 'south', SW: 'south west', W: 'west', NW: 'north west' };
 const SAY_TAGS = { // name: [example for the Test button, value for a plane]
@@ -2647,6 +2646,22 @@ $('cards').addEventListener('click', e => {
 });
 
 // Selecting a plane (card, map, alert or leaderboard) highlights it and opens its popup window.
+// the cards along the top: click one to jump to what it shows. Plane cards open that plane; the "today" cards open
+// Today's log (on the matching tab); Overhead now shows the aircraft list.
+var statPlane = {};
+function goStat(card) {
+  const go = card.dataset.go, plane = statPlane[go];
+  if (plane) return select(plane, true);
+  if (go === 'list') { setColumn('left', false); $('list').scrollTop = 0; return; }
+  if (!['log', 'types', 'fastest'].includes(go)) return;
+  setColumn('right', false);
+  if (go !== 'log') document.querySelector('#tdTabs [data-tab="' + go + '"]')?.click();
+  $('today').open = true;
+  $('today').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+document.querySelector('.stats').addEventListener('click', e => { const c = e.target.closest('.stat'); if (c) goStat(c); });
+document.querySelector('.stats').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { const c = e.target.closest('.stat'); if (c) { e.preventDefault(); goStat(c); } } });
+
 function select(hex, pan) {
   selected = hex;
   const t = hex && tracks.get(hex);
@@ -2847,7 +2862,6 @@ function renderLog() {
   $('tdUnique').textContent = L.unique.toLocaleString();
   const y = L.history[L.history.length - 1];
   $('tdYest').textContent = y ? `${y.unique.toLocaleString()} yesterday` : 'counting since start';
-  $('tdMil').innerHTML = `<span style="color:${L.military ? SPECIAL.military.color : 'inherit'}">${L.military}</span>`;
   const peak = L.hourly.indexOf(Math.max(...L.hourly));
   $('tdBusy').textContent = L.hourly[peak] ? hourName(peak) : '–';
   // the most-seen aircraft type, and the fastest plane, today
@@ -3112,7 +3126,9 @@ async function fbReport() {
   ];
   return { text, v, body: `${text.slice(0, 2500)}\n\n---\n<sub>Sent from the app's feedback form.</sub>\n\n${facts.map(f => '- ' + f).join('\n')}\n` };
 }
-$('fbPill').onclick = () => { $('fbPanel').hidden = !$('fbPanel').hidden; if (!$('fbPanel').hidden) $('fbText').focus(); };
+function openFeedback() { $('fbPanel').hidden = false; $('fbText').focus(); }
+$('fbOpen').onclick = () => { $('homeDlg').close(); openFeedback(); }; // Settings is a modal box: close it first
+if (location.hash === '#feedback') { history.replaceState(null, '', location.pathname); setTimeout(openFeedback, 800); } // from the tray menu
 $('fbClose').onclick = () => { $('fbPanel').hidden = true; };
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('fbPanel').hidden) $('fbPanel').hidden = true; });
 document.querySelectorAll('.fb-tabs button').forEach(b => b.onclick = () => setFbKind(b.dataset.kind));

@@ -44,6 +44,7 @@ static class Tray
         settingsMenu.DropDownOpening += (s, e) => TraySettings.Build(settingsMenu, api);
         menu.Items.Add(settingsMenu);
         menu.Items.Add("Check for updates", null, (s, e) => CheckForUpdates());
+        menu.Items.Add("💡 Send feedback...", null, (s, e) => { try { Process.Start(url + "#feedback"); } catch { } }); // the page opens its feedback form
         menu.Items.Add("Email debug log...", null, (s, e) => AskApp("api/debuglog"));
         menu.Items.Add("☕ Buy me a coffee", null, (s, e) => { try { Process.Start(CoffeeUrl); } catch { } });
         menu.Items.Add(new ToolStripSeparator());
