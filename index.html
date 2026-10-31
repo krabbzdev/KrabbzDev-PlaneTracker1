@@ -836,6 +836,11 @@
         </select>
       </div>
       <div class="place">
+        <h4>📡 Radar sweep strength</h4>
+        <p class="hint">How strong the beam looks when 📡 Radar sweep is on (Map Options). Lower is fainter. Changes right away.</p>
+        <div class="row" style="align-items:center"><input type="range" id="sweepStrIn" min="0.1" max="1" step="0.05" aria-label="Radar sweep strength" data-pref="Radar sweep strength" data-pref-group="Display" data-pref-scale="100" data-pref-unit="%"><b id="sweepStrVal" style="min-width:64px;text-align:right;font-family:var(--mono)"></b></div>
+      </div>
+      <div class="place">
         <h4>📏 Units</h4>
         <label class="chk"><input type="checkbox" id="nauticalIn" data-pref="Pilot units (knots, nautical miles)" data-pref-group="Display"> Pilot units: speeds in knots, distances in nautical miles</label>
         <p class="hint">Off: miles per hour and miles. Altitudes are always in feet. The voice uses the same units.</p>
@@ -1259,6 +1264,10 @@ sweepCv.className = 'sweep-cv';
 map.getContainer().appendChild(sweepCv);
 let sweepOn = load('skySweep', false), sweepRaf = 0, sweepRgb = '76,201,240', sweepColorAt = 0;
 $('sweepOn').checked = sweepOn;
+let sweepStr = load('skySweepStr', 1); // 0.1 to 1: how strong the beam looks
+const showSweepStr = () => { $('sweepStrIn').value = sweepStr; $('sweepStrVal').textContent = Math.round(sweepStr * 100) + '%'; };
+showSweepStr();
+$('sweepStrIn').addEventListener('input', e => { sweepStr = +e.target.value; save('skySweepStr', sweepStr); showSweepStr(); });
 function sweepDraw(t) {
   const size = map.getSize(), dpr = window.devicePixelRatio || 1;
   if (sweepCv.width !== Math.round(size.x * dpr) || sweepCv.height !== Math.round(size.y * dpr)) { sweepCv.width = Math.round(size.x * dpr); sweepCv.height = Math.round(size.y * dpr); }
@@ -1276,9 +1285,9 @@ function sweepDraw(t) {
   ctx.save();
   ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, 2 * Math.PI); ctx.clip();
   const g = ctx.createConicGradient(a - trail, c.x, c.y), end = trail / (2 * Math.PI);
-  g.addColorStop(0, `rgba(${sweepRgb},0)`); g.addColorStop(end, `rgba(${sweepRgb},.34)`); g.addColorStop(Math.min(end + .001, 1), `rgba(${sweepRgb},0)`);
+  g.addColorStop(0, `rgba(${sweepRgb},0)`); g.addColorStop(end, `rgba(${sweepRgb},${(.34 * sweepStr).toFixed(3)})`); g.addColorStop(Math.min(end + .001, 1), `rgba(${sweepRgb},0)`);
   ctx.fillStyle = g; ctx.fillRect(c.x - r, c.y - r, r * 2, r * 2);
-  ctx.strokeStyle = `rgba(${sweepRgb},.85)`; ctx.lineWidth = 2;
+  ctx.strokeStyle = `rgba(${sweepRgb},${(.85 * sweepStr).toFixed(3)})`; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(c.x + r * Math.cos(a), c.y + r * Math.sin(a)); ctx.stroke();
   ctx.restore();
 }
